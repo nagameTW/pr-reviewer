@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 356" width="980" height="356" role="img" aria-labelledby="t d">
+  <title id="t">Across rounds</title>
+  <desc id="d">Every new head is a new round. The previous round's blockers go back into the prompt: each is marked fixed or carried over word for word. From round two, a new blocker about a file the push did not touch and no round cited is shown as MEDIUM and does not block. If a PR is merged while its last verdict is changes requested, the reviewer posts one alert comment on it.</desc>
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #3B4252; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; white-space: pre; }
+    .title { font-size: 16px; font-weight: 700; fill: #2E3440; }
+    .lbl { font-size: 12px; fill: #4C566A; }
+    .note { font-size: 12px; fill: #3B4252; }
+    .card { fill: #ECEFF4; stroke: #81A1C1; stroke-width: 1.5; }
+    .hero { fill: #E5E9F0; stroke: #5E81AC; stroke-width: 2.5; }
+    .chip-block { fill: #4C566A; }
+    .chip-soft { fill: #FFFFFF; stroke: #81A1C1; stroke-width: 1.2; }
+    .chip-gone { fill: #FFFFFF; stroke: #81A1C1; stroke-width: 1.2; opacity: .6; }
+    .on-strong { fill: #FFFFFF; }
+    .gone-text { fill: #4C566A; text-decoration: line-through; }
+    .pill-bad { fill: #FFFFFF; stroke: #BF616A; stroke-width: 1.5; }
+    .pill-bad-text { font-size: 11px; font-weight: 700; fill: #A2525A; }
+    .pill-ok { fill: #4C566A; }
+    .pill-ok-text { font-size: 11px; font-weight: 700; fill: #FFFFFF; }
+    .flow { stroke: #5E81AC; stroke-width: 2; fill: none; }
+    .flow-head { fill: #5E81AC; }
+    .acc { fill: #BF616A; }
+  </style>
+  <rect x="1" y="1" width="978" height="354" rx="14" fill="#FFFFFF" stroke="#D8DEE9" stroke-width="2"/>
+
+  <!-- Round 1 -->
+  <rect class="card" x="24" y="40" width="240" height="196" rx="12"/>
+  <text class="title" x="42" y="70">Round 1</text>
+  <rect class="pill-bad" x="124" y="55" width="124" height="22" rx="11"/>
+  <text class="pill-bad-text" x="186" y="70" text-anchor="middle">Changes requested</text>
+  <rect class="chip-block" x="40" y="92" width="208" height="28" rx="6"/>
+  <text class="mono on-strong" x="52" y="111">CRITICAL  a.py:30</text>
+  <rect class="chip-block" x="40" y="128" width="208" height="28" rx="6"/>
+  <text class="mono on-strong" x="52" y="147">HIGH      a.py:29</text>
+  <rect class="chip-soft" x="40" y="164" width="208" height="28" rx="6"/>
+  <text class="mono" x="52" y="183">MEDIUM    test_a.py:16</text>
+  <text class="lbl" x="42" y="220">full review of the whole diff</text>
+
+  <!-- 1 -> 2 -->
+  <path class="flow" d="M264 132 H364"/><path class="flow-head" d="M372 132 l-10 -5 v10 z"/>
+  <text class="lbl" x="276" y="112">author pushes</text>
+  <text class="lbl" x="276" y="126">a fix</text>
+  <text class="lbl" x="276" y="154">blockers go</text>
+  <text class="lbl" x="276" y="168">back into</text>
+  <text class="lbl" x="276" y="182">the prompt</text>
+
+  <!-- Round 2 (the point of the picture) -->
+  <rect class="hero" x="372" y="30" width="316" height="216" rx="14"/>
+  <text class="title" x="392" y="62">Round 2</text>
+  <rect class="pill-bad" x="548" y="47" width="124" height="22" rx="11"/>
+  <text class="pill-bad-text" x="610" y="62" text-anchor="middle">Changes requested</text>
+  <rect class="chip-gone" x="390" y="82" width="282" height="28" rx="6"/>
+  <text class="mono gone-text" x="402" y="101">CRITICAL  a.py:30</text>
+  <text class="lbl" x="660" y="101" text-anchor="end">fixed</text>
+  <rect class="chip-block" x="390" y="118" width="282" height="28" rx="6"/>
+  <rect class="acc" x="390" y="118" width="6" height="28" rx="3"/>
+  <text class="mono on-strong" x="404" y="137">HIGH      a.py:29  Carried over: …</text>
+  <rect x="390" y="154" width="282" height="28" rx="6" fill="#FFFFFF" stroke="#BF616A" stroke-width="1.6" stroke-dasharray="5 4"/>
+  <text class="mono" x="402" y="173">HIGH → MEDIUM  b.py:12</text>
+  <text class="note" x="392" y="204">b.py was not in this push and no round cited it:</text>
+  <text class="note" x="392" y="222">shown, but it does not block. CRITICAL never drops.</text>
+
+  <!-- 2 -> 3 -->
+  <path class="flow" d="M688 132 H758"/><path class="flow-head" d="M766 132 l-10 -5 v10 z"/>
+  <text class="lbl" x="696" y="112">pushes</text>
+  <text class="lbl" x="696" y="126">again</text>
+
+  <!-- Round 3 -->
+  <rect class="card" x="766" y="40" width="190" height="196" rx="12"/>
+  <text class="title" x="784" y="70">Round 3</text>
+  <rect class="pill-ok" x="854" y="55" width="88" height="22" rx="11"/>
+  <text class="pill-ok-text" x="898" y="70" text-anchor="middle">No blockers</text>
+  <rect class="chip-gone" x="782" y="92" width="160" height="28" rx="6"/>
+  <text class="mono gone-text" x="794" y="111">HIGH  a.py:29</text>
+  <text class="lbl" x="930" y="111" text-anchor="end">fixed</text>
+  <text class="lbl" x="784" y="150">no blocking findings;</text>
+  <text class="lbl" x="784" y="166">MEDIUM/LOW stay listed</text>
+  <text class="lbl" x="784" y="182">under the verdict</text>
+
+  <!-- merged over a red verdict -->
+  <rect class="card" x="24" y="272" width="300" height="60" rx="10"/>
+  <text class="note" x="42" y="298" font-weight="700">Merged anyway</text>
+  <text class="lbl" x="42" y="316">while the last verdict is changes requested</text>
+  <path class="flow" d="M324 302 H434"/><path class="flow-head" d="M442 302 l-10 -5 v10 z"/>
+  <text class="lbl" x="336" y="292">next round</text>
+  <rect class="card" x="442" y="272" width="514" height="60" rx="10"/>
+  <rect class="acc" x="442" y="272" width="6" height="60" rx="3"/>
+  <text class="note" x="462" y="298" font-weight="700">One post-merge alert comment on that PR</text>
+  <text class="lbl" x="462" y="316">posted once; the reviewer itself still never approves or merges</text>
+</svg>

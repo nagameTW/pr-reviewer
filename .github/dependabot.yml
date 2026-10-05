@@ -1,0 +1,12 @@
+version: 2
+updates:
+  # GitHub Actions: keep the pinned SHAs current, monthly, in one PR.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    groups:
+      actions:
+        patterns:
+          - "*"

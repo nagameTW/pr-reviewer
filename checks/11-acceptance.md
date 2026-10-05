@@ -1,0 +1,1 @@
+Acceptance — only when the linked-issue text is provided below: does the diff actually deliver what that ticket asked? A stated acceptance criterion left undelivered (or silently narrowed) is HIGH. Judgement calls about scope go in the summary, not a finding. No linked issue provided: skip this dimension silently.

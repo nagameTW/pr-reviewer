@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 430" width="960" height="430" role="img" aria-labelledby="t d">
+  <title id="t">Where pr-reviewer sits</title>
+  <desc id="d">The reviewer runs on your machine. It reads open pull requests through gh, asks headless Claude Code to review a disposable clone with read-only tools, scans the result against your sensitive-data patterns, and posts one comment per new head. It never approves and never merges.</desc>
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #3B4252; }
+    .cap { font-size: 12px; fill: #4C566A; letter-spacing: .06em; }
+    .name { font-size: 16px; font-weight: 600; }
+    .hero-name { font-size: 22px; font-weight: 700; fill: #2E3440; }
+    .sub { font-size: 12.5px; fill: #4C566A; }
+    .row-name { font-size: 14px; font-weight: 600; fill: #2E3440; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .lbl { font-size: 12px; fill: #4C566A; }
+    .never { font-size: 12px; font-weight: 700; fill: #A2525A; }
+    .box { fill: #ECEFF4; stroke: #81A1C1; stroke-width: 1.5; }
+    .hero { fill: #E5E9F0; stroke: #5E81AC; stroke-width: 2.5; }
+    .row { fill: #FFFFFF; stroke: #81A1C1; stroke-width: 1.2; }
+    .ghost { fill: none; stroke: #81A1C1; stroke-width: 1.5; stroke-dasharray: 5 4; }
+    .ghost-text { font-size: 14px; fill: #4C566A; }
+    .flow { stroke: #5E81AC; stroke-width: 2; fill: none; }
+    .flow-head { fill: #5E81AC; }
+    .no { stroke: #BF616A; stroke-width: 1.8; fill: none; stroke-dasharray: 6 5; }
+    .x { stroke: #BF616A; stroke-width: 3; stroke-linecap: round; }
+  </style>
+  <rect x="1" y="1" width="958" height="428" rx="14" fill="#FFFFFF" stroke="#D8DEE9" stroke-width="2"/>
+
+  <!-- GitHub column -->
+  <text class="cap" x="28" y="40">GITHUB</text>
+  <rect class="box" x="28" y="64" width="190" height="96" rx="10"/>
+  <text class="name" x="46" y="98">Pull request</text>
+  <text class="sub" x="46" y="120">any repo you list in</text>
+  <text class="sub" x="46" y="138">PRREVIEW_GATE_REPOS</text>
+
+  <rect class="ghost" x="28" y="262" width="190" height="52" rx="10"/>
+  <text class="ghost-text" x="46" y="293">Approve</text>
+  <rect class="ghost" x="28" y="336" width="190" height="52" rx="10"/>
+  <text class="ghost-text" x="46" y="367">Merge</text>
+
+  <!-- Protagonist -->
+  <text class="cap" x="340" y="40">YOUR MACHINE</text>
+  <rect class="hero" x="340" y="56" width="330" height="340" rx="14"/>
+  <text class="hero-name" x="362" y="94">pr-reviewer</text>
+  <text class="sub" x="362" y="116">runs as your gh login, on a machine you control</text>
+
+  <rect class="row" x="360" y="134" width="290" height="64" rx="8"/>
+  <text class="row-name" x="376" y="160">review-loop.sh</text>
+  <text class="lbl" x="376" y="182">one round a minute while any PR is open</text>
+
+  <rect class="row" x="360" y="210" width="290" height="64" rx="8"/>
+  <text class="row-name" x="376" y="236">pr-autoreview.sh</text>
+  <text class="lbl" x="376" y="258">one round: every new head gets one review</text>
+
+  <rect class="row" x="360" y="286" width="290" height="92" rx="8"/>
+  <text class="name" x="376" y="312" style="fill:#2E3440">Disposable clone</text>
+  <text class="lbl" x="376" y="334">base branch at the merge base,</text>
+  <text class="lbl" x="376" y="352">PR diff applied on top; never</text>
+  <text class="lbl" x="376" y="370">your own working tree</text>
+
+  <!-- Claude + patterns column -->
+  <text class="cap" x="760" y="40">MODEL</text>
+  <rect class="box" x="760" y="64" width="172" height="130" rx="10"/>
+  <text class="name" x="778" y="98">Claude Code</text>
+  <text class="sub" x="778" y="120">claude -p, headless</text>
+  <text class="sub" x="778" y="144">tools: Read, Grep, Glob</text>
+  <text class="sub" x="778" y="162">inside the clone only;</text>
+  <text class="sub" x="778" y="180">no shell, no network</text>
+
+  <text class="cap" x="760" y="252">LOCAL FILE</text>
+  <rect class="box" x="760" y="266" width="172" height="96" rx="10"/>
+  <text class="name" x="778" y="298">sensitive-patterns</text>
+  <text class="sub" x="778" y="320">your regex list; no file,</text>
+  <text class="sub" x="778" y="338">no run</text>
+
+  <!-- PR <-> reviewer -->
+  <path class="flow" d="M218 94 H332"/><path class="flow-head" d="M340 94 l-10 -5 v10 z"/>
+  <text class="lbl" x="228" y="84">diff, title, body</text>
+  <path class="flow" d="M340 138 H226"/><path class="flow-head" d="M218 138 l10 -5 v10 z"/>
+  <text class="lbl" x="228" y="158">one comment</text>
+  <text class="lbl" x="228" y="174">per new head</text>
+
+  <!-- reviewer -> approve / merge : never -->
+  <path class="no" d="M340 288 H218"/>
+  <line class="x" x1="270" y1="280" x2="286" y2="296"/><line class="x" x1="286" y1="280" x2="270" y2="296"/>
+  <text class="never" x="298" y="280">never</text>
+  <path class="no" d="M340 362 H218"/>
+  <line class="x" x1="270" y1="354" x2="286" y2="370"/><line class="x" x1="286" y1="354" x2="270" y2="370"/>
+  <text class="never" x="298" y="354">never</text>
+
+  <!-- reviewer <-> Claude -->
+  <path class="flow" d="M670 104 H752"/><path class="flow-head" d="M760 104 l-10 -5 v10 z"/>
+  <text class="lbl" x="678" y="94">prompt</text>
+  <path class="flow" d="M760 150 H678"/><path class="flow-head" d="M670 150 l10 -5 v10 z"/>
+  <text class="lbl" x="678" y="170">findings</text>
+  <text class="lbl" x="678" y="186">JSON</text>
+
+  <!-- patterns -> reviewer -->
+  <path class="flow" d="M760 314 H678"/><path class="flow-head" d="M670 314 l10 -5 v10 z"/>
+  <text class="lbl" x="678" y="304">checked</text>
+  <text class="lbl" x="678" y="336">before</text>
+  <text class="lbl" x="678" y="352">every post</text>
+</svg>

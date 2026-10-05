@@ -1,0 +1,29 @@
+# Sensitive-data patterns for pr-reviewer.
+#
+# Copy this file to ~/.config/pr-reviewer/sensitive-patterns (or point
+# PRREVIEW_SENSITIVE_PATTERNS_FILE at your copy) and add what is secret in YOUR
+# environment: internal hostnames, private IP ranges, customer names.
+#
+# One extended regular expression (grep -E) per line, matched case-insensitively.
+# Lines starting with # and blank lines are ignored.
+#
+# Every comment the reviewer is about to post is checked against this list,
+# and so are the title and description of every PR it reviews. A hit in an
+# outgoing comment, or a scan that cannot run, means that comment is not
+# posted. A hit in a PR's title or description means that PR is not reviewed.
+# The reviewer refuses to start without this file.
+
+# Private keys
+-----BEGIN [A-Z ]*PRIVATE KEY-----
+# AWS access key id
+AKIA[0-9A-Z]{16}
+# GitHub tokens
+gh[pousr]_[A-Za-z0-9]{36}
+github_pat_[A-Za-z0-9_]{22,}
+# Anthropic and OpenAI API keys
+sk-ant-[A-Za-z0-9_-]{20,}
+sk-(proj-)?[A-Za-z0-9]{32,}
+# Slack tokens
+xox[abposr]-[A-Za-z0-9-]{10,}
+# Google API key
+AIza[0-9A-Za-z_-]{35}

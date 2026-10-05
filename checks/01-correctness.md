@@ -1,0 +1,3 @@
+Correctness — bugs, broken logic, unhandled realistic inputs, concurrency issues; regressions in the callers of anything whose signature or semantics the diff changed.
+
+Concurrency issues, spelled out: two threads, tasks or processes touching the same state without a lock or atomic operation (a data race); checking a condition and acting on it in two steps while something else can change it in between (check-then-act, also called time-of-check to time-of-use, CWE-367); locks taken in different orders on different paths (deadlock); an async call whose result is used without being awaited; a shared file or temporary path two runs can write at once.

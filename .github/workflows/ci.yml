@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    # 22.04 ships jq 1.6, which rejects some programs 1.7 accepts.
+    strategy:
+      matrix:
+        os: [ubuntu-latest, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Tool versions
+        run: |
+          bash --version | head -1
+          shellcheck --version | sed -n 2p
+          jq --version
+      - run: bash tests/run-all.sh

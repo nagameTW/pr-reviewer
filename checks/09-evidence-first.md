@@ -1,0 +1,1 @@
+Evidence-first, only for a change to a heuristic, a limit, a model choice or a prompt — a new or retuned one that ships with no measurement showing it does better than what it replaces (for a new one, the behaviour without it) is MEDIUM: say in the summary what measurement would settle it. Never treat 'it looks better' as evidence.

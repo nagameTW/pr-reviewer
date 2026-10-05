@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 328" width="980" height="328" role="img" aria-labelledby="t d">
+  <title id="t">The red team</title>
+  <desc id="d">Optional, off by default. When a round, any round, has no blocking finding and is about to post an approval, one extra call argues that the approval is wrong. It looks for parts of the diff that disagree, a limit applied at the wrong level, an error returned as if it were success, a branch that decides from a different input than its sibling, and a rule the repo's own documents pin. It returns up to three CRITICAL or HIGH candidates. Each goes through the same refutation call as any blocking finding: one that survives is posted, marked raised by the red team; one that is refuted is dropped and the approval stands. If the call fails or times out, the round approves as if the red team were off. Turn it on with prreview set PRREVIEW_GATE_REDTEAM 1.</desc>
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #3B4252; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+    .title { font-size: 16px; font-weight: 700; fill: #2E3440; }
+    .name { font-size: 13px; font-weight: 700; fill: #2E3440; }
+    .lbl { font-size: 12px; fill: #4C566A; }
+    .card { fill: #ECEFF4; stroke: #81A1C1; stroke-width: 1.5; }
+    .hero { fill: #E5E9F0; stroke: #5E81AC; stroke-width: 2.5; }
+    .chip-soft { fill: #FFFFFF; stroke: #81A1C1; stroke-width: 1.2; }
+    .chip-block { fill: #4C566A; }
+    .chip-gone { fill: #FFFFFF; stroke: #81A1C1; stroke-width: 1.2; opacity: .6; }
+    .on-strong { fill: #FFFFFF; }
+    .pill-ok { fill: #4C566A; }
+    .pill-ok-text { font-size: 11px; font-weight: 700; fill: #FFFFFF; }
+    .flow { stroke: #5E81AC; stroke-width: 2; fill: none; }
+    .flow-head { fill: #5E81AC; }
+    .acc { fill: #BF616A; }
+    .dot { fill: #BF616A; }
+  </style>
+  <rect x="1" y="1" width="978" height="326" rx="14" fill="#FFFFFF" stroke="#D8DEE9" stroke-width="2"/>
+
+  <!-- a round came out clean -->
+  <rect class="card" x="24" y="56" width="176" height="128" rx="12"/>
+  <text class="title" x="42" y="86">Any round</text>
+  <rect class="pill-ok" x="42" y="100" width="92" height="22" rx="11"/>
+  <text class="pill-ok-text" x="88" y="115" text-anchor="middle">No blockers</text>
+  <text class="lbl" x="42" y="148">about to post</text>
+  <text class="lbl" x="42" y="164">an approval</text>
+
+  <path class="flow" d="M200 120 H224"/><path class="flow-head" d="M232 120 l-10 -5 v10 z"/>
+
+  <!-- the red team call (the point of the picture) -->
+  <rect class="hero" x="232" y="24" width="284" height="200" rx="14"/>
+  <text class="title" x="252" y="54">Red team</text>
+  <text class="lbl" x="252" y="74">one more call argues the approval is wrong</text>
+  <rect class="chip-soft" x="250" y="86" width="248" height="22" rx="5"/><circle class="dot" cx="263" cy="97" r="3.5"/>
+  <text class="lbl" x="274" y="101">parts of the diff that disagree</text>
+  <rect class="chip-soft" x="250" y="112" width="248" height="22" rx="5"/><circle class="dot" cx="263" cy="123" r="3.5"/>
+  <text class="lbl" x="274" y="127">a limit applied at the wrong level</text>
+  <rect class="chip-soft" x="250" y="138" width="248" height="22" rx="5"/><circle class="dot" cx="263" cy="149" r="3.5"/>
+  <text class="lbl" x="274" y="153">an error returned as success</text>
+  <rect class="chip-soft" x="250" y="164" width="248" height="22" rx="5"/><circle class="dot" cx="263" cy="175" r="3.5"/>
+  <text class="lbl" x="274" y="179">a branch deciding from other input</text>
+  <rect class="chip-soft" x="250" y="190" width="248" height="22" rx="5"/><circle class="dot" cx="263" cy="201" r="3.5"/>
+  <text class="lbl" x="274" y="205">a rule the repo's own docs pin</text>
+
+  <path class="flow" d="M516 120 H596"/><path class="flow-head" d="M604 120 l-10 -5 v10 z"/>
+  <text class="lbl" x="526" y="88">up to 3</text>
+  <text class="lbl" x="526" y="104">CRITICAL</text>
+  <text class="lbl" x="526" y="140">or HIGH</text>
+  <text class="lbl" x="526" y="156">candidates</text>
+
+  <!-- refutation -->
+  <rect class="card" x="604" y="72" width="150" height="96" rx="12"/>
+  <text class="title" x="620" y="100">Refutation</text>
+  <text class="lbl" x="620" y="124">the same call every</text>
+  <text class="lbl" x="620" y="140">blocking finding gets</text>
+
+  <path class="flow" d="M754 120 H770 V72 H782"/><path class="flow-head" d="M790 72 l-10 -5 v10 z"/>
+  <path class="flow" d="M770 120 V168 H782"/><path class="flow-head" d="M790 168 l-10 -5 v10 z"/>
+
+  <!-- outcomes -->
+  <rect class="chip-block" x="790" y="40" width="166" height="64" rx="8"/>
+  <rect class="acc" x="790" y="40" width="6" height="64" rx="3"/>
+  <text class="name on-strong" x="806" y="62">Survives: posted</text>
+  <text class="lbl on-strong" x="806" y="80">marked [raised by</text>
+  <text class="lbl on-strong" x="806" y="95">the red team]</text>
+  <rect class="chip-gone" x="790" y="136" width="166" height="64" rx="8"/>
+  <text class="name" x="806" y="160">Refuted: dropped</text>
+  <text class="lbl" x="806" y="180">the approval stands</text>
+
+  <!-- fails open / how to turn it on -->
+  <rect x="24" y="248" width="572" height="56" rx="10" fill="#FFFFFF" stroke="#BF616A" stroke-width="1.6" stroke-dasharray="5 4"/>
+  <text class="name" x="42" y="271">If the call fails or times out</text>
+  <text class="lbl" x="42" y="290">the round posts its approval as if the red team were off</text>
+  <rect class="card" x="612" y="248" width="344" height="56" rx="10"/>
+  <text class="name" x="630" y="271">Off by default</text>
+  <text class="mono" x="630" y="290">prreview set PRREVIEW_GATE_REDTEAM 1</text>
+</svg>

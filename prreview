@@ -1,0 +1,733 @@
+#!/usr/bin/env bash
+# prreview: set up and run pr-reviewer. `prreview help` lists the commands.
+set -uo pipefail
+# Follow symlinks first: `ln -s ~/pr-reviewer/prreview ~/.local/bin/prreview`
+# must still find lib/ next to the real file.
+_src="${BASH_SOURCE[0]}"
+while [ -L "$_src" ]; do
+  _link="$(readlink "$_src")"
+  case "$_link" in /*) _src="$_link" ;; *) _src="$(dirname "$_src")/$_link" ;; esac
+done
+# pwd -P: the physical path, so the macOS privacy check sees ~/Documents
+# even when the clone is reached through a symlink elsewhere.
+PRREVIEW_HOME="$(cd "$(dirname "$_src")" && pwd -P)"
+. "$PRREVIEW_HOME/lib/prreview-config.sh" || { echo "lib/prreview-config.sh missing" >&2; exit 1; }
+. "$PRREVIEW_HOME/lib/prreview-service.sh" || { echo "lib/prreview-service.sh missing" >&2; exit 1; }
+. "$PRREVIEW_HOME/lib/review-spec.sh" || { echo "lib/review-spec.sh missing" >&2; exit 1; }
+. "$PRREVIEW_HOME/lib/app.sh" || { echo "lib/app.sh missing" >&2; exit 1; }
+
+CONFIG="$(prreview_config_file)"
+STATE_DIR="$(prreview_state_dir)"
+LOG="$STATE_DIR/gate.log"
+PLATFORM="${PRREVIEW_PLATFORM:-$(prreview_platform)}"
+DEFAULT_PARALLEL="$(prreview_key_default "$PRREVIEW_HOME" PRREVIEW_GATE_PARALLEL)"
+# Only if the script's own default could not be read, and then said.
+[ -n "$DEFAULT_PARALLEL" ] || { DEFAULT_PARALLEL=2; echo "prreview: could not read PRREVIEW_GATE_PARALLEL's default from pr-autoreview.sh; assuming 2" >&2; }
+TOOLS="git jq gh claude flock timeout sha256sum curl openssl"
+
+die() { echo "prreview: $*" >&2; exit 1; }
+say() { printf '%s\n' "$*"; }
+
+# ask <variable> <prompt> <default>: one line from stdin into <variable>,
+# the default on an empty line. The end of input stops prreview: read as Enter,
+# it would answer the default forever, "Try again? [y]" included.
+ask() {
+  local _answer
+  printf '%s' "$2${3:+ [$3]}: " >&2
+  IFS= read -r _answer || [ -n "$_answer" ] || { echo >&2; die "no more input; stopped"; }
+  printf -v "$1" '%s' "${_answer:-${3-}}"
+}
+
+yes_no() { # <prompt> <y|n default>
+  local _yn
+  ask _yn "$1 (y/n)" "$2"
+  case "$_yn" in [Yy]*) return 0 ;; *) return 1 ;; esac
+}
+
+load_config() { prreview_config_export "$CONFIG" || die "fix $CONFIG first (above)"; }
+
+# Opens $1 in $EDITOR, else $VISUAL, else vi, saying which and where first:
+# someone who never set either lands in vi, and should know how they got there.
+edit_file() {
+  local ed="${EDITOR:-${VISUAL:-vi}}"
+  say "Opening $1 in $ed; save and quit to go on."
+  # Through sh, as git runs it: EDITOR may carry arguments ("code --wait"),
+  # and a path with spaces in it needs quotes inside the value.
+  sh -c "$ed \"\$@\"" "$ed" "$1" || { say "The editor ($ed) did not run or failed."; return 1; }
+}
+
+# A setting, or $2 when it is not set. The file was checked when prreview
+# started (below), so a read here cannot fail on a malformed line.
+setting() { local v; v="$(prreview_config_get "$CONFIG" "$1")"; printf '%s' "${v:-${2-}}"; }
+checks_dir() { local d="${PRREVIEW_GATE_CHECKS_DIR:-$(setting PRREVIEW_GATE_CHECKS_DIR)}"; printf '%s' "${d:-$PRREVIEW_HOME/checks}"; }
+
+# The built-in item files that $1 has no file of the same name for.
+checks_not_in() {
+  local f
+  for f in "$PRREVIEW_HOME"/checks/*.md; do [ -e "$1/${f##*/}" ] || printf '%s\n' "${f##*/}"; done
+}
+
+# 0 when $1 is the checklist inside the clone. Compared as physical paths, so
+# a trailing slash, a relative path or a symlink cannot slip past.
+is_builtin_checks() {
+  [ "$(cd "$1" 2>/dev/null && pwd -P)" = "$(cd "$PRREVIEW_HOME/checks" && pwd -P)" ]
+}
+
+# owner/repo as GitHub spells it, for anything gh accepts (a URL, a
+# HOST/OWNER/REPO); nothing, with status 1, for a repository gh cannot see.
+# The gate builds API paths from this value, so it must be the plain form.
+repo_name() {
+  local name
+  name="$("${GH_BIN:-gh}" repo view "$1" --json nameWithOwner --jq .nameWithOwner 2>/dev/null)" || return 1
+  [[ "$name" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || return 1
+  printf '%s' "$name"
+}
+
+item_count() { local f n=0; for f in "$1"/*.md; do [ -e "$f" ] && n=$((n + 1)); done; echo "$n"; }
+
+# The files in $1 that are item $2 (leading zeros ignored), one per line.
+item_files() {
+  local f b n want="${2#"${2%%[!0]*}"}"
+  for f in "$1"/*.md; do
+    [ -e "$f" ] || continue
+    b="${f##*/}"; n="${b%%-*}"; n="${n#"${n%%[!0]*}"}"
+    if [ "$n" = "$want" ]; then printf '%s\n' "$f"; fi
+  done
+}
+
+# Refuses a value the reviewer would stop on, before it is written: a
+# checklist or patterns file that does not work, repositories not in
+# owner/repo form, a count that is not a number. Paths become absolute,
+# since the service does not start where this terminal is.
+checked_value() { # <key> <value>; prints the value to store
+  local key="$1" value="$2" item items default is_number=0 is_path=0
+  # The kind of value comes from the reviewer's own default, so a setting
+  # added there is checked here without a list to keep up: a number stays a
+  # number, and a path becomes absolute (the service does not start where
+  # this terminal is, and the reviewer runs inside each repository's clone).
+  # Empty clears the setting, the same as `prreview unset`.
+  if [ -z "$value" ] && [ "$key" != PRREVIEW_GATE_REPOS ]; then return 0; fi
+  default="$(prreview_key_default "$PRREVIEW_HOME" "$key")"
+  case "$default" in ''|*[!0-9]*) ;; *) is_number=1 ;; esac
+  case "$default" in '$HOME'*|'${XDG_'*|'${PRREVIEW_STATE_DIR'*|'$SCRIPT_DIR'*|/*) is_path=1 ;; esac
+  # Defaults that are empty or worked out at run time do not show the kind.
+  case "$key" in
+    PRREVIEW_REVIEW_APP_ID) is_number=1 ;;
+    PRREVIEW_REVIEW_APP_KEY|PRREVIEW_LOOP_BASH|GH_BIN|CLAUDE_BIN) is_path=1 ;;
+  esac
+  if [ "$is_number" = 1 ]; then
+    case "$value" in ''|*[!0-9]*) die "$key takes a whole number${default:+ (its default is $default)}" ;; esac
+  fi
+  if [ "$is_path" = 1 ]; then
+    case "$key:$value" in
+      *:\~/*) value="$HOME/${value#\~/}" ;;
+      *:/*) ;;
+      # A bare program name is looked up on PATH, as the service would.
+      PRREVIEW_LOOP_BASH:*/*|GH_BIN:*/*|CLAUDE_BIN:*/*) value="$PWD/$value" ;;
+      PRREVIEW_LOOP_BASH:*|GH_BIN:*|CLAUDE_BIN:*) value="$(command -v "$value")" || die "cannot find $2 on PATH" ;;
+      *) value="$PWD/$value" ;;
+    esac
+    # The background service reads these too, and macOS does not let it into
+    # the protected folders even when this terminal can read them.
+    if [ "$PLATFORM" = macos ]; then
+      item="$value"; [ -d "$item" ] || item="$(dirname "$item")"
+      ! prreview_macos_protected_dir "$item" \
+        || die "macOS does not let the background service read $value (Documents, Desktop, Downloads and iCloud are protected); put it under ~/.config/pr-reviewer instead"
+    fi
+  fi
+  case "$key" in
+    PRREVIEW_GATE_CHECKS_DIR) review_checks_render "$value" >/dev/null || die "$value is not a usable checklist (above)" ;;
+    PRREVIEW_SENSITIVE_PATTERNS_FILE) [ -s "$value" ] || die "$value is missing or empty; the reviewer refuses to run without patterns" ;;
+    PRREVIEW_REVIEW_APP_KEY) [ -r "$value" ] || die "cannot read $value" ;;
+    PRREVIEW_GATE_REPOS)
+      read -ra items <<<"$value"
+      [ "${#items[@]}" -ge 1 ] || die "the reviewer needs at least one repository"
+      for item in $value; do
+        [[ "$item" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || die "$item is not owner/repo; 'prreview repos add' also takes a URL"
+      done ;;
+    # Numbers the reviewer or its loop refuses to start with below 1: 0
+    # would mean no deadline, no pause, or a spin.
+    PRREVIEW_GATE_PARALLEL|PRREVIEW_GATE_SAMPLES|PRREVIEW_GATE_CALL_CAP|*_TIMEOUT|PRREVIEW_GATE_ROUND_BUDGET|PRREVIEW_GATE_HOLDOFF_QUOTA|PRREVIEW_GATE_HOLDOFF_FAIL|PRREVIEW_GATE_HOLDOFF_MAX|PRREVIEW_LOOP_INTERVAL|PRREVIEW_LOOP_IDLE_EVERY|PRREVIEW_LOOP_ROUND_KILL_AFTER)
+      [[ "$value" =~ ^[0-9]+$ ]] && [ "$((10#$value))" -ge 1 ] || die "$key takes a whole number, 1 or more" ;;
+    # 0 would disarm the stall alert, 1 would file one every round.
+    PRREVIEW_LOOP_READY_FAIL_LIMIT) [[ "$value" =~ ^[0-9]+$ ]] && [ "$((10#$value))" -ge 2 ] || die "$key takes a whole number, 2 or more" ;;
+    # The reviewer reads anything but 1 as off (PRREVIEW_GATE_SYMBOLS: anything but
+    # 0 as on), and an unknown severity as high, each with no more than a log
+    # line; say so here instead.
+    PRREVIEW_GATE_REDTEAM|PRREVIEW_GATE_TICKETS|PRREVIEW_GATE_TITLE_CHECK|PRREVIEW_GATE_ISSUE_NOTE|PRREVIEW_GATE_DISARM_AUTO_MERGE|PRREVIEW_GATE_VERIFY_LINES|PRREVIEW_GATE_SYMBOLS)
+      case "$value" in 0|1) ;; *) die "$key takes 0 (off) or 1 (on)" ;; esac ;;
+    PRREVIEW_GATE_ISSUE_MIN_SEVERITY)
+      value="$(tr '[:upper:]' '[:lower:]' <<<"$value")"
+      case "$value" in critical|high|medium|low) ;; *) die "$key takes critical, high, medium or low" ;; esac ;;
+    PRREVIEW_ALERT_REPO) [[ "$value" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || die "$key takes owner/repo" ;;
+  esac
+  printf '%s' "$value"
+}
+
+# The service's file deleted by hand while the service still runs: stop it
+# without the file. 1 when nothing was running.
+stop_orphaned_service() {
+  prreview_service_loaded "$PLATFORM" || return 1
+  prreview_service_halt "$PLATFORM" || ! prreview_service_loaded "$PLATFORM" \
+    || die "the service file is gone, the service is still running, and it did not stop (above)"
+  say "Its service file was gone but it was still running; stopped it."
+}
+
+# A failed restart usually means the service stopped (a setting it refuses,
+# or systemd's restart limit), so say which it is. Returns 0 restarted, 2
+# still running on the old settings, 1 not running: callers act on the same
+# answer the message gave, not on a second look that may differ.
+restart_service() {
+  prreview_service_restart "$PLATFORM" && return 0
+  if [ "$(prreview_service_state "$PLATFORM")" = running ]; then
+    say "The restart failed (above): the service keeps its old settings until it next starts. 'prreview restart' tries again."
+    return 2
+  fi
+  say "The restart failed (above) and the service is not running. 'prreview logs' shows why."
+  [ "$PLATFORM" != linux ] || say "If nobody is logged in to this machine, systemd will not start it: run 'sudo loginctl enable-linger $(id -un)'."
+  return 1
+}
+
+# From a su or sudo shell systemd cannot be asked, so "not running" would be
+# a guess: say so and stop instead.
+need_service_manager() {
+  case "$PLATFORM" in linux|wsl) ;; *) return 0 ;; esac
+  prreview_systemd_unreachable || return 0
+  prreview_systemd_user_hint "$PLATFORM"
+  die "cannot ask systemd about the background service from this shell (above)"
+}
+
+restart_if_running() {
+  if { [ "$PLATFORM" = linux ] || [ "$PLATFORM" = wsl ]; } && prreview_systemd_unreachable; then
+    say "From this shell prreview cannot ask systemd whether the background service runs. If it does, run 'prreview restart' from a direct login so the change applies."
+    return 0
+  fi
+  [ "$(prreview_service_state "$PLATFORM")" = running ] || return 0
+  restart_service && say "Restarted the background service so the change applies." || return 1
+}
+
+install_hint() {
+  case "$PLATFORM" in
+    macos)
+      say "  brew install git jq gh coreutils flock"
+      say "If prreview setup still finds no timeout or sha256sum after that, your Homebrew installed them only as gtimeout and gsha256sum. Put the plain names first on PATH in this terminal and run prreview setup again (it records that PATH for the service):"
+      say "  export PATH=\"\$(brew --prefix)/opt/coreutils/libexec/gnubin:\$PATH\""
+      say "Claude Code: https://docs.claude.com/en/docs/claude-code/setup" ;;
+    *) say "  sudo apt install git jq curl openssl util-linux coreutils   (Debian/Ubuntu)"
+       say "gh: https://github.com/cli/cli/blob/trunk/docs/install_linux.md   Claude Code: https://docs.claude.com/en/docs/claude-code/setup" ;;
+  esac
+}
+
+# ── setup ─────────────────────────────────────────────────────────────────
+setup_tools() {
+  local t missing=""
+  for t in $TOOLS; do command -v "$t" >/dev/null 2>&1 || missing="$missing $t"; done
+  if [ -n "$missing" ]; then
+    say "Missing:$missing"
+    install_hint
+    return 1
+  fi
+  say "All tools found."
+}
+
+# A reviewer that is not logged in fails every round, and a failed round
+# only waits and tries again, so setup is where it has to show.
+setup_claude() {
+  local st
+  # stdin closed and a deadline: a claude that does not know the subcommand
+  # must not wait for, or eat, the answers setup reads from stdin.
+  st="$(timeout 20 "${CLAUDE_BIN:-claude}" auth status </dev/null 2>/dev/null)"
+  case "$(jq -r '.loggedIn | select(type == "boolean")' <<<"$st" 2>/dev/null)" in
+    true) ;;
+    false) say "Claude Code is not logged in. Run 'claude auth login' in another terminal (over SSH it prints a link to open elsewhere), then try again."
+           return 1 ;;
+    *) say "Could not ask Claude Code whether it is logged in ('claude auth status'). Check that 'claude -p hi' answers before the first round."
+       return 0 ;;
+  esac
+  if [ "$(jq -r '.apiKeySource // empty' <<<"$st")" = ANTHROPIC_API_KEY ]; then
+    say "Claude Code uses ANTHROPIC_API_KEY from this terminal, which a background service does not get. Run 'claude auth login' to store a login, or review with 'prreview run' from a terminal that has the key."
+  fi
+  say "Claude Code is logged in."
+}
+
+setup_github() {
+  if ! "${GH_BIN:-gh}" auth status >/dev/null 2>&1; then
+    say "gh is not logged in. The reviewer reads through gh, and comments as that account unless you set up a GitHub App next."
+    yes_no "Run 'gh auth login' now?" y || return 1
+    "${GH_BIN:-gh}" auth login || return 1
+  fi
+  say "gh is logged in as $("${GH_BIN:-gh}" api user --jq .login 2>/dev/null || echo '?')."
+  # The reviewer clones with `gh repo clone`, which follows this setting.
+  [ "$("${GH_BIN:-gh}" config get git_protocol -h github.com 2>/dev/null)" = ssh ] || return 0
+  say "gh clones over ssh. The background service has no ssh-agent to unlock your key (a systemd user service gets none), so its clones can fail; over https, gh signs in with its own login."
+  if yes_no "Switch gh to https ('gh config set git_protocol https -h github.com')?" y; then
+    "${GH_BIN:-gh}" config set git_protocol https -h github.com && say "gh now clones over https."
+  fi
+  return 0
+}
+
+setup_repos() {
+  local current listed choice picked="" item repo
+  current="$(setting PRREVIEW_GATE_REPOS)"
+  listed="$("${GH_BIN:-gh}" repo list --limit 30 --json nameWithOwner --jq '.[].nameWithOwner' 2>/dev/null)"
+  if [ -n "$listed" ]; then
+    say "Your repositories:"
+    awk '{ printf "  %2d  %s\n", NR, $0 }' <<<"$listed"
+  fi
+  say "Enter numbers from the list and/or owner/repo names, separated by spaces."
+  ask choice "Repositories to review" "$current"
+  for item in $choice; do
+    case "$item" in
+      *[!0-9]*) repo="$item" ;;
+      *) repo="$(sed -n "${item}p" <<<"$listed")"
+         [ -n "$repo" ] || { say "No repository number $item in the list."; return 1; } ;;
+    esac
+    repo="$(repo_name "$repo")" || { say "Cannot see $item with this gh login."; return 1; }
+    case " $picked " in *" $repo "*) ;; *) picked="${picked:+$picked }$repo" ;; esac
+  done
+  [ -n "$picked" ] || { say "At least one repository is needed."; return 1; }
+  prreview_config_set "$CONFIG" PRREVIEW_GATE_REPOS "$picked"
+}
+
+# The page that creates a GitHub App with the permissions the reviewer needs
+# filled in: pull requests and issues read & write (comments on a PR are
+# issue comments), no webhook, private. GitHub caps the name at 34
+# characters and it must be unique, hence the login in it.
+app_new_url() {
+  local name="pr-reviewer-${1-}"
+  printf 'https://github.com/settings/apps/new?name=%s&url=https://github.com/nagameTW/pr-reviewer&public=false&webhook_active=false&pull_requests=write&issues=write' \
+    "$(printf '%s' "$name" | cut -c1-34)"
+}
+
+setup_identity() {
+  local choice id key dest tmp slug jwt repo missing=""
+  say "Comments can come from your gh account, or from a GitHub App: they then show as <app-name>[bot], and the App can do only what its permissions allow."
+  ask choice "Post as 1) your gh account or 2) a GitHub App" "$([ -n "$(setting PRREVIEW_REVIEW_APP_ID)" ] && echo 2 || echo 1)"
+  case "$choice" in
+    1) prreview_config_set "$CONFIG" PRREVIEW_REVIEW_APP_ID "" && prreview_config_set "$CONFIG" PRREVIEW_REVIEW_APP_KEY "" \
+         && prreview_config_set "$CONFIG" PRREVIEW_REVIEW_APP_SLUG "" && say "Comments will come from your gh account."
+       return ;;
+    2) ;;
+    *) say "Answer 1 or 2."; return 1 ;;
+  esac
+  if [ -z "$(setting PRREVIEW_REVIEW_APP_ID)" ]; then
+    say "Create the App from this page; it fills in the permissions (pull requests and issues: read and write, no webhook):"
+    say "  $(app_new_url "$("${GH_BIN:-gh}" api user --jq .login 2>/dev/null)")"
+    say "For an organization's App, change settings/apps/new to organizations/<org>/settings/apps/new."
+    say "After creating it: note the App ID, click 'Generate a private key', then 'Install App' on every account whose repositories you review. A private App installs only on the account that owns it: for another account's or an organization's repositories, make it public first (Advanced, on its settings page)."
+  fi
+  ask id "App ID" "$(setting PRREVIEW_REVIEW_APP_ID)"
+  case "$id" in ''|*[!0-9]*) say "The App ID is a number, shown on the App's settings page."; return 1 ;; esac
+  ask key "Private key file (.pem)" "$(setting PRREVIEW_REVIEW_APP_KEY)"
+  case "$key" in \~/*) key="$HOME/${key#\~/}" ;; esac
+  [ -r "$key" ] || { say "Cannot read $key."; return 1; }
+  # Checked with the key where it is, before anything is copied: a wrong or
+  # revoked key must not replace one that works.
+  if ! { slug="$(app_slug "$id" "$key")" && jwt="$(app_jwt "$id" "$key")"; }; then
+    # curl exits 0 (or 22 under -f) once GitHub answered at all.
+    curl -s -o /dev/null --max-time 10 https://api.github.com/
+    case $? in
+      0|22) say "GitHub did not accept App $id with that key." ;;
+      *) say "Could not reach api.github.com to check the App; check the network and try again." ;;
+    esac
+    return 1
+  fi
+  for repo in $(setting PRREVIEW_GATE_REPOS); do
+    app_installation "$jwt" "$repo" >/dev/null || missing="$missing $repo"
+  done
+  if [ -n "$missing" ]; then
+    say "The App cannot see:$missing. Install it on the accounts that own them, or add them to its repositories, at https://github.com/apps/$slug/installations/new and answer again. A private App installs only on its own account; for other accounts, make it public first (Advanced, on its settings page)."
+    return 1
+  fi
+  dest="$(prreview_config_dir)/app.pem"
+  # -ef: the same file by another spelling (a symlink, ./) is left alone.
+  # Otherwise copy to a temporary file and rename, under umask 077: the key
+  # is never readable by others, and a failed copy never removes the old one.
+  if [ ! "$key" -ef "$dest" ]; then
+    mkdir -p "$(prreview_config_dir)" && tmp="$(umask 077 && mktemp "$dest.XXXXXX")" || return 1
+    cp "$key" "$tmp" && mv "$tmp" "$dest" || { rm -f "$tmp"; return 1; }
+    say "Copied the key to $dest (readable only by you)."
+  fi
+  # The slug is not written down: the gate reads it from GitHub each round,
+  # so renaming the App cannot leave a stale one behind.
+  prreview_config_set "$CONFIG" PRREVIEW_REVIEW_APP_ID "$id" && prreview_config_set "$CONFIG" PRREVIEW_REVIEW_APP_KEY "$dest" \
+    && prreview_config_set "$CONFIG" PRREVIEW_REVIEW_APP_SLUG "" && say "Comments will come from ${slug}[bot]."
+}
+
+setup_parallel() {
+  local n
+  ask n "How many PRs to review at the same time" "$(setting PRREVIEW_GATE_PARALLEL "$DEFAULT_PARALLEL")"
+  case "$n" in ''|*[!0-9]*|0) say "Give a whole number, 1 or more."; return 1 ;; esac
+  # The default is not written down, like the model's: a later version's
+  # default then applies.
+  [ "$n" != "$DEFAULT_PARALLEL" ] || n=""
+  prreview_config_set "$CONFIG" PRREVIEW_GATE_PARALLEL "$n"
+}
+
+setup_model() {
+  local m
+  ask m "Model for reviews" "$(setting PRREVIEW_REVIEW_MODEL "$REVIEW_MODEL_DEFAULT")"
+  if [ "$m" = "$REVIEW_MODEL_DEFAULT" ]; then
+    prreview_config_set "$CONFIG" PRREVIEW_REVIEW_MODEL ""
+  else
+    prreview_config_set "$CONFIG" PRREVIEW_REVIEW_MODEL "$m"
+  fi
+}
+
+setup_patterns() {
+  local file
+  file="$(setting PRREVIEW_SENSITIVE_PATTERNS_FILE "$(prreview_config_dir)/sensitive-patterns")"
+  if [ ! -s "$file" ]; then
+    # Private: it is where internal hostnames and customer names go.
+    mkdir -p "$(dirname "$file")" && (umask 077 && cp "$PRREVIEW_HOME/sensitive-patterns.example" "$file") || return 1
+    say "Wrote $file from the example. Each line is a regular expression for text that must never appear in a comment: internal hostnames, private address ranges, customer names."
+  else
+    say "Sensitive-data patterns: $file"
+  fi
+  # Written down even at the default, so the gate reads this very file.
+  prreview_config_set "$CONFIG" PRREVIEW_SENSITIVE_PATTERNS_FILE "$file" || return 1
+  if yes_no "Edit it now?" n; then edit_file "$file" || say "Edit $file later."; fi
+}
+
+setup_checks() {
+  local own current missing f taken
+  own="$(prreview_config_dir)/checks"
+  current="$(setting PRREVIEW_GATE_CHECKS_DIR)"
+  say "The checklist is a folder with one file per review item ($(ls "$PRREVIEW_HOME/checks" | wc -l | tr -d ' ') built in)."
+  # A checklist chosen with `prreview set checks` stays; setup only offers the
+  # built-in items it lacks.
+  if [ -n "$current" ] && [ "$current" != "$own" ] && [ -d "$current" ] && ! is_builtin_checks "$current"; then
+    own="$current"
+  fi
+  if [ -d "$own" ]; then
+    say "Using your copy at $own."
+    prreview_config_set "$CONFIG" PRREVIEW_GATE_CHECKS_DIR "$own" || return 1
+    missing="$(checks_not_in "$own")"
+    [ -n "$missing" ] || return 0
+    say "Built-in items your copy does not have (new in this version, or ones you removed):"
+    sed 's/^/  /' <<<"$missing"
+    if yes_no "Copy them into your copy?" n; then
+      while IFS= read -r f; do
+        # Two files with one number stop every round, so one of yours keeps it.
+        taken="$(item_files "$own" "${f%%-*}")"
+        if [ -n "$taken" ]; then
+          say "Skipped $f: item ${f%%-*} is already ${taken##*/} in your copy. Renumber yours (50 and up) and run prreview setup again to add it."
+          continue
+        fi
+        cp "$PRREVIEW_HOME/checks/$f" "$own/" || return 1
+        say "Copied $f."
+      done <<<"$missing"
+    fi
+    return 0
+  fi
+  if yes_no "Copy it to $own so you can add and remove items?" y; then
+    mkdir -p "$own" && cp "$PRREVIEW_HOME"/checks/*.md "$own/" || return 1
+    prreview_config_set "$CONFIG" PRREVIEW_GATE_CHECKS_DIR "$own"
+    say "Copied. 'prreview checks' lists the items."
+  fi
+}
+
+# Sets SETUP_DONE, the line setup ends with, from what happened here rather
+# than from a second look: launchd may not have started the job yet, and a
+# shell that cannot reach systemd cannot tell either way.
+SETUP_DONE="Done. 'prreview run' reviews from this terminal until you stop it; 'prreview once' does one round."
+SETUP_DONE_RUNNING="Done. The service is running; 'prreview logs -f' follows it."
+setup_service() {
+  local where="$PLATFORM" state
+  case "$where" in
+    macos) where="launchd (starts at login)" ;;
+    linux) where="a systemd user service (starts at login)" ;;
+    wsl) where="a systemd user service inside WSL" ;;
+    *) say "No background service on this system. Run 'prreview run' yourself."; return 0 ;;
+  esac
+  if ! yes_no "Run the reviewer in the background with $where?" y; then
+    # One that is already running still holds the old settings.
+    restart_if_running
+    state="$(prreview_service_state "$PLATFORM")"
+    case "$state" in
+      running) SETUP_DONE="$SETUP_DONE_RUNNING" ;;
+      "not installed") say "Skipped. 'prreview start' installs it later." ;;
+      unknown*) SETUP_DONE="Done." ;;
+    esac
+    return 0
+  fi
+  prreview_service_install "$PLATFORM" "$PRREVIEW_HOME" "$LOG" || return 1
+  # systemctl enable --now leaves a running service alone; it read its
+  # settings when it started, so restart it (launchd's reinstall already did).
+  if [ "$PLATFORM" != macos ]; then
+    restart_service
+    case $? in 1) return 1 ;; 2) SETUP_DONE="$SETUP_DONE_RUNNING"; return 0 ;; esac
+  fi
+  SETUP_DONE="$SETUP_DONE_RUNNING"
+  say "Installed. It checks for new PRs every minute. 'prreview status' shows it, 'prreview logs' follows it."
+  [ "$PLATFORM" != linux ] || say "On a server nobody logs in to, run 'sudo loginctl enable-linger $(id -un)' so it keeps running after you log out."
+  [ "$PLATFORM" != wsl ] || say "WSL stops when Windows has no WSL window open; see the README's Windows section to keep it running."
+}
+
+cmd_setup() {
+  local step title terminal_only=0
+  say "pr-reviewer setup. Settings go to $CONFIG; Enter keeps the value in brackets."
+  # Before any question: the service cannot run from a folder macOS protects,
+  # and finding that out after every answer wastes them. Running in a
+  # terminal still works from there, so that stays a choice.
+  if [ "$PLATFORM" = macos ] && prreview_macos_protected_dir "$PRREVIEW_HOME"; then
+    say "macOS does not let a background service read $PRREVIEW_HOME (Documents, Desktop, Downloads and iCloud are protected). Move the clone to run it in the background:"
+    say "  mv $(printf '%q' "$PRREVIEW_HOME") ~/pr-reviewer && cd ~/pr-reviewer && ./prreview setup"
+    yes_no "Set it up here anyway, to run it only in a terminal ('prreview run', 'prreview once')?" n \
+      || die "setup stopped; move the clone and run prreview setup again"
+    terminal_only=1
+  fi
+  for step in tools claude github repos identity parallel model patterns checks; do
+    # The step names the README uses.
+    case "$step" in
+      tools) title=Tools ;; claude) title="Claude Code" ;; github) title=GitHub ;; repos) title=Repositories ;;
+      identity) title="Who posts" ;; parallel) title="PRs at the same time" ;;
+      model) title=Model ;; patterns) title="Sensitive-data patterns" ;; checks) title=Checklist ;;
+    esac
+    say ""
+    say "── $title"
+    until "setup_$step"; do
+      [ "$step" = tools ] && die "install the missing tools, then run prreview setup again"
+      yes_no "Try again?" y || die "setup stopped at '$title'; run prreview setup again to continue"
+    done
+  done
+  # The service's PATH is a login shell's minimum; record this one so it
+  # finds gh, claude and jq where this terminal does.
+  prreview_config_set "$CONFIG" PATH "$PATH" || die "could not record PATH in $CONFIG; a background service would not find gh and claude"
+  say ""
+  if [ "$terminal_only" = 1 ]; then
+    # One installed from another clone still holds the old settings.
+    restart_if_running
+    say "Done. 'prreview run' reviews from this terminal until you stop it; 'prreview once' does one round."
+    return 0
+  fi
+  say "── Background service"
+  if setup_service; then
+    say ""
+    say "$SETUP_DONE"
+  else
+    say "The reviewer is not running in the background (above). 'prreview run' runs it in this terminal."
+  fi
+}
+
+# ── everyday commands ─────────────────────────────────────────────────────
+# The service runs `prreview run --service` and writes its output to $LOG, so only
+# then may the loop rotate $LOG. Run by hand, the output goes wherever the
+# caller sent it and $LOG is not this loop's to touch.
+cmd_run() {
+  local own_log=""
+  load_config; mkdir -p "$STATE_DIR"
+  [ "${1-}" = --service ] && own_log="$LOG"
+  PRREVIEW_LOOP_LOG_FILE="$own_log" exec bash "$PRREVIEW_HOME/review-loop.sh" "$STATE_DIR/gate-logs"
+}
+cmd_once() {
+  load_config
+  [ -n "${PRREVIEW_GATE_REPOS-}" ] || die "no repositories are set; run prreview setup first"
+  # The locale the service runs it in (review-loop.sh), so a round run by
+  # hand cuts text by character too, not by byte.
+  exec env LC_ALL=C.UTF-8 LANG=C.UTF-8 bash "$PRREVIEW_HOME/pr-autoreview.sh"
+}
+
+cmd_status() {
+  local repos
+  repos="$(setting PRREVIEW_GATE_REPOS)"
+  say "Settings:     $CONFIG"
+  say "Repositories: ${repos:-none (run prreview setup)}"
+  # By the App id, as the gate decides (pr-autoreview.sh GATE_APP).
+  say "Comments as:  $(id="$(setting PRREVIEW_REVIEW_APP_ID)"; [ -n "$id" ] && echo "GitHub App $id" || echo "your gh account")"
+  say "At a time:    $(setting PRREVIEW_GATE_PARALLEL "$DEFAULT_PARALLEL (default)")"
+  say "Model:        $(setting PRREVIEW_REVIEW_MODEL "$REVIEW_MODEL_DEFAULT (default)")"
+  say "Checklist:    $(checks_dir)"
+  say "Service:      $(prreview_service_state "$PLATFORM")"
+  if [ -s "$LOG" ]; then say "Last lines of $LOG:"; tail -5 "$LOG" | sed 's/^/  /'; fi
+}
+
+cmd_logs() { [ -f "$LOG" ] || die "no log yet at $LOG"; if [ "${1-}" = -f ]; then tail -f "$LOG"; else tail -40 "$LOG"; fi; }
+
+cmd_repos() {
+  local repos repo item out=""
+  repos="$(setting PRREVIEW_GATE_REPOS)"
+  case "${1-list}" in
+    list) [ -z "$repos" ] || tr ' ' '\n' <<<"$repos" ;;
+    add)
+      [ -n "${2-}" ] || die "usage: prreview repos add owner/repo"
+      repo="$(repo_name "$2")" || die "cannot see $2 with this gh login"
+      case " $repos " in *" $repo "*) say "$repo is already on the list."; return 0 ;; esac
+      prreview_config_set "$CONFIG" PRREVIEW_GATE_REPOS "${repos:+$repos }$repo" && say "Added $repo." && restart_if_running ;;
+    remove)
+      [ -n "${2-}" ] || die "usage: prreview repos remove owner/repo"
+      # As typed first (a repository renamed since it was added: gh would
+      # answer with the new name), then as repos add would have stored it (a
+      # URL, other letter case).
+      repo="$2"
+      case " $repos " in *" $repo "*) ;; *) repo="$(repo_name "$2")" || repo="$2" ;; esac
+      for item in $repos; do [ "$item" = "$repo" ] || out="${out:+$out }$item"; done
+      [ "$out" != "$repos" ] || die "$2 is not on the list"
+      [ -n "$out" ] || die "that is the last repository; the reviewer needs at least one"
+      prreview_config_set "$CONFIG" PRREVIEW_GATE_REPOS "$out" && say "Removed $repo." && restart_if_running ;;
+    *) die "usage: prreview repos [list | add owner/repo | remove owner/repo]" ;;
+  esac
+}
+
+cmd_set() {
+  local key value
+  [ $# -ge 2 ] || die "usage: prreview set <name> <value>   (names: repos, parallel, model, checks, patterns, or any PRREVIEW_ setting)"
+  key="$(prreview_key_of "$1")" || die "not a setting name: $1"
+  prreview_key_known "$PRREVIEW_HOME" "$key" || die "$key is not a setting the reviewer reads (check the spelling; the README lists them)"
+  shift
+  value="$(checked_value "$key" "$*")" || exit 1
+  prreview_config_set "$CONFIG" "$key" "$value" && say "$key=$value" && restart_if_running
+}
+
+cmd_unset() {
+  local key
+  key="$(prreview_key_of "${1-}")" || die "usage: prreview unset <name>"
+  [ "$key" != PRREVIEW_GATE_REPOS ] || die "the reviewer needs at least one repository; change them with prreview repos or prreview set repos"
+  prreview_config_set "$CONFIG" "$key" "" && say "$key is back to its default." && restart_if_running
+}
+
+cmd_get() {
+  local key value
+  key="$(prreview_key_of "${1-}")" || die "usage: prreview get <name>"
+  value="$(prreview_config_get "$CONFIG" "$key")"
+  if [ -n "$value" ]; then printf '%s\n' "$value"; return 0; fi
+  # Not set: the reviewer's own default, when it is a plain value. Only the
+  # value goes to stdout, so $(prreview get x) stays usable; the note goes to stderr.
+  value="$(prreview_key_default "$PRREVIEW_HOME" "$key")"
+  value="${value//\$REVIEW_MODEL_DEFAULT/$REVIEW_MODEL_DEFAULT}"
+  case "$value" in
+    '') ;;
+    *'$'*) echo "(not set; the default is worked out when the reviewer runs, see the README)" >&2 ;;
+    *) printf '%s\n' "$value"; echo "(not set; that is the default)" >&2 ;;
+  esac
+}
+
+# Every item with its number, the files it is limited to, and its first words.
+cmd_checks() {
+  local dir f base num scope first missing tpl
+  dir="$(checks_dir)"
+  case "${1-list}" in
+    list)
+      review_checks_render "$dir" >/dev/null || die "the checklist at $dir is not usable (above)"
+      say "Checklist: $dir"
+      for f in "$dir"/*.md; do
+        base="${f##*/}"; num="${base%%-*}"; num="${num#"${num%%[!0]*}"}"
+        scope="$(awk 'NR == 1 && $0 != "---" { exit } /^applies_to:/ { sub(/^applies_to:[ \t]*/, ""); print; exit }' "$f")"
+        first="$(awk 'NR == 1 && $0 == "---" { fm = 1; next } fm && $0 == "---" { fm = 0; next } !fm && NF { print; exit }' "$f")"; first="${first:0:70}"
+        printf '  %-4s %-28s %s\n' "${num:-0}" "${base%.md}" "${scope:+[$scope] }$first"
+      done
+      if ! is_builtin_checks "$dir"; then
+        missing="$(checks_not_in "$dir")"
+        [ -z "$missing" ] || say "Built-in items not in this copy: $(tr '\n' ' ' <<<"$missing")(prreview setup offers to copy them)"
+      fi ;;
+    path) say "$dir" ;;
+    add)
+      [ -n "${2-}" ] || die "usage: prreview checks add <number-name>   (for example: prreview checks add 50-migrations; number your own items 50 and up)"
+      [[ "$2" =~ ^[0-9]+[a-z]?-[A-Za-z0-9._-]+$ ]] || die "name it like 50-migrations: a number, a dash, a name"
+      ! is_builtin_checks "$dir" || die "that is the built-in checklist; run prreview setup and copy it first, so updates to the reviewer do not undo your change"
+      f="$(item_files "$dir" "${2%%-*}")"
+      [ -z "$f" ] || die "item ${2%%-*} is taken by $f; pick another number"
+      f="$dir/$2.md"
+      tpl="$(printf -- '---\n# applies_to limits this item to PRs that change matching files, e.g. applies_to: *.py\n# As written (*) it applies to every PR, and everything from --- to --- can go.\napplies_to: *\n---\n%s — describe what to look for and how severe a miss is.' "${2#*-}")"
+      printf '%s\n' "$tpl" > "$f" || die "cannot write $f"
+      edit_file "$f" || { rm -f "$f"; die "the item was not added"; }
+      # The template would go to the model on every PR as it stands.
+      if [ "$(cat "$f")" = "$tpl" ]; then
+        rm -f "$f"
+        die "the item was not changed, so it was not added"
+      fi
+      review_checks_render "$dir" >/dev/null || die "the new item is not usable yet (above); fix $f"
+      say "Added $f." ;;
+    remove)
+      [ -n "${2-}" ] || die "usage: prreview checks remove <number>"
+      f="$(item_files "$dir" "$2")"
+      [ -n "$f" ] || die "no item $2 in $dir"
+      [ "$(item_count "$dir")" -gt 1 ] || die "that is the last item; the reviewer refuses to run with an empty checklist"
+      [ "$(wc -l <<<"$f" | tr -d ' ')" = 1 ] || die "more than one file is item $2; delete the one you mean by hand:
+$f"
+      ! is_builtin_checks "$dir" || die "that is the built-in checklist; run prreview setup and copy it first, so updates to the reviewer do not undo your change"
+      yes_no "Delete $f?" n && rm -f "$f" && say "Removed item $2." ;;
+    *) die "usage: prreview checks [list | path | add <number-name> | remove <number>]" ;;
+  esac
+}
+
+cmd_start() {
+  need_service_manager
+  local state
+  # Without a repository the loop refuses to run, and the service manager
+  # would restart it every 30 seconds for nothing.
+  [ -n "${PRREVIEW_GATE_REPOS:-$(setting PRREVIEW_GATE_REPOS)}" ] || die "no repositories are set; run prreview setup first"
+  state="$(prreview_service_state "$PLATFORM")"
+  case "$state" in
+    running) say "Already running." ;;
+    "not installed") prreview_service_install "$PLATFORM" "$PRREVIEW_HOME" "$LOG" && say "Installed and started." ;;
+    *) prreview_service_start "$PLATFORM" && say "Started." ;;
+  esac || die "the service did not start (above); 'prreview logs' shows why"
+}
+
+cmd_help() {
+  cat <<'EOF'
+prreview: set up and run pr-reviewer
+
+  prreview setup                 step-by-step setup: login, repositories, service
+  prreview status                settings, service state and the last log lines
+  prreview logs [-f]             the reviewer's log (-f follows it)
+
+  prreview repos                 list the repositories under review
+  prreview repos add <o/r>       review another repository
+  prreview repos remove <o/r>    stop reviewing one
+
+  prreview set <name> <value>    change a setting: repos, parallel, model, checks,
+                                 patterns, or any PRREVIEW_ setting from the README
+  prreview get <name>            print one setting
+  prreview unset <name>          back to the default
+
+  prreview checks                list the review items
+  prreview checks add <NN-name>  write a new item (number it 50 or up) and open it in $EDITOR
+  prreview checks remove <NN>    delete an item (your copy only)
+  prreview checks path           print the checklist directory in use
+
+  prreview once                  review the open PRs one time, in this terminal
+  prreview run                   the loop, in this terminal (what the service runs)
+  prreview start | stop | restart | uninstall
+EOF
+}
+
+case "${1-help}" in help|-h|--help) ;; *)
+  prreview_config_read "$CONFIG" >/dev/null || die "fix $CONFIG first (above)" ;;
+esac
+
+case "${1-help}" in
+  setup) cmd_setup ;;
+  run) shift; cmd_run "$@" ;;
+  once) cmd_once ;;
+  status) cmd_status ;;
+  logs) shift; cmd_logs "$@" ;;
+  repos) shift; cmd_repos "$@" ;;
+  set) shift; cmd_set "$@" ;;
+  get) shift; cmd_get "$@" ;;
+  unset) shift; cmd_unset "$@" ;;
+  checks) shift; cmd_checks "$@" ;;
+  start) cmd_start ;;
+  stop)
+    need_service_manager
+    if [ "$(prreview_service_state "$PLATFORM")" = "not installed" ]; then
+      if stop_orphaned_service; then say "'prreview start' installs it again."
+      else say "The background service is not installed; nothing to stop."; fi
+      exit 0
+    fi
+    prreview_service_stop "$PLATFORM" && say "Stopped. It stays stopped after a reboot or a new login until 'prreview start'." || die "could not stop the service (above)" ;;
+  restart)
+    need_service_manager
+    [ "$(prreview_service_state "$PLATFORM")" != "not installed" ] || die "the background service is not installed; 'prreview start' installs and starts it"
+    restart_service && say "Restarted." || exit 1 ;;
+  uninstall)
+    need_service_manager
+    if [ "$(prreview_service_state "$PLATFORM")" = "not installed" ]; then
+      stop_orphaned_service || say "The background service is not installed; nothing to remove."
+      exit 0
+    fi
+    prreview_service_remove "$PLATFORM" && say "Removed the background service. Settings stay in $CONFIG." || die "could not remove the service (above)" ;;
+  help|-h|--help) cmd_help ;;
+  *) echo "unknown command: $1" >&2; cmd_help >&2; exit 2 ;;
+esac

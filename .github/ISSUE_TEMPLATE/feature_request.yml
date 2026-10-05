@@ -1,0 +1,28 @@
+name: Feature request
+description: Suggest a change to what the reviewer checks or how it runs.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The reviewer only comments, by design. Requests to approve, merge or
+        block pull requests are out of scope for this project.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you are trying to do, and where the reviewer gets in the way or falls short.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like
+      description: The behavior you want. If it is a new setting, what it would default to.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: A pull request, a review comment, or numbers that show the problem. Changes to review behavior land more easily with a before-and-after.

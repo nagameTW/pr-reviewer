@@ -1,0 +1,1 @@
+Design — over-engineering (solving a speculated future problem instead of the present one), needless complexity; a change clearly in the wrong place or clearly inconsistent with the existing architecture (flag as HIGH only when unambiguous — borderline design taste is MEDIUM at most); naming or comments only when they genuinely obscure meaning.
