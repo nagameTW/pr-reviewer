@@ -6,6 +6,8 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-12
+
 ### Added
 
 - The README documents five settings that already existed:
@@ -66,4 +68,5 @@ All notable changes to this project are recorded here. The format follows
   to add an item, delete one to drop it; `applies_to` front matter limits an
   item to PRs that change matching files.
 
-[Unreleased]: https://github.com/nagameTW/pr-reviewer/commits/main
+[Unreleased]: https://github.com/nagameTW/pr-reviewer/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/nagameTW/pr-reviewer/releases/tag/v0.2.0
