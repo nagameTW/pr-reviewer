@@ -152,9 +152,9 @@ item it comes from and a severity.
 </p>
 
 Each item is one file in `checks/`, and that file is the full wording the
-model sees. Item 3 treats host addresses in `10.0.0.0/8` and `192.168.0.0/16`
-as real internal addresses, in tests too, and allows `172.16.0.0/12` and the
-documentation ranges; if your fixtures use other ranges, edit
+model sees. Item 3 treats a host address in any RFC 1918 private range as a
+real internal address, in tests too. It allows the ranges and names reserved
+for documentation. If your fixtures use other ranges, edit
 `checks/03-sensitive-data.md` to match.
 
 ## Adding your own checks
