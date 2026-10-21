@@ -59,6 +59,7 @@ chmod +x "$STUBS/cat"
 #   plan-prefix-fail    chunk_plan prints its first 4 rows and exits 1
 #   plan-prefix-ok      chunk_plan prints its first 4 rows and exits 0
 #   plan-dup-ok         chunk_plan prints all rows and the last row again
+#   plan-full-fail      chunk_plan prints all rows and exits 1
 #   select-prefix-fail  the selector of slice 2 prints its first row and exits 1
 cat > "$STUBS/awk" <<'STUB'
 #!/bin/bash
@@ -71,6 +72,7 @@ esac
 out="$("$AWK_REAL" "$@")"
 case "$mode" in
   plan-dup-ok) printf '%s\n' "$out"; printf '%s\n' "$out" | tail -n 1 ;;
+  plan-full-fail) printf '%s\n' "$out" ;;
   plan-*) printf '%s\n' "$out" | head -n 4 ;;
   select-*) printf '%s\n' "$out" | head -n 1 ;;
 esac
@@ -150,6 +152,13 @@ has "says the plan does not cover the diff" "slice plan" "$(cat "$TMP/out-7")"
 echo "the planner prints the last part twice and exits 0"
 is "falls back to the whole diff in one pass" "$(run_case 8 '' fail plan-dup-ok)" "1 whole"
 is "the planner stub ran" "$(fired)" yes
+
+# The plan is complete, so the coverage check passes. Only the status of the
+# planner can reject it.
+echo "the planner prints the complete plan and exits non-zero"
+is "falls back to the whole diff in one pass" "$(run_case 10 '' fail plan-full-fail)" "1 whole"
+is "the planner stub ran" "$(fired)" yes
+has "says the plan does not cover the diff" "slice plan" "$(cat "$TMP/out-10")"
 
 echo "the selector of slice 2 prints a prefix and exits non-zero"
 is "falls back to the whole diff in one pass" "$(run_case 9 '' fail select-prefix-fail)" "1 whole"
