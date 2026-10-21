@@ -40,7 +40,7 @@ pin    'binary files are excluded by path so the text changes still apply' 'appl
 pin    'the model is told which binary files are missing from the tree' 'TREE_CLAUSE="$(prompt_tree_clause "$DIFF_APPLIED" "$TREE_AT")$TREE_CONV_NOTE$TREE_BIN_NOTE"' pr-autoreview.sh
 pin    '...and so are the red team, in the tree text it shares with the review' 'redteam_prompt "$REPO" "$PR" "$DIFF" "$TREE_CLAUSE$STACKED_CLAUSE" "$RT_PRIOR"' pr-autoreview.sh
 pin    '...which also gets the line definition' '"$REVIEW_LANGUAGE_SPEC" "$SEVERITY_SPEC" "$REPO_DIR" "$REVIEW_LINE_SPEC")"' pr-autoreview.sh
-pin    '...the verifier' '"$V_ISSUE" "$DIFF_APPLIED" "$TREE_BIN_NOTE")"' pr-autoreview.sh
+pin    '...and so are the verifier, in the same tree text' '"$V_ISSUE" "$TREE_CLAUSE$STACKED_CLAUSE")"' pr-autoreview.sh
 pin    'job log lines carry the repo key, so two repos with one name stay apart' 'sed -u "s|^|[$REPO_KEY#$PR] |"' pr-autoreview.sh
 pin    'a broken checks directory stops the gate at startup' 'review_checks_render "$CHECKS_DIR" >/dev/null \' pr-autoreview.sh
 pin    'each PR gets the checks that apply to its changed paths' 'REVIEW_CHECKS="$(review_checks_render "$CHECKS_DIR" "$PR_FILES")" \' pr-autoreview.sh

@@ -1030,56 +1030,29 @@ FINDINGS_MERGE_STAKES='a clean verdict here is often the only review a PR gets b
 # English because an overturned finding's reason is printed straight into
 # the same PR comment as the main review's own text (pr-autoreview.sh's
 # refuted-findings block).
-# $8 says whether the caller applied the PR's diff to the working tree. It
-# changes what the verifier may treat as evidence, which is the one thing this
-# prompt is most easily broken by: told the tree is pre-change when it is
-# post-change, the verifier refuses to trust what it reads and refutes on the
-# hunk text alone; told the opposite, "line N says something else" becomes
-# proof when it is really the default branch showing through. Empty or 0 keeps
-# the original wording, so a caller that has not been taught to pass it gets
-# the conservative half rather than a wrong claim. $9 is an optional sentence
-# appended to the tree description (the binary-file note).
+# $8 is the text that says what the working tree is: the same text the main
+# review gets (TREE_CLAUSE and STACKED_CLAUSE in pr-autoreview.sh), binary-file
+# note included, so the two prompts never describe one tree in two ways. It
+# used to choose its own text from DIFF_APPLIED alone. For a stacked PR the
+# tree is the parent branch, and that text was then wrong in both apply
+# states. The text matters here more than anywhere: told the tree is
+# pre-change when it is post-change, the verifier refuses to trust what it
+# reads and refutes on the hunk text alone; told the opposite, "line N says
+# something else" becomes proof when it is really another branch showing.
 findings_verify_prompt() {
-  local repo="${1-}" pr="${2-}" diff="${3-}" severity="${4-}" file="${5-}" line="${6-}" issue="${7-}" applied="${8-}" note="${9-}" sep tree_para reason_spec
+  local repo="${1-}" pr="${2-}" diff="${3-}" severity="${4-}" file="${5-}" line="${6-}" issue="${7-}" tree_para="${8-}" sep reason_spec
   sep="$(findings_fence_nonce)"
   reason_spec="<1-3 sentences in plain English, citing file:line>"
-  if [ "$applied" = 1 ]; then
-    tree_para="The working tree around you is the code AS THIS PR HAS IT: the commit the author
-branched from, with this PR's diff applied on top. So:
-
-- A line number in the finding DOES line up with the file on disk, and a file the PR adds is
-  readable in full. If the cited line says something other than what the finding claims,
-  that is real evidence — check it.
-- One exception, and it is the trap: for a PR based on another branch, that parent's own
-  changes are still absent from this tree, so code that looks MISSING may live there. Say so
-  rather than refuting on absence.
-- The default branch may have moved since the author branched, so this tree is not the
-  post-merge state. A finding about clashing with newer code there cannot be settled here.
-- If the finding cites a file the diff does not touch at all, it may still be right: a
-  change breaks its callers, leaves a doc stale, or needs an existing guard that is missing.
-  Judge the claim, not the line number."
-  else
-    tree_para="The working tree around you is the
-repo's DEFAULT branch, i.e. the code WITHOUT this change (for a PR based on another branch
-it is not even the PR's base, so that parent's changes are absent too). The finding is about
-the code WITH the change, so:
-
-- Line numbers in the finding refer to the post-merge file. They will not line up with the
-  file on disk, and that is normal. A cited line that \"says something else\" in the tree is
-  NOT evidence against the finding — it is the default branch showing through. Code that
-  looks MISSING may live on a parent branch this tree does not have. Find the code the
-  finding is talking about IN THE DIFF, then use the tree for everything around it: callers,
-  existing guards, tests, neighbouring functions.
-- If the finding cites a file the diff does not touch at all, it may still be right: a
-  change breaks its callers, leaves a doc stale, or needs an existing guard that is missing.
-  Judge the claim, not the line number."
-  fi
   cat <<EOF
 You are the second round of an automated review gate for $repo, PR #$pr. A first-round
 review reported the finding quoted below at $severity, which $FINDINGS_BLOCKS_MERGE. Your job is
 to try to REFUTE it by reading the actual code, not to agree with it.
 
-The full diff of this PR is in $diff — Read it FIRST. $tree_para$note
+The full diff of this PR is in $diff — Read it FIRST. $tree_para
+
+If the finding cites a file the diff does not touch at all, it may still be right: a change
+breaks its callers, leaves a doc stale, or needs an existing guard that is missing.
+Judge the claim, not the line number.
 
 Check, concretely:
 - Does the code the finding describes actually exist in this diff, doing what it says?

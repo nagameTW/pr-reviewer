@@ -334,9 +334,9 @@ VERIFY_CALL="$(grep -F 'findings_verify_prompt "$REPO"' pr-autoreview.sh)"
 if [ -z "$VERIFY_CALL" ]; then
   WORDING_MISSING="$WORDING_MISSING
   the second-round verify call is gone from pr-autoreview.sh"
-elif ! grep -qF -- '"$DIFF_APPLIED"' <<<"$VERIFY_CALL"; then
+elif ! grep -qF -- '"$TREE_CLAUSE$STACKED_CLAUSE"' <<<"$VERIFY_CALL"; then
   WORDING_MISSING="$WORDING_MISSING
-  the verify call no longer passes \$DIFF_APPLIED, so the verifier is told the tree is pre-change even when the diff was applied"
+  the verify call no longer passes the review's tree text (\$TREE_CLAUSE\$STACKED_CLAUSE), so the verifier can be told a tree that is not there"
 fi
 
 TITLE_REMINDER='ℹ️ Title format reminder'

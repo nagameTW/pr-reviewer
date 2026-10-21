@@ -18,11 +18,12 @@ All notable changes to this project are recorded here. The format follows
   not so when the diff did not apply, or for a convention file the reviewer
   restored. For a deleted line the model uses the nearest line that still
   exists, and for a deleted file it uses 0.
-- The red-team prompt now describes the review tree with the same text as the
-  main review. It used to choose its own text from one fact, whether the diff
-  applied. For a PR based on another branch, the tree is that branch, and the
-  red-team text was then wrong whether or not the diff applied. The red team
-  now also gets the note about convention files the reviewer restored.
+- The red-team and refutation prompts now describe the review tree with the
+  same text as the main review. Each used to choose its own text from one
+  fact, whether the diff applied. For a PR based on another branch, the tree
+  is that branch, and those texts were then wrong whether or not the diff
+  applied. Both now also get the note about convention files the reviewer
+  restored.
 - A PR that changes no files is skipped with a log line that says so. v0.2.0
   skipped it too. The new diff fetch for the exact head commit read the empty
   diff of such a PR as a diff it could not read.

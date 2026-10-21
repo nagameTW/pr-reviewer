@@ -51,17 +51,14 @@ prompt_linked_issue() {
 #     reads and falls back to the hunk text.
 # So the sentence is computed from what actually happened rather than assumed.
 #
-# There are TWO of these TEXTS, not one — findings_verify_prompt writes its
-# own separate wording, because lib/findings.sh has to stay loadable without
-# this lib (tests/findings.test.sh sources only that file) and it is handed
-# the 0/1 flag, not the sentence. They already differ in detail — this one
-# mentions that git history describes the branch point, that one does not.
-# Both halves are pinned by tests (tests/prompt.test.sh here,
-# tests/findings.test.sh there), which is what has to catch a change made to
-# one and not the other. Every caller of this function itself, though, reads
-# the SAME sentence from here — a caller writing its own copy
+# There is ONE of these texts. The main review, the red team
+# (redteam_prompt) and the verifier (findings_verify_prompt) all get it,
+# with STACKED_CLAUSE after it, from pr-autoreview.sh. The red team and the
+# verifier used to write their own wording from DIFF_APPLIED alone, and for a
+# stacked PR both were wrong. A caller writing its own copy
 # instead of calling this function is the failure this file exists to
-# remove, not a second legitimate text.
+# remove, not a second legitimate text. tests/redteam.test.sh runs all three
+# call sites in each tree state.
 # $1 = 1 when the diff was applied to the tree, anything else when it was not.
 # $2 = where the checkout actually landed: "base" (the PR's own base, which on
 #      a stacked PR is the parent branch) or anything else for the default

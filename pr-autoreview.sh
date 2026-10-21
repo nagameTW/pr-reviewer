@@ -2523,7 +2523,8 @@ $SLICE_CLEAN"
       # but indistinguishable from a stage that never ran at all.
       # Same path-scoped tools as the review: repo + this diff, nothing else.
       # $! is the PID of the last command in this pipeline, the model call.
-      printf '%s' "$(findings_verify_prompt "$REPO" "$PR" "$DIFF" "$V_SEV" "$V_FILE" "$V_LINE" "$V_ISSUE" "$DIFF_APPLIED" "$TREE_BIN_NOTE")" \
+      # The tree text is the main review's own, as for the red team.
+      printf '%s' "$(findings_verify_prompt "$REPO" "$PR" "$DIFF" "$V_SEV" "$V_FILE" "$V_LINE" "$V_ISSUE" "$TREE_CLAUSE$STACKED_CLAUSE")" \
         | claude_call "$VERIFY_TIMEOUT" "$REVIEW_MODEL" "$CLAUDE_READ_TOOLS" "$DIFF_DIR" -- "Read(/$REPO_DIR/**)" "Grep(/$REPO_DIR/**)" "Glob(/$REPO_DIR/**)" "Read(/$DIFF)" \
         >"$V_FILE_OUT" 2>"$V_FILE_ERR" &
       VERIFY_PIDS+=("$!"); VERIFY_FILES+=("$V_FILE_OUT"); VERIFY_ERRS+=("$V_FILE_ERR")
