@@ -160,4 +160,147 @@ grep -qF "api repos/owner/repo/compare/feat%23x%25y%7Bbranch}...deadbeef " "$LOG
   || fail "a #, % or { in the base ref must be percent-encoded, not change the URL"
 unset SHA_OUT SHA_RC
 
-echo "PASS: lib/merge.sh (merge_base_allowed x6, merge_size_allowed x11, merge_base_sha x3, disarm_unreviewed_auto_merge x3 + caller block x3 + 1 call site)"
+# ── pr_diff_pinned ─────────────────────────────────────────────────────────
+# The diff, the file list and the marker SHA must describe ONE commit. The
+# stub answers a compare URL with the diff of the head SHA named in it, so a
+# fetch that ignores $SHA (or reads the PR's moving head instead) gets the
+# wrong diff and the assertion below says so.
+SHA_A=1111111111111111111111111111111111111111
+SHA_B=2222222222222222222222222222222222222222
+MB=3333333333333333333333333333333333333333
+FX="$TMP/fx"; mkdir -p "$FX"
+cat > "$TMP/gh" <<'EOF3'
+#!/usr/bin/env bash
+echo "$*" >> "$GH_LOG"
+[ "${GH_RC:-0}" = 0 ] || exit "$GH_RC"
+[ "$1" = api ] || exit 99
+case "$*" in *"Accept: application/vnd.github.diff"*) ;; *) echo '{"merge_base_commit":{}}'; exit 0 ;; esac
+cat "$GH_FIXTURES/diff-${2##*...}" 2>/dev/null || exit 1
+EOF3
+chmod +x "$TMP/gh"
+GH="$TMP/gh"; export GH_FIXTURES="$FX"
+printf 'diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1,2 @@\n a\n+from A\ndiff --git a/b.txt b/b.txt\n--- a/b.txt\n+++ b/b.txt\n@@ -1 +1,2 @@\n b\n+from A\n' > "$FX/diff-$SHA_A"
+printf 'diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1,2 @@\n a\n+from B\ndiff --git a/b.txt b/b.txt\n--- a/b.txt\n+++ b/b.txt\n@@ -1 +1,2 @@\n b\n+from B\ndiff --git a/c.txt b/c.txt\n--- a/c.txt\n+++ b/c.txt\n@@ -1 +1,2 @@\n c\n+from B\n' > "$FX/diff-$SHA_B"
+OUTF="$TMP/pinned.diff"
+
+: > "$LOG"; rm -f "$OUTF"
+FILES="$(pr_diff_pinned example/repo "$MB" "$SHA_A" "$OUTF" 2)" || fail "pr_diff_pinned must succeed when the diff has the changed-file count gh reported"
+cmp -s "$OUTF" "$FX/diff-$SHA_A" || fail "the diff written must be the one for the head SHA asked for (A)"
+[ "$FILES" = "$(printf 'a.txt\nb.txt')" ] || fail "the file list must come from the same diff (got: $FILES)"
+grep -qF "api repos/example/repo/compare/$MB...$SHA_A -H Accept: application/vnd.github.diff" "$LOG" \
+  || fail "the diff must be fetched from the compare API, pinned to merge base and head SHA, as a diff"
+grep -qF "$SHA_B" "$LOG" && fail "the fetch must never name another head"
+[ "$(grep -c '' "$LOG")" = 1 ] || fail "the diff is fetched once, not once for the diff and again for the file list"
+
+: > "$LOG"; rm -f "$OUTF"
+FILES="$(pr_diff_pinned example/repo "$MB" "$SHA_B" "$OUTF" 3)" || fail "pr_diff_pinned must succeed for head B"
+cmp -s "$OUTF" "$FX/diff-$SHA_B" || fail "head B asked for, so the diff written must be B's, not A's"
+[ "$FILES" = "$(printf 'a.txt\nb.txt\nc.txt')" ] || fail "the file list must follow the head asked for (got: $FILES)"
+
+# A diff with fewer files than gh reported was cut short (a limit on the
+# compare side). Reviewing it would approve what was never read.
+: > "$LOG"
+FILES="$(pr_diff_pinned example/repo "$MB" "$SHA_A" "$OUTF" 3)"; RC=$?
+[ "$RC" = 4 ] || fail "one file fewer than changedFiles must fail closed with 4 (rc=$RC)"
+[ -z "$FILES" ] || fail "a failed check must print no file list"
+pr_diff_pinned example/repo "$MB" "$SHA_B" "$OUTF" 2 >/dev/null; RC=$?
+[ "$RC" = 4 ] || fail "one file more than changedFiles must fail closed too (rc=$RC)"
+for bad in '' abc -1 '2 ' '2x'; do
+  pr_diff_pinned example/repo "$MB" "$SHA_A" "$OUTF" "$bad" >/dev/null; RC=$?
+  [ "$RC" = 4 ] || fail "an unreadable changedFiles ('$bad') must fail closed with 4 (rc=$RC)"
+done
+
+# Both ends must be a full lowercase SHA, and gh must not be called otherwise.
+: > "$LOG"
+for bad in '' main abc123 "${SHA_A%?}" "${SHA_A}1" 111111111111111111111111111111111111111G \
+           AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA "$SHA_A"$'\n' "${SHA_A%??}"$'\n'1 HEAD~1 'a...b'; do
+  pr_diff_pinned example/repo "$MB" "$bad" "$OUTF" 2 >/dev/null; RC=$?
+  [ "$RC" = 1 ] || fail "head '$bad' is not a full lowercase SHA: must fail closed with 1 (rc=$RC)"
+  pr_diff_pinned example/repo "$bad" "$SHA_A" "$OUTF" 2 >/dev/null; RC=$?
+  [ "$RC" = 1 ] || fail "merge base '$bad' is not a full lowercase SHA: must fail closed with 1 (rc=$RC)"
+done
+[ -s "$LOG" ] && fail "a bad SHA must be refused before gh is called"
+
+GH_RC=1 pr_diff_pinned example/repo "$MB" "$SHA_A" "$OUTF" 2 >/dev/null; RC=$?
+[ "$RC" = 2 ] || fail "a failed API call (406, rate limit, network) must fail closed with 2 (rc=$RC)"
+SHA_C=4444444444444444444444444444444444444444
+pr_diff_pinned example/repo "$MB" "$SHA_C" "$OUTF" 2 >/dev/null; RC=$?
+[ "$RC" = 2 ] || fail "an API call that returns an error status must fail closed with 2 (rc=$RC)"
+# Not a diff at all (a JSON body, an HTML error page, an empty answer).
+printf '{"message":"Not Found"}\n' > "$FX/diff-$SHA_C"
+pr_diff_pinned example/repo "$MB" "$SHA_C" "$OUTF" 1 >/dev/null; RC=$?
+[ "$RC" = 3 ] || fail "an answer that is not a diff must fail closed with 3 (rc=$RC)"
+: > "$FX/diff-$SHA_C"
+pr_diff_pinned example/repo "$MB" "$SHA_C" "$OUTF" 1 >/dev/null; RC=$?
+[ "$RC" = 3 ] || fail "an empty answer must fail closed with 3 (rc=$RC)"
+# Cut off inside a hunk: git refuses a patch whose hunk is shorter than it says.
+head -n 8 "$FX/diff-$SHA_B" > "$FX/diff-$SHA_C"
+pr_diff_pinned example/repo "$MB" "$SHA_C" "$OUTF" 2 >/dev/null; RC=$?
+[ "$RC" = 3 ] || fail "a diff cut off inside a hunk must fail closed with 3 (rc=$RC)"
+
+# ── diff_changed_files ─────────────────────────────────────────────────────
+# One entry per file, the NEW name for a rename, whatever the file is: a path
+# with a space, a non-ASCII path (git quotes those in the diff header), a
+# binary stub, a deletion, a mode-only change, an empty new file.
+FR="$TMP/fr"; mkdir -p "$FR"; git -C "$FR" init -q
+printf 'a\n' > "$FR/t.txt"; printf 'x\n' > "$FR/sp ace.txt"; printf 'e\n' > "$FR/é.txt"
+printf '1\n2\n3\n4\n5\n' > "$FR/old.txt"; printf 'm\n' > "$FR/mode.sh"; printf 'gone\n' > "$FR/del.txt"; printf '\000\001' > "$FR/old.bin"
+git -C "$FR" add -A; git -C "$FR" -c user.email=t@example.com -c user.name=t commit -qm base
+printf 'a\nb\n' > "$FR/t.txt"; printf 'y\n' > "$FR/sp ace.txt"; git -C "$FR" rm -q 'é.txt'; printf 'u\n' > "$FR/ü.txt"
+git -C "$FR" mv old.txt new.txt; chmod +x "$FR/mode.sh"; git -C "$FR" rm -q del.txt; : > "$FR/empty.txt"
+printf '\000\002' > "$FR/old.bin"; printf '\000\003' > "$FR/new.bin"; mkdir -p "$FR/d ir"; printf 'q\n' > "$FR/d ir/f g.txt"
+git -C "$FR" add -A; git -C "$FR" diff --cached -M > "$TMP/mixed.diff"
+grep -q '^rename from old.txt' "$TMP/mixed.diff" || fail "the fixture must contain a rename"
+grep -q '^Binary files' "$TMP/mixed.diff" || fail "the fixture must contain a binary stub"
+GOT="$(diff_changed_files "$TMP/mixed.diff")" || fail "diff_changed_files refused a valid mixed diff"
+WANT="$(printf '%s\n' 'd ir/f g.txt' del.txt empty.txt mode.sh new.bin new.txt old.bin 'sp ace.txt' t.txt 'é.txt' 'ü.txt')"
+[ "$GOT" = "$WANT" ] || fail "the file list of a mixed diff is wrong. want: $(tr '\n' '|' <<<"$WANT") got: $(tr '\n' '|' <<<"$GOT")"
+[ "$(grep -c '' <<<"$GOT")" = "$(git -C "$FR" diff --cached -M --name-only | grep -c '')" ] \
+  || fail "the count must be the number of files git itself lists"
+diff_changed_files "$TMP/does-not-exist" >/dev/null && fail "an unreadable diff file must fail"
+
+# ── the round's half ───────────────────────────────────────────────────────
+# The block lifted out of pr-autoreview.sh (from the merge base lookup to the
+# `esac` that maps pr_diff_pinned's answer), run with a recorder for
+# note_skip. A refusal must end this PR's round with a fail-closed note before
+# anything else reads the diff, and nothing in the block may post.
+BLOCK="$(awk '/^  MERGE_BASE="\$\(merge_base_sha / { p = 1 } p { print } p && /^  esac$/ { exit }' pr-autoreview.sh)"
+[ -n "$BLOCK" ] || fail "could not lift the pinned-diff block out of pr-autoreview.sh"
+eval "pinned_block() { $BLOCK
+echo reached; }"
+note_skip() { echo "skip $PR: $1"; }
+gh_post() { echo POSTED; }
+merge_base_sha() { printf '%s' "${MB_OUT-}"; }
+# shellcheck disable=SC2034  # read by the eval'd block
+REPO=example/repo PR=5 PR_BASE=main
+run_block() { # $1 = head SHA, $2 = changedFiles in INFO (or "none")
+  # shellcheck disable=SC2034  # SHA and INFO are read by the eval'd block
+  SHA="$1"; DIFF="$TMP/round.diff"; : > "$DIFF"; PR_FILES=""
+  # shellcheck disable=SC2034
+  if [ "$2" = none ]; then INFO='{"headRefOid":"x"}'; else INFO="{\"headRefOid\":\"x\",\"changedFiles\":$2}"; fi
+  : > "$LOG"; pinned_block > "$TMP/block.out" 2>&1
+  BOUT="$(cat "$TMP/block.out")"
+}
+MB_OUT="$MB"
+run_block "$SHA_A" 2
+[ "$BOUT" = reached ] || fail "a diff with the reported file count must pass the block (got: $BOUT)"
+cmp -s "$DIFF" "$FX/diff-$SHA_A" || fail "the round must write the diff of \$SHA (A), not another head's"
+[ "$PR_FILES" = "$(printf 'a.txt\nb.txt')" ] || fail "PR_FILES must come from the same diff (got: $PR_FILES)"
+run_block "$SHA_B" 3
+cmp -s "$DIFF" "$FX/diff-$SHA_B" || fail "with \$SHA = B the round must write B's diff"
+grep -qF "compare/$MB...$SHA_B " "$LOG" || fail "the round must ask for the diff between the merge base and \$SHA"
+run_block "$SHA_A" 3
+case "$BOUT" in *"skip 5:"*"(fail closed)"*) ;; *) fail "a diff one file short must skip with a fail-closed note (got: $BOUT)" ;; esac
+case "$BOUT" in *reached*|*POSTED*) fail "a diff one file short must end the round without posting (got: $BOUT)" ;; esac
+[ ! -e "$DIFF" ] || fail "a refused diff must not be left on disk for the next step"
+run_block "$SHA_A" none
+case "$BOUT" in *"skip 5:"*) ;; *) fail "a missing changedFiles must skip (got: $BOUT)" ;; esac
+MB_OUT=""; run_block "$SHA_A" 2
+case "$BOUT" in *"skip 5:"*"(fail closed)"*) ;; *) fail "an unresolved merge base must skip with a fail-closed note (got: $BOUT)" ;; esac
+case "$BOUT" in *reached*) fail "an unresolved merge base must end the round" ;; esac
+[ -s "$LOG" ] && fail "an unresolved merge base must be refused before the diff is fetched"
+MB_OUT="$MB"; GH_RC=1 run_block "$SHA_A" 2
+case "$BOUT" in *"skip 5:"*"could not fetch the diff"*"(fail closed)"*) ;; *) fail "a failed fetch must skip and say why (got: $BOUT)" ;; esac
+unset GH_RC MB_OUT
+
+echo "PASS: lib/merge.sh (merge_base_allowed x6, merge_size_allowed x11, merge_base_sha x3, pr_diff_pinned, diff_changed_files + the round block, disarm_unreviewed_auto_merge x3 + caller block x3 + 1 call site)"

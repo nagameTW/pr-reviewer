@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Four questions about a PR that pr-autoreview.sh and tests share:
+# Five questions about a PR that pr-autoreview.sh and tests share:
 # whether it targets the default branch, whether it is small enough for one
-# review pass to count, its merge base (which the review tree is built on), and
-# an auto-merge armed on a head the gate has not reviewed yet.
+# review pass to count, its merge base (which the review tree is built on), the
+# diff between that merge base and the head SHA that was keyed, and an
+# auto-merge armed on a head the gate has not reviewed yet.
 # Source-time side effects are forbidden here: tests must be able to source
 # this file without an App private key, network, or token minting.
 # Callers provide $GH (gh binary) and $REPO (owner/name) in scope.
@@ -67,6 +68,71 @@ merge_base_sha() {
   local base="${2-}"
   base="${base//%/%25}"; base="${base//#/%23}"; base="${base//\{/%7B}"
   "$GH" api "repos/${1-}/compare/${base}...${3-}" -q '.merge_base_commit.sha' 2>/dev/null
+}
+
+# 0 when $1 is a full SHA: 40 lowercase hex digits and nothing else. The
+# digits are spelled out because a range such as a-f can match uppercase
+# letters in some locales, and a newline or a revision name such as HEAD~1
+# must never get through.
+sha_is_full_hex() {
+  [ "${#1}" = 40 ] || return 1
+  case "$1" in *[!0123456789abcdef]*) return 1 ;; esac
+}
+
+# The files a diff changes, one path per line, read from the diff file $1
+# itself. git does the parsing, so a path with a space, a non-ASCII path (git
+# C-quotes those in the `diff --git` header) and a rename (the new name) come
+# out as they are on disk, and a binary stub or an empty file still counts as
+# one file. A path with a newline in it cannot be one line of a list, so it
+# fails here.
+# Returns 1, printing nothing, when git cannot read the patch (a diff cut off
+# inside a hunk, JSON or HTML instead of a diff, an empty file).
+diff_changed_files() {
+  local nums line rest added deleted path out=""
+  # pipefail inside the substitution: a git that dies must not read as an
+  # empty list that `tr` happily passes on.
+  nums="$(set -o pipefail; git apply --numstat -z "${1-}" 2>/dev/null | tr '\0' '\n')" || return 1
+  [ -n "$nums" ] || return 1
+  while IFS= read -r line; do
+    added="${line%%$'\t'*}"; rest="${line#*$'\t'}"
+    deleted="${rest%%$'\t'*}"; path="${rest#*$'\t'}"
+    [ "$rest" != "$line" ] && [ "$path" != "$rest" ] && [ -n "$path" ] || return 1
+    case "$added" in '' | *[!0123456789-]*) return 1 ;; esac
+    case "$deleted" in '' | *[!0123456789-]*) return 1 ;; esac
+    out="${out:+$out$'\n'}$path"
+  done <<<"$nums"
+  printf '%s\n' "$out"
+}
+
+# The diff of a PR at ONE commit, and the files it changes.
+# $1 = owner/name, $2 = merge base SHA, $3 = head SHA, $4 = file to write the
+# diff to, $5 = changedFiles from the same `gh pr view` read that gave $3.
+# Prints the changed files, one per line. Fails closed, printing nothing:
+#   1  $2 or $3 is not a full SHA
+#   2  the API call failed (rate limit, a diff too large to render, network)
+#   3  the answer is not a diff git can read (cut off, an error body)
+#   4  $5 is not a number, or the diff holds a different number of files
+#
+# Why a compare URL and not the PR's own diff: that one returns the PR's head AT
+# THE MOMENT OF THE CALL. The SHA, the review key and the verdict marker come
+# from an earlier read, so a force-push in between put a verdict on a head the
+# model never saw. Re-reading headRefOid afterwards does not close it either,
+# since A-B-A passes. The merge base is an ancestor of the head, so
+# <merge base>...<head> is the same three-dot diff the PR page shows, and both
+# ends are commits that cannot move.
+# The file list comes from the diff file and not from a second call, so list
+# and content cannot disagree. The count check catches a diff the API cut
+# short: GitHub knows how many files the PR changes, so a short diff is not
+# reviewed as if it were whole. The usual cause of a mismatch is harmless
+# (a very large PR), and the cost is one skipped round, never a wrong verdict.
+pr_diff_pinned() {
+  local repo="${1-}" base="${2-}" head="${3-}" out="${4-}" want="${5-}" files
+  case "$want" in '' | *[!0123456789]*) return 4 ;; esac
+  sha_is_full_hex "$base" && sha_is_full_hex "$head" || return 1
+  "$GH" api "repos/$repo/compare/$base...$head" -H 'Accept: application/vnd.github.diff' > "$out" || return 2
+  files="$(diff_changed_files "$out")" || return 3
+  [ "$(grep -c '' <<<"$files")" = "$want" ] || return 4
+  printf '%s\n' "$files"
 }
 
 # Is this PR small enough that ONE review pass is worth acting on?

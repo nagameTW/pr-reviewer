@@ -862,7 +862,7 @@ review_one_pr() { # $1 = PR number, $2 = the worktree the dispatcher made
   # marker above treats every nonzero exit as an unexpected death.
   cd "$REPO_DIR" || { note_skip "review worktree missing — skipping (fail closed)"; return 0; }
   INFO="$("$GH" pr view "$PR" --repo "$REPO" \
-        --json headRefOid,isDraft,reviews,comments,title,body,additions,deletions,autoMergeRequest,baseRefName)"
+        --json headRefOid,isDraft,reviews,comments,title,body,additions,deletions,changedFiles,autoMergeRequest,baseRefName)"
   [ -n "$INFO" ] || { note_skip "could not fetch PR info — skipping (fail closed)"; return 0; }
   [ "$(jq -r '.isDraft' <<<"$INFO")" = "true" ] && return 0
   SHA="$(jq -r '.headRefOid' <<<"$INFO")"
@@ -882,15 +882,12 @@ review_one_pr() { # $1 = PR number, $2 = the worktree the dispatcher made
 
   HOLD_F="$(holdoff_path "$REPO" "$PR" "$KEY")" || HOLD_F=""
 
-  # Both of the following are materialized on purpose, never piped straight
+  # Materialized on purpose, never piped straight
   # into `grep -q`: under pipefail an early-quitting grep SIGPIPEs the
   # producer, so the pipeline reports non-zero EVEN ON A MATCH and a hit reads
   # as a miss. Large outputs are the ones that trip it (a small one fits the
   # pipe buffer and the producer exits cleanly), which is the worst possible
   # bias here — the consequence is re-reviewing an already-handled head.
-  # Failing to list the changed files is fatal for this PR: the checklist,
-  # the convention-file revert and the size check all read them, and
-  # guessing means guessing in the unsafe direction.
   # Gate-authored bodies only: anyone can type `$MARKER $KEY`.
   HANDLED_BODIES="$(prompt_gate_bodies "$INFO" "$PRIOR_AUTHORS")"
   # Does this exact head + title/body carry a verdict from this gate?
@@ -909,12 +906,6 @@ review_one_pr() { # $1 = PR number, $2 = the worktree the dispatcher made
     disarm_unreviewed_auto_merge "$INFO" "$PR" \
       || { note_skip "auto-merge could not be disarmed — skipping (fail closed)"; return 0; }
   fi
-  if ! PR_FILES="$("$GH" pr diff "$PR" --repo "$REPO" --name-only 2>/dev/null)" \
-     || [ -z "$PR_FILES" ]; then
-    note_skip "could not list changed files — skipping (fail closed)"
-    return 0
-  fi
-
   # already handled this exact head + title/body?
   if [ "$HEAD_HANDLED" = 1 ]; then
     echo "PR #$PR: this head was already handled — nothing to do until it changes (review-only: this gate never merges)"
@@ -956,8 +947,7 @@ review_one_pr() { # $1 = PR number, $2 = the worktree the dispatcher made
   # message, and the failure is silent: review, approve, squash. It needs no
   # attacker either: the pipe buffer is a fixed 64KiB and multibyte text
   # (most non-Latin scripts, emoji) takes 2 to 4 bytes a character, so a long-but-ordinary body
-  # reaches it. Same discipline as HANDLED_BODIES / PR_FILES above, for the
-  # same reason.
+  # reaches it. Same discipline as HANDLED_BODIES above, for the same reason.
   TITLE_BODY="$(jq -r '(.title // "") + "\n" + (.body // "")' <<<"$INFO")"
   if scan_hit_or_unknown "$PATS_FILE" "$TITLE_BODY"; then
     NOTICE_TEXT="
@@ -1064,11 +1054,45 @@ the default branch. Edit the title and it is checked again automatically."
     || { note_skip "could not create a scratch file for the diff — skipping (fail closed)"; return 0; }
   DIFF="$DIFF_DIR/pr.diff"
   TMPFILES+=("$DIFF")
-  # Not silent: a 406 on a >20k-line diff, a rate limit and a
-  # dropped connection all land here, and this used to be the one skip in the
-  # file that left no line at all.
-  "$GH" pr diff "$PR" --repo "$REPO" > "$DIFF" \
-    || { rm -f "$DIFF"; note_skip "could not fetch the diff — skipping (fail closed)"; return 0; }
+  # The diff, the file list and the marker SHA must describe ONE commit.
+  # $SHA and $KEY come from the `gh pr view` read at the top of this job, and
+  # a fetch that follows the PR's current head can return a different head if
+  # the author force-pushes in between: the verdict, and the marker
+  # that says "handled", would then name a head the model never saw. So the
+  # diff is fetched for exactly $SHA, from the merge base to $SHA, and the
+  # file list is read out of that same file (lib/merge.sh pr_diff_pinned).
+  # Re-reading headRefOid afterwards would not do: A-B-A passes that check.
+  #
+  # The merge base is looked up first because the URL needs it, and the tree
+  # below is built on it. It is the PR's own base (the parent branch for a
+  # stacked PR), not the default branch. A merge base that is not a full SHA
+  # skips the round: the tree and the diff would not line up, and the old
+  # fallback (review the diff without its changes in the tree) quietly
+  # weakened the review.
+  #
+  # changedFiles is from the same `gh pr view` read as $SHA. A diff with a
+  # different file count was cut short or is for another head, and reading it
+  # would approve what nobody read: skipping costs one round, and the PR is
+  # picked up again by the next one.
+  #
+  # Failing to read the changed files is fatal for this PR: the checklist, the
+  # convention-file revert and the size check all read them, and guessing
+  # means guessing in the unsafe direction.
+  #
+  # Not silent: a diff too large to render, a rate limit and a dropped
+  # connection all land here, and this used to be the one skip in the file that
+  # left no line at all.
+  MERGE_BASE="$(merge_base_sha "$REPO" "$PR_BASE" "$SHA")"
+  PR_FILES_RC=0
+  PR_FILES="$(pr_diff_pinned "$REPO" "$MERGE_BASE" "$SHA" "$DIFF" "$(jq -r '.changedFiles // ""' <<<"$INFO")")" \
+    || PR_FILES_RC=$?
+  case "$PR_FILES_RC" in
+    0) ;;
+    1) rm -f "$DIFF"; note_skip "the merge base or the head is not a full commit SHA, skipping (fail closed)"; return 0 ;;
+    2) rm -f "$DIFF"; note_skip "could not fetch the diff, skipping (fail closed)"; return 0 ;;
+    3) rm -f "$DIFF"; note_skip "the fetched diff could not be read (cut off, or not a diff), skipping (fail closed)"; return 0 ;;
+    *) rm -f "$DIFF"; note_skip "no file count to check the diff against, or the diff holds another number of files than GitHub reports, skipping (fail closed)"; return 0 ;;
+  esac
 
   # Put the change INTO the tree the model reads (the biggest single gap this
   # gate had). Until now every Read/Grep returned pre-change source, so the
@@ -1086,7 +1110,7 @@ the default branch. Edit the title and it is checked again automatically."
   # conventions, the reason for reviewing off the default branch.
   #
   # The patch has to be applied to the commit it was COMPUTED against, which
-  # is the merge base, not the tip of the default branch. `gh pr diff` is a
+  # is the merge base, not the tip of the default branch. The fetched diff is a
   # three-dot diff, so its hunks describe the difference from
   # merge-base(base, head) to head; against a tip that has moved on since the
   # author branched, they conflict on every file main touched in the meantime.
@@ -1101,7 +1125,7 @@ the default branch. Edit the title and it is checked again automatically."
   #
   # Atomic by construction: `git apply` without --reject applies the whole
   # patch or none of it, so there is no half-patched tree to reason about.
-  # Binary files are the one exception, on purpose: `gh pr diff` renders each
+  # Binary files are the one exception, on purpose: the diff API renders each
   # as a "Binary files differ" stub with no content, so they are excluded by
   # path (lib/tree.sh tree_binary_paths) and the text changes still apply.
   # Keeping them off the disk the model can Read is a bonus: a PNG carrying
@@ -1121,7 +1145,6 @@ the default branch. Edit the title and it is checked again automatically."
   # unconditionally and contradict each other.
   TREE_AT=default
   APPLY_ERR=""
-  MERGE_BASE=""
   TREE_CONV_NOTE=""
   TREE_BIN_NOTE=""
   BIN_EXCLUDES=()
@@ -1137,7 +1160,7 @@ the default branch. Edit the title and it is checked again automatically."
   # convention files come from the default branch, the ones the patch wrote
   # are reverted, and a symlink that could lead the model elsewhere
   # (tree_has_symlinks says which) refuses the whole review.
-  MERGE_BASE="$(merge_base_sha "$REPO" "$PR_BASE" "$SHA")"
+  # A second check: pr_diff_pinned already refused anything but a full SHA.
   # A full 40-hex SHA or nothing. `git checkout` accepts refs, short SHAs and
   # `HEAD@{...}`, so a partial or error-shaped answer from the API must not
   # reach it as a revision to resolve — the value comes off the network and

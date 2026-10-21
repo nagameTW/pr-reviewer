@@ -368,7 +368,7 @@ fi
 # apply failed; STACKED_CLAUSE said "the tree IS the parent with this PR's diff
 # applied" unconditionally, so on a stacked PR whose apply failed the prompt
 # carried two contradictory descriptions and neither was true. The apply is
-# something the author can fail on purpose — `gh pr diff` gives a contentless
+# something the author can fail on purpose — the diff API gives a contentless
 # stub for a binary file.
 # The wordings live in lib/prompt.sh's prompt_stacked_clause; what
 # pr-autoreview.sh has to do is pass it the state. Both halves are pinned.

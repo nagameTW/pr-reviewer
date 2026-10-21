@@ -30,6 +30,12 @@ All notable changes to this project are recorded here. The format follows
   finding text and code from the pull request.
 - As defense in depth, the `claude` process starts with `GH_TOKEN`,
   `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN` and `GITHUB_ENTERPRISE_TOKEN` empty.
+- The reviewed diff is now fetched for the exact head commit the verdict
+  names. Before, the diff, the list of changed files and the head SHA in the
+  verdict marker were read in separate calls. If the author force-pushed
+  during a round, the verdict and its marker could name a head the model never
+  reviewed. The file list now comes from the same diff, and a diff with a
+  different number of files than GitHub reports for the PR is not reviewed.
 
 ### Changed
 
@@ -41,6 +47,10 @@ All notable changes to this project are recorded here. The format follows
   tools that register after launch, and 2.1.304 fails every request on
   Vertex, Bedrock and gateways with this tool set. To upgrade, see Upgrading
   in the README.
+- A round now skips a PR, and tries it again next round, when its merge base
+  or its diff cannot be fetched, or when the diff is incomplete. Before, an
+  unresolved merge base reviewed the diff without the PR's changes in the
+  tree.
 
 ## [0.2.0] - 2026-10-12
 
