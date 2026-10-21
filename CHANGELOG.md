@@ -6,6 +6,11 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The README and SECURITY.md state the limits of their claims more precisely,
+  and the README warns that the first run reviews every open non-draft PR.
+
 ## [0.2.0] - 2026-10-12
 
 ### Added

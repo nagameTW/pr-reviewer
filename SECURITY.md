@@ -43,15 +43,20 @@ settings cannot widen that. Every other tool, a shell and the network
 included, needs a permission a headless run has nobody to grant, so it is
 refused. Checked against Claude Code 2.1 with the reviewer's own flags: `Bash`,
 `Write`, `WebFetch` and a `Read` outside the clone were all refused, and an
-`.mcp.json` or `CLAUDE.local.md` a pull request adds was not loaded.
+`.mcp.json` or `CLAUDE.local.md` a pull request adds was not loaded. This was a
+manual test. The Claude Code patch version and the exact command were not
+recorded.
 
-**The base branch sets the rules.** The review tree is the PR's merge base with
+**The merge base sets the rules.** The review tree is the PR's merge base with
 the diff applied, and convention files such as `CLAUDE.md` are read as they are
-on the base branch. The author's branch is never checked out.
+at the PR's merge base. The author's branch is never checked out.
 
-**Nothing leaves unscanned.** Every comment is checked against the operator's
+**Comments with PR text or model output are scanned.** Every comment that
+carries PR text or model output is checked against the operator's
 sensitive-patterns file before it is posted. A match, or a scan that cannot
-run, means it is not posted. The reviewer will not start without that file.
+run, means it is not posted. Two fixed notices carry neither and are not
+scanned: the notice that a title or description matched the scan, and the
+title-format reminder. The reviewer will not start without that file.
 The scan matches your patterns against the text as written. Text shaped to
 slip past it, such as a key split by an HTML entity or a zero-width
 character, is not caught, so treat it as a safety net for accidents.
@@ -62,9 +67,16 @@ bot in your repository acts on commands in comments (`/lgtm`, `/approve`,
 `bors r+`), run the reviewer as a GitHub App that bot does not take commands
 from, not as a person it trusts.
 
-**It cannot merge.** It never calls an approve or merge API. With the defaults
-it does not touch auto-merge either; `PRREVIEW_GATE_DISARM_AUTO_MERGE=1` lets it
-turn off an auto-merge armed on a head it has not reviewed yet.
+**Refutation is not a security control.** The refutation step can only remove
+blocking findings. Against an author who writes the diff to fool the model, it
+pushes the verdict toward approve. The red-team pass, which is off by default,
+is the only step that argues against an approve. Refutation reduces false
+positives. It does not stop a diff that was written to fool the model.
+
+**It cannot merge.** It never approves or merges. Its only merge call is
+`gh pr merge --disable-auto`, which is off by default. With the defaults it
+leaves auto-merge alone. `PRREVIEW_GATE_DISARM_AUTO_MERGE=1` lets it turn off
+an auto-merge armed on a head it has not reviewed yet.
 
 **Scratch files stay private.** Diffs, slices and raw model output are written
 under the reviewer's own work directory, not a shared `/tmp`.
