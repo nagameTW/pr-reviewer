@@ -2390,8 +2390,10 @@ $SLICE_CLEAN"
       # Round 1's own list, so the red team cannot spend its one call re-raising
       # a MEDIUM at HIGH. Fenced and labelled DATA inside the prompt.
       RT_PRIOR="$(jq -r "$FINDINGS_RENDER_PLAIN_JQ" <<<"$CLEANED" 2>/dev/null)" || RT_PRIOR=""
-      printf '%s' "$(redteam_prompt "$REPO" "$PR" "$DIFF" "$DIFF_APPLIED" "$RT_PRIOR" \
-              "$REVIEW_LANGUAGE_SPEC" "$SEVERITY_SPEC" "$REPO_DIR" "$TREE_BIN_NOTE" "$REVIEW_LINE_SPEC")" \
+      # The tree text is the main review's own, so a stacked PR gets the
+      # sentence that matches where the tree landed (lib/prompt.sh).
+      printf '%s' "$(redteam_prompt "$REPO" "$PR" "$DIFF" "$TREE_CLAUSE$STACKED_CLAUSE" "$RT_PRIOR" \
+              "$REVIEW_LANGUAGE_SPEC" "$SEVERITY_SPEC" "$REPO_DIR" "$REVIEW_LINE_SPEC")" \
         | claude_call "$VERIFY_TIMEOUT" "$REVIEW_MODEL" "$CLAUDE_READ_TOOLS" "$DIFF_DIR" -- "Read(/$REPO_DIR/**)" "Grep(/$REPO_DIR/**)" "Glob(/$REPO_DIR/**)" "Read(/$DIFF)" \
         >"$RT_OUT" 2>"$RT_ERR"
       # has("candidates"), not `.candidates | length > 0`: an empty list is the

@@ -18,6 +18,11 @@ All notable changes to this project are recorded here. The format follows
   not so when the diff did not apply, or for a convention file the reviewer
   restored. For a deleted line the model uses the nearest line that still
   exists, and for a deleted file it uses 0.
+- The red-team prompt now describes the review tree with the same text as the
+  main review. It used to choose its own text from one fact, whether the diff
+  applied. For a PR based on another branch, the tree is that branch, and the
+  red-team text was then wrong whether or not the diff applied. The red team
+  now also gets the note about convention files the reviewer restored.
 
 ### Security
 
