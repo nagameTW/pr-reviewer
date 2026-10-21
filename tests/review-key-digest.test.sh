@@ -10,8 +10,15 @@
 # one stage fail. A missing digest must give no key, as a missing base commit
 # does: the job then skips the PR and the dispatcher does not call it handled.
 #
-# The last cases pin the guard behind a head that is not a full SHA. The key
-# does not check the head. The diff fetch does, before anything is reviewed.
+# The head part of the key has the same fault. It comes from its own
+# `jq -r .headRefOid` call. If that call prints nothing the key is `-<digest>`,
+# and if the field is missing the key is `null-<digest>`. grep -F anchors the
+# key on the left with the marker and a space, so such a key cannot match the
+# marker of a head that has its SHA. It matches a marker the gate posted under
+# the same fault: the two notices that go out before the diff fetch carry
+# `$MARKER $KEY`. Then any later head with the same title, description and
+# base is called handled and never reviewed. The key gives no key unless the
+# head is a full SHA. The diff fetch is a second guard, behind the key.
 #
 # Run: bash tests/review-key-digest.test.sh
 set -uo pipefail
@@ -33,11 +40,15 @@ REAL_JQ="$(command -v jq)"
 # One directory per injected failure. Every stub writes $STUB_FIRED when it
 # runs, so a case whose stub never ran cannot pass by doing nothing.
 STUBS="$TMP/stubs"
-mkdir -p "$STUBS/sha-exit1" "$STUBS/sha-silent" "$STUBS/jq-digest"
+mkdir -p "$STUBS/sha-exit1" "$STUBS/sha-silent" "$STUBS/jq-digest" "$STUBS/jq-head-exit1" "$STUBS/jq-head-silent"
 printf '#!/bin/bash\n: > "$STUB_FIRED"\ncat >/dev/null\nexit 1\n' > "$STUBS/sha-exit1/sha256sum"
 printf '#!/bin/bash\n: > "$STUB_FIRED"\ncat >/dev/null\nexit 0\n' > "$STUBS/sha-silent/sha256sum"
 # Fails only the digest call, the one that takes `--arg extra`.
 printf '#!/bin/bash\ncase "$*" in *"--arg extra"*) : > "$STUB_FIRED"; exit 5 ;; esac\nexec %q "$@"\n' "$REAL_JQ" > "$STUBS/jq-digest/jq"
+# Fails only the read of the head, `jq -r .headRefOid`: with a status, and
+# with an empty answer and status 0.
+printf '#!/bin/bash\ncase "$*" in "-r .headRefOid") : > "$STUB_FIRED"; exit 5 ;; esac\nexec %q "$@"\n' "$REAL_JQ" > "$STUBS/jq-head-exit1/jq"
+printf '#!/bin/bash\ncase "$*" in "-r .headRefOid") : > "$STUB_FIRED"; exit 0 ;; esac\nexec %q "$@"\n' "$REAL_JQ" > "$STUBS/jq-head-silent/jq"
 chmod +x "$STUBS"/*/*
 
 # $1 = stub directory name, then the command. Runs it with that stub first on
@@ -84,6 +95,51 @@ for stub in sha-exit1 sha-silent jq-digest; do
      "$(under "$stub" prompt_head_handled "$EDITED" "$M" "$AUTHORS" main && echo yes || echo no)" no
 done
 
+# ── the head part: a key without a full head SHA is no key ───────────────────
+# D is the digest part of the key of PRJ. H2 is another head of the same PR
+# with the same title, description and base, so it has the same D.
+D="${V020_KEY#*-}"
+H2=fedcba9876543210fedcba9876543210fedcba98
+PRJ2="$(jq -c --arg h "$H2" '.headRefOid = $h' <<<"$PRJ")"
+with_marker() { # $1 = PR json, $2 = marker text: the PR json plus one gate comment
+  jq -c --arg b "<!-- $M $2 -->" '. + {comments: [{author: {login: "review-bot"}, body: $b}], reviews: []}' <<<"$1"
+}
+handled() { prompt_head_handled "$@" && echo yes || echo no; }
+
+# The marker of a head that has its SHA never matches a key without one.
+for stub in jq-head-exit1 jq-head-silent; do
+  is "$stub: the stub ran" "$(under "$stub" prompt_review_key "$PRJ" main >/dev/null; fired)" yes
+  is "$stub: the marker of another head does not match" \
+     "$(under "$stub" handled "$(with_marker "$PRJ" "$H2-$D")" "$M" "$AUTHORS" main)" no
+done
+
+# A marker the gate posted under that fault matches the key of any other head
+# of the same PR that fails the same way.
+HEADLESS="$(with_marker "$PRJ2" "-$D")"
+is 'a healthy key does not match the marker that has no head' "$(handled "$HEADLESS" "$M" "$AUTHORS" main)" no
+for stub in jq-head-exit1 jq-head-silent; do
+  OUT="$(under "$stub" prompt_review_key "$PRJ" main)"; RC=$?
+  is "$stub: no key (fail closed)" "$RC:$OUT" '1:'
+  is "$stub: a later head is not handled on the strength of that marker" \
+     "$(under "$stub" handled "$HEADLESS" "$M" "$AUTHORS" main)" no
+done
+
+# The head field is missing, empty or not a full SHA: the same.
+H40_UPPER="$(printf '%s' "$H40" | tr a-f A-F)"
+for head in null '' HEAD "${H40%?}" "${H40}0" "$H40_UPPER"; do
+  J="$(jq -c --arg h "$head" '.headRefOid = $h' <<<"$PRJ")"
+  OUT="$(prompt_review_key "$J" main)"; RC=$?
+  is "head '$head': no key (fail closed)" "$RC:$OUT" '1:'
+done
+OUT="$(prompt_review_key "$(jq -c 'del(.headRefOid)' <<<"$PRJ")" main)"; RC=$?
+is 'head field missing: no key (fail closed)' "$RC:$OUT" '1:'
+OUT="$(prompt_review_key "$(jq -c '.headRefOid = null' <<<"$PRJ")" main)"; RC=$?
+is 'head field null: no key (fail closed)' "$RC:$OUT" '1:'
+for head in null '' HEAD; do
+  J="$(with_marker "$(jq -c --arg h "$head" '.headRefOid = $h' <<<"$PRJ")" "$head-$D")"
+  is "head '$head': a marker with that head does not make it handled" "$(handled "$J" "$M" "$AUTHORS" main)" no
+done
+
 # ── the job: its own KEY line, lifted from pr-autoreview.sh ─────────────────
 KEY_SRC="$(awk '{ if (sub(/\\$/, "")) printf "%s ", $0; else print }' pr-autoreview.sh | grep -E '^  KEY="\$\(prompt_review_key ')"
 is 'the job KEY line was found' "$([ -n "$KEY_SRC" ] && echo yes)" yes
@@ -95,16 +151,15 @@ DEFAULT_BRANCH=main
 # shellcheck disable=SC2034
 INFO="$PRJ"
 is 'the job KEY line with no stub gets the key' "$(key_block)" "reached $V020_KEY"
-for stub in sha-exit1 sha-silent jq-digest; do
+for stub in sha-exit1 sha-silent jq-digest jq-head-exit1 jq-head-silent; do
   OUT="$(under "$stub" key_block)"
   has "$stub: the job skips with a fail-closed note" '(fail closed)' "$OUT"
   case "$OUT" in *reached*) bad "$stub: the job never reaches the code after the key" "got: $OUT" ;; *) ok "$stub: the job never reaches the code after the key" ;; esac
 done
 
 # ── behind the key: a head that is not a full SHA never reaches the review ──
-# `.headRefOid` read from a PR with no such field prints `null`, and the key
-# takes it as it is. The diff fetch is the guard: it needs a full SHA for the
-# head and calls gh only after that.
+# The key refuses such a head (above). The diff fetch is a second guard: it
+# needs a full SHA for the head and calls gh only after that.
 GH="$TMP/gh"
 printf '#!/bin/bash\n: > "%s"\nexit 1\n' "$TMP/gh-called" > "$GH"; chmod +x "$GH"
 for head in null '' HEAD "${H40%?}"; do
