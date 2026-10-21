@@ -3,9 +3,11 @@
 # with the default branch's versions. The real block runs here, lifted out of
 # the script, on a real git repo. A recorder stands in for note_skip.
 #
-# Every step of the block can fail: the file list, the checkout of a file,
-# the removal of a file from the index and the removal from the disk. A
-# failure must skip the PR and must not set CONV_FORCED. The failures are
+# Every step of the block can fail: the file list, the read of the default
+# branch's tree, the checkout of a file, the removal of a file from the index
+# and the removal from the disk. A failure must skip the PR and must not set
+# CONV_FORCED. A path that the default branch does not have is not a failure:
+# the block removes that file and the review goes on. The failures are
 # injected with shell functions that shadow git and rm inside a subshell.
 #
 # Run: bash tests/stacked-conv.test.sh
@@ -63,6 +65,13 @@ build() { # $1 = directory
 # Injectors. Each runs inside the subshell of run_case.
 # git, called as `git -C <dir> <subcommand> ...`: the subcommand is $3.
 fail_ls_files() { git() { if [ "$3" = ls-files ]; then return 128; fi; command git "$@"; }; }
+# The default branch's tree cannot be read: the listing fails, and so does a
+# read of a single object.
+fail_tree_read() { git() { case "$3" in ls-tree|cat-file) return 128 ;; esac; command git "$@"; }; }
+# The look-up of a path in that listing gives no answer.
+fail_lookup()   { grep() { return 2; }; }
+# A convention file with a newline in its name cannot be matched safely.
+newline_name()  { printf 'x\n' > "$REPO_DIR/.claude/skills/a/odd"$'\n'"name.md"; git -C "$REPO_DIR" add -A; }
 fail_checkout() { git() { if [ "$3" = checkout ] && [ "${!#}" = CLAUDE.md ]; then return 1; fi; command git "$@"; }; }
 fail_index_rm() { git() { if [ "$3" = rm ] && [ "${!#}" = docs/CLAUDE.md ]; then return 1; fi; command git "$@"; }; }
 fail_file_rm()  { rm() { case "${!#}" in */docs/CLAUDE.md) return 1 ;; esac; command rm "$@"; }; }
@@ -110,10 +119,11 @@ is  "happy: an unchanged convention file stays"         "$(cat "$D/AGENTS.md")" 
   || bad "happy: a nested CLAUDE.md the default branch lacks is removed from the disk" "still on disk"
 is  "happy: ...and from the index"                      "$(git -C "$D" ls-files '.claude/skills/p/SKILL.md' 'docs/CLAUDE.md')" ""
 is  "happy: a file that is no convention file stays"    "$(cat "$D/src.py")" "parent code"
-is  "happy: the file list is one temp file for the EXIT trap" "${#TMPFILES[@]}" 1
-[ -f "${TMPFILES[0]:-/nonexistent}" ] && ok "happy: ...and it exists under the scratch directory" \
-  || bad "happy: ...and it exists under the scratch directory" "missing: ${TMPFILES[0]:-none}"
-case "${TMPFILES[0]:-}" in "$GATE_SCRATCH"/*) ok "happy: ...inside GATE_SCRATCH" ;; *) bad "happy: ...inside GATE_SCRATCH" "${TMPFILES[0]:-none}" ;; esac
+is  "happy: the two file lists are two temp files for the EXIT trap" "${#TMPFILES[@]}" 2
+for tf in "${TMPFILES[@]}"; do
+  [ -f "$tf" ] && ok "happy: ...$(basename "$tf") exists" || bad "happy: ...$(basename "$tf") exists" "missing: $tf"
+  case "$tf" in "$GATE_SCRATCH"/*) ok "happy: ...$(basename "$tf") is inside GATE_SCRATCH" ;; *) bad "happy: ...$(basename "$tf") is inside GATE_SCRATCH" "$tf" ;; esac
+done
 
 # ── a PR into the default branch is left alone ─────────────────────────────
 run_case : main
@@ -125,10 +135,33 @@ is  "default base: no file changes"                     "$(cat "$CASE_DIR/CLAUDE
 run_case drop_origin
 skipped "no origin ref" "cannot resolve origin/main"
 
+# ── a path that the default branch does not have is removed ────────────────
+run_case :
+is  "missing in default: CONV_FORCED is 1"              "$CF" 1
+has "missing in default: the review goes on"            "reached" "$OUT"
+lacks "missing in default: nothing is skipped"          "skip 5:" "$OUT"
+[ ! -e "$CASE_DIR/docs/CLAUDE.md" ] && ok "missing in default: the file is removed from the disk" \
+  || bad "missing in default: the file is removed from the disk" "still on disk"
+is  "missing in default: ...and from the index"         "$(git -C "$CASE_DIR" ls-files 'docs/CLAUDE.md' '.claude/skills/p/SKILL.md')" ""
+is  "missing in default: a file the default has takes its version" "$(cat "$CASE_DIR/CLAUDE.md")" "main rules"
+
 # ── a step that fails skips the PR ─────────────────────────────────────────
 run_case fail_ls_files
 skipped "listing fails" "list the convention files"
 is  "listing fails: no file was touched"                "$(cat "$CASE_DIR/CLAUDE.md")" "parent rules"
+
+run_case fail_tree_read
+skipped "tree read fails" "list the files of origin/main"
+is  "tree read fails: the file keeps the parent's version" "$(cat "$CASE_DIR/CLAUDE.md")" "parent rules"
+[ -e "$CASE_DIR/docs/CLAUDE.md" ] && ok "tree read fails: no convention file is removed" \
+  || bad "tree read fails: no convention file is removed" "docs/CLAUDE.md is gone"
+is  "tree read fails: the index keeps the parent's files" "$(git -C "$CASE_DIR" ls-files 'docs/CLAUDE.md' '.claude/skills/p/SKILL.md' | wc -l | tr -d ' ')" 2
+
+run_case fail_lookup
+skipped "look-up fails" "look up a convention file"
+
+run_case newline_name
+skipped "newline in a name" "look up a convention file"
 
 run_case fail_checkout
 skipped "checkout fails" "check out a convention file"

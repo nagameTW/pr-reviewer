@@ -58,9 +58,11 @@ All notable changes to this project are recorded here. The format follows
   file that only the default branch has. The prompt said that every
   convention file came from the default branch. The reviewer now skips the PR,
   and tries it again next round, when a replacement step fails: the file
-  list, the checkout of a file, the removal of a file from the index, or the
-  removal of a file from the review tree. Before, such a failure went
-  unnoticed and the review went on.
+  list, the read of the file list of the default branch, the checkout of a
+  file, the removal of a file from the index, or the removal of a file from
+  the review tree. A failed read of the default branch no longer counts as a
+  file that the default branch does not have, so it removes no file. Before,
+  such a failure went unnoticed and the review went on.
 
 ### Security
 

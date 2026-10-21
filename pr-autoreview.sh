@@ -1230,6 +1230,14 @@ the default branch. Edit the title and it is checked again automatically."
         '.claude/*' '*/.claude/*' \
         ${TREE_CONV_EXTRA_PATHSPECS[@]+"${TREE_CONV_EXTRA_PATHSPECS[@]}"} > "$CONV_LIST" 2>/dev/null \
         || { note_skip "could not list the convention files to replace on a stacked base, skipping (fail closed)"; return 0; }
+      # The default branch's files go to a file the same way. A per-file
+      # `git cat-file -e` gives one status for "the tree has no such path" and
+      # for "git could not read the tree", and only the first one may remove a
+      # file. Here a failed read skips the PR before any file is touched.
+      CONV_TREE="$(mktemp "$GATE_SCRATCH/prreview-conv-tree-XXXXXX")" && TMPFILES+=("$CONV_TREE") \
+        || { note_skip "could not create a scratch file for the file list of origin/$DEFAULT_BRANCH, skipping (fail closed)"; return 0; }
+      git -C "$REPO_DIR" ls-tree -r --name-only -z "origin/$DEFAULT_BRANCH" > "$CONV_TREE" 2>/dev/null \
+        || { note_skip "could not list the files of origin/$DEFAULT_BRANCH on a stacked base, skipping (fail closed)"; return 0; }
       # Each step must work. A failed step skips the PR: a tree where one
       # convention file still comes from the parent branch does not hold the
       # default branch's rules. CONV_FORCED is set after the last file is done.
@@ -1240,7 +1248,18 @@ the default branch. Edit the title and it is checked again automatically."
       CONV_DONE=0
       while IFS= read -r -d '' conv; do
         if [ -n "$conv" ]; then
-          if git -C "$REPO_DIR" cat-file -e "origin/$DEFAULT_BRANCH:$conv" 2>/dev/null; then
+          # CONV_HAVE: 0 = the default tree has the path, 1 = it has not,
+          # 2 = no answer. grep splits a pattern at a newline, so a name with
+          # one gets no answer instead of a wrong one.
+          case "$conv" in
+            *$'\n'*) CONV_HAVE=2 ;;
+            *) LC_ALL=C grep -qzxF -- "$conv" "$CONV_TREE" 2>/dev/null; CONV_HAVE=$? ;;
+          esac
+          if [ "$CONV_HAVE" -ge 2 ]; then
+            note_skip "could not look up a convention file in the file list of origin/$DEFAULT_BRANCH on a stacked base, skipping (fail closed)"
+            return 0
+          fi
+          if [ "$CONV_HAVE" = 0 ]; then
             git -C "$REPO_DIR" checkout "origin/$DEFAULT_BRANCH" -- "$conv" 2>/dev/null \
               || { note_skip "could not check out a convention file from origin/$DEFAULT_BRANCH on a stacked base, skipping (fail closed)"; return 0; }
           else
