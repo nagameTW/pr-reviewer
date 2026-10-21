@@ -3160,7 +3160,7 @@ wait
 # CREATED first), so a long-lived PR merged just now can sit past row 10
 # and miss the 48h window; and this scan runs outside the ROUND_BUDGET
 # check, adding 1+N cheap calls after a budget-exhausted round. Both are
-# bounded by --limit 10, which covers a repo that merges a handful a day.
+# bounded by --limit 10, which covers up to 10 merges in the 48-hour window.
 MERGED_RECENT="$("$GH" pr list --repo "$REPO" --state merged --limit 10 \
     --json number,mergedAt 2>/dev/null \
   | jq -r '.[] | select(.mergedAt > (now - 172800 | todate)) | .number' 2>/dev/null)" \
