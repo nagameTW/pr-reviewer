@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# The one way this repo starts a model call (claude_call), and the check that
-# the installed Claude Code is new enough for it (claude_version_check).
-# Sourced by pr-autoreview.sh and prreview.
+# The one way this repo starts a model call (claude_call), and the checks that
+# the installed Claude Code and gh are new enough (claude_version_check,
+# gh_version_check). Sourced by pr-autoreview.sh and prreview.
 #
 # Each flag removes something that a prompt-injected diff could use:
 #   --tools            sets which built-in tools exist. --allowedTools only
@@ -40,10 +40,13 @@
 # every request on Vertex, Bedrock and gateways when --tools leaves out
 # ToolSearch, and 2.1.305 fixes that. These tool sets have no ToolSearch.
 CLAUDE_MIN_VERSION="2.1.305"
+# The reviewer reads baseRefOid, headRefOid and changedFiles with
+# `gh pr view --json`. gh 2.63.0 is the first release that lists baseRefOid.
+GH_MIN_VERSION="2.63.0"
 # The tools of a call that reads the review clone.
 # shellcheck disable=SC2034  # read by pr-autoreview.sh
 CLAUDE_READ_TOOLS="Read,Grep,Glob"
-# Seconds for `claude --version`. It makes no API call.
+# Seconds for `claude --version` and `gh --version`. Neither makes an API call.
 CLAUDE_VERSION_TIMEOUT=20
 
 # claude_call SECONDS MODEL TOOLS [DIR...] -- RULE...
@@ -72,13 +75,13 @@ claude_call() {
       --allowedTools "$@" --output-format json
 }
 
-# claude_version_ok TEXT: 0 when TEXT, the output of `claude --version` such
-# as "2.1.305 (Claude Code)", starts with CLAUDE_MIN_VERSION or a later one.
+# version_at_least TEXT MIN: 0 when TEXT starts with version MIN or a later
+# one, as in "2.1.305 (Claude Code)". Only the first word of TEXT counts.
 # Each field is compared as an integer, so 2.1.1000 is later than 2.1.305.
 # As in SemVer, build metadata (+...) is ignored, and a pre-release (-...)
 # comes before its release: 2.1.306-beta.1 passes, 2.1.305-rc.1 does not.
 # Text that is not three numbers is refused.
-claude_version_ok() {
+version_at_least() {
   local v="${1%%[[:space:]]*}" pre="" maj min pat want_maj want_min want_pat
   v="${v%%+*}"
   case "$v" in
@@ -88,13 +91,26 @@ claude_version_ok() {
   case "$v" in *[!0-9.]* | .* | *. | *..* | *.*.*.*) return 1 ;; esac
   case "$v" in *.*.*) ;; *) return 1 ;; esac
   IFS=. read -r maj min pat <<<"$v"
-  IFS=. read -r want_maj want_min want_pat <<<"$CLAUDE_MIN_VERSION"
+  IFS=. read -r want_maj want_min want_pat <<<"${2-}"
   # 10# reads a field such as 08 as decimal, not as octal.
   maj=$((10#$maj)); min=$((10#$min)); pat=$((10#$pat))
   if [ "$maj" -ne "$want_maj" ]; then [ "$maj" -gt "$want_maj" ]; return; fi
   if [ "$min" -ne "$want_min" ]; then [ "$min" -gt "$want_min" ]; return; fi
   if [ "$pat" -ne "$want_pat" ]; then [ "$pat" -gt "$want_pat" ]; return; fi
   [ -z "$pre" ]
+}
+
+# claude_version_ok TEXT: 0 when TEXT, the output of `claude --version`, starts
+# with CLAUDE_MIN_VERSION or a later one.
+claude_version_ok() { version_at_least "${1-}" "$CLAUDE_MIN_VERSION"; }
+
+# gh_version_ok TEXT: 0 when TEXT, the output of `gh --version`, such as
+# "gh version 2.63.0 (2024-11-27)", names GH_MIN_VERSION or a later one. Only
+# the first line counts.
+gh_version_ok() {
+  local first="${1-}"
+  first="${first%%$'\n'*}"
+  version_at_least "${first#gh version }" "$GH_MIN_VERSION"
 }
 
 # claude_version_check: 0 when the installed claude is new enough. If not, it
@@ -104,5 +120,17 @@ claude_version_check() {
   out="$(timeout "$CLAUDE_VERSION_TIMEOUT" "${CLAUDE_BIN:-claude}" --version </dev/null 2>/dev/null)"
   claude_version_ok "$out" && return 0
   echo "Claude Code $CLAUDE_MIN_VERSION or later is required, and '${CLAUDE_BIN:-claude} --version' printed '${out:-nothing}'. Update it with 'claude update', then try again."
+  return 1
+}
+
+# gh_version_check [GH]: 0 when the installed gh is new enough. If not, it
+# prints the version it found and the version it needs, and returns 1. GH is
+# the binary (default: $GH_BIN, then gh).
+gh_version_check() {
+  local gh="${1:-${GH_BIN:-gh}}" out
+  out="$(timeout "$CLAUDE_VERSION_TIMEOUT" "$gh" --version </dev/null 2>/dev/null)"
+  gh_version_ok "$out" && return 0
+  out="${out%%$'\n'*}"
+  echo "gh $GH_MIN_VERSION or later is required, because older versions cannot report baseRefOid. '$gh --version' printed '${out:-nothing}'. Update gh (https://github.com/cli/cli#installation), then try again."
   return 1
 }

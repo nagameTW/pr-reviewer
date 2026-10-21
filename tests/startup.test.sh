@@ -33,18 +33,27 @@ printf '\necho STARTUP-OK\n' >> "$SMOKE"
 # the model.
 # PRREVIEW_GATE_REPOS and PRREVIEW_OWNER_LOGIN are set so the head never has to ask
 # gh for them.
-# gh is only checked to be executable, so /usr/bin/true stands in for it.
-# claude is a stub that prints FAKE_CLAUDE_VERSION the way `claude --version`
-# does. This must also pass on a CI runner that has neither.
+# claude and gh are stubs that print FAKE_CLAUDE_VERSION and FAKE_GH_VERSION
+# the way `claude --version` and `gh --version` do. This must also pass on a
+# CI runner that has neither.
 cat > "$STUB/claude" <<'STUB_EOF'
 #!/usr/bin/env bash
 [ "${1-}" = --version ] || exit 1
 printf '%s\n' "$FAKE_CLAUDE_VERSION"
 STUB_EOF
 chmod +x "$STUB/claude"
-run_head() { # $1 = what the claude stub prints for --version
+cat > "$STUB/gh" <<'STUB_EOF'
+#!/usr/bin/env bash
+[ "${1-}" = --version ] || exit 1
+printf '%s\n%s\n' "$FAKE_GH_VERSION" 'https://github.com/cli/cli/releases/latest'
+STUB_EOF
+chmod +x "$STUB/gh"
+# $1 = what the claude stub prints for --version, $2 = what the gh stub prints
+# (default: a gh that is new enough)
+run_head() {
   env -i HOME="$HOME" PATH="$PATH" PRREVIEW_GATE_REPOS=acme/widgets PRREVIEW_OWNER_LOGIN=acme \
-    CLAUDE_BIN="$STUB/claude" GH_BIN=/usr/bin/true FAKE_CLAUDE_VERSION="$1" bash "$SMOKE" 2>&1
+    CLAUDE_BIN="$STUB/claude" GH_BIN="$STUB/gh" FAKE_CLAUDE_VERSION="$1" \
+    FAKE_GH_VERSION="${2-gh version 2.63.0 (2024-11-27)}" bash "$SMOKE" 2>&1
 }
 OUT="$(run_head '2.1.305 (Claude Code)')"; RC=$?
 case "$OUT" in
@@ -80,5 +89,33 @@ done
 OUT="$(run_head '2.1.304 (Claude Code)')"; RC=$?
 case "$OUT" in *'2.1.304'*) ok 'the refusal names the version it found' ;; *) bad 'the refusal names the version it found' "$OUT" ;; esac
 if [ "$RC" -ne 0 ]; then ok '...and exits non-zero'; else bad '...and exits non-zero' "rc=$RC"; fi
+
+# gh 2.63.0 or later: the first release that lists baseRefOid in
+# `gh pr view --json`. Fields compare as integers, so 2.100.0 passes and
+# 2.9.0 does not.
+for v in 'gh version 2.63.0 (2024-11-27)' 'gh version 2.63.1 (2024-12-02)' 'gh version 2.100.0 (2026-01-01)' \
+         'gh version 3.0.0 (2027-01-01)' 'gh version 2.64.0-rc.1 (2024-12-01)'; do
+  OUT="$(run_head '2.1.305 (Claude Code)' "$v")"
+  case "$OUT" in
+    *STARTUP-OK*) ok "gh '$v' is accepted" ;;
+    *) bad "gh '$v' is accepted" "$(printf '%s' "$OUT" | tail -2 | tr '\n' ' ')" ;;
+  esac
+done
+for v in 'gh version 2.62.0 (2024-11-14)' 'gh version 2.9.0 (2022-02-01)' 'gh version 1.14.0 (2021-08-01)' \
+         'gh version 2.63.0-rc.1 (2024-11-20)' 'gh version' 'not gh' ''; do
+  OUT="$(run_head '2.1.305 (Claude Code)' "$v")"; RC=$?
+  case "$OUT" in
+    *STARTUP-OK*) bad "gh '$v' is refused" 'the head ran to the end' ;;
+    *'gh 2.63.0 or later'*) ok "gh '$v' is refused, and the message names 2.63.0" ;;
+    *) bad "gh '$v' is refused, and the message names 2.63.0" "rc=$RC, output: $(printf '%s' "$OUT" | tail -2 | tr '\n' ' ')" ;;
+  esac
+done
+OUT="$(run_head '2.1.305 (Claude Code)' 'gh version 2.62.0 (2024-11-14)')"; RC=$?
+case "$OUT" in *'gh version 2.62.0'*) ok 'the gh refusal names the version it found' ;; *) bad 'the gh refusal names the version it found' "$OUT" ;; esac
+if [ "$RC" -ne 0 ]; then ok '...and exits non-zero'; else bad '...and exits non-zero' "rc=$RC"; fi
+# A gh that is not there at all is refused the same way.
+OUT="$(env -i HOME="$HOME" PATH="$PATH" PRREVIEW_GATE_REPOS=acme/widgets PRREVIEW_OWNER_LOGIN=acme \
+  CLAUDE_BIN="$STUB/claude" GH_BIN="$STUB/no-such-gh" FAKE_CLAUDE_VERSION='2.1.305 (Claude Code)' bash "$SMOKE" 2>&1)"
+case "$OUT" in *'gh 2.63.0 or later'*"printed 'nothing'"*) ok 'a missing gh is refused, and the message says it printed nothing' ;; *) bad 'a missing gh is refused, and the message says it printed nothing' "$OUT" ;; esac
 
 if [ "$FAILED" -eq 0 ]; then echo "PASS: startup"; else echo "FAIL: startup"; exit 1; fi

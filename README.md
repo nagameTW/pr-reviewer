@@ -239,7 +239,10 @@ chooses one the same way it does for the built-in items.
 
 - **macOS or Linux.** On Windows it runs inside WSL2; see [Windows](#windows).
 - **bash 3.2 or newer.** The bash macOS ships at `/bin/bash` works.
-- **[gh](https://cli.github.com/)**, logged in. With the defaults it needs to
+- **[gh](https://cli.github.com/) 2.63.0 or later**, logged in. The reviewer
+  reads `baseRefOid` with `gh pr view --json`, and gh 2.63.0 is the first
+  release that lists it. `prreview setup` checks `gh --version`, and the
+  reviewer refuses to start on an older version. With the defaults it needs to
   read the repos and comment on their pull requests; the settings that open
   issues or touch auto-merge need more (see [Security model](#security-model)).
   Comments come from this account unless you set up a GitHub App (see
@@ -469,9 +472,10 @@ git pull --ff-only
 ```
 
 After `git pull --ff-only`, run `./prreview setup` again. Claude Code 2.1.305
-or later is required. Setup stops at the Claude Code step when
-`claude --version` is older. Run `claude update`, then run `./prreview setup`
-again.
+or later and gh 2.63.0 or later are required. Setup stops at the Claude Code
+step when `claude --version` is older, and at the GitHub step when
+`gh --version` is older. Run `claude update` or update gh, then run
+`./prreview setup` again.
 
 Press Enter through the questions to keep your answers, except at the
 Checklist step: when setup lists built-in items your copy lacks, answer `y`

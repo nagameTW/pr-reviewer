@@ -255,6 +255,9 @@ setup_claude() {
 }
 
 setup_github() {
+  # The reviewer refuses to start on an older gh, so setup says it first. The
+  # function prints the found and the needed version.
+  gh_version_check "${GH_BIN:-gh}" || return 1
   if ! "${GH_BIN:-gh}" auth status >/dev/null 2>&1; then
     say "gh is not logged in. The reviewer reads through gh, and comments as that account unless you set up a GitHub App next."
     yes_no "Run 'gh auth login' now?" y || return 1

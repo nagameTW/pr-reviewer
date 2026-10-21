@@ -347,6 +347,7 @@ command -v timeout >/dev/null || { echo "timeout(1) missing — refusing to run 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/lib/claude-call.sh" || { echo "lib/claude-call.sh missing, refusing to run"; exit 1; }
 claude_version_check || exit 1
+gh_version_check "$GH" || exit 1
 
 # Single-instance lock. The gate fetches and checks out in $GATE_WORKROOT,
 # so a manual run overlapping the scheduled one would have two

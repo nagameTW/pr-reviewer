@@ -6,6 +6,13 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- gh 2.63.0 or later is now required. The reviewer reads `baseRefOid` with
+  `gh pr view --json`, and gh 2.63.0 is the first release that lists it. The
+  reviewer and `prreview setup` check `gh --version` and refuse an older gh
+  with a message that names both versions.
+
 ### Fixed
 
 - Findings now cite the line in the changed file, not a line of the diff. The

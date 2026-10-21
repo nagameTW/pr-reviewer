@@ -132,6 +132,7 @@ is  '...and nothing else in that file uses print mode' \
     "$( (grep -vFx "$CALL_BODY" lib/claude-call.sh 2>/dev/null || cat lib/claude-call.sh 2>/dev/null) | print_mode_lines | head -3)" ''
 is  'no --allowedTools outside lib/claude-call.sh' "$(grep -hE '^[^#]*--allowedTools' "${OTHERS[@]}" | wc -l | tr -d ' ')" 0
 before 'the Claude Code version is checked before the lock' 'claude_version_check || exit 1' 'LOCKFILE=' pr-autoreview.sh
+before 'the gh version is checked before the lock' 'gh_version_check "$GH" || exit 1' 'LOCKFILE=' pr-autoreview.sh
 
 # The diff, the file list and the marker SHA describe ONE commit. A moving
 # `gh pr diff` call (head at the time of the call) would let a force-push
