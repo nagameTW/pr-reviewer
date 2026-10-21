@@ -124,7 +124,13 @@ for _ in 1 2 3; do holdoff_set "$TMP/hold/r-4-k" quota "$NOW"; done
 : > "$TMP/hold/r-1-k.verdict"
 is "stuck: three failures in a row, of the review or the post, count; quota and two do not" \
    "$(holdoff_stuck "$TMP/mark" 3 | sort | tr '\n' ' ')" "r-1-k r-3-k "
-touch "$TMP/mark2"; sleep 1; holdoff_set "$TMP/hold/r-3-k" postfail "$NOW"
+# The file dates are set by hand, not read from the clock. If the clock of the
+# box steps back by a few seconds between two writes, a hold written first
+# looks newer than a mark made after it. The holds are older than mark2, and
+# the one write below is newer than it.
+touch -t 200001020000 "$TMP/hold"/*
+touch -t 200001030000 "$TMP/mark2"
+holdoff_set "$TMP/hold/r-3-k" postfail "$NOW"
 is "stuck: only holds written since the mark" "$(holdoff_stuck "$TMP/mark2" 3)" "r-3-k"
 is "stuck: a missing mark reports nothing" "$(holdoff_stuck "$TMP/nope" 3)" ""
 

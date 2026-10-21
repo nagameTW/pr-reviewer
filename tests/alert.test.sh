@@ -39,10 +39,11 @@ run_alert() {
     GH_STUB_OUT="$T/body" GH_BIN="$T/gh" PRREVIEW_SENSITIVE_PATTERNS_FILE="$T/pats" \
     PRREVIEW_ALERT_WORKROOT="$T/work" bash owner-alert.sh "$@" >"$T/out" 2>&1
 }
-h_ago() { # $1 hours -> GitHub's updatedAt shape
-  local e=$(( $(date +%s) - $1 * 3600 ))
+s_ago() { # $1 seconds -> GitHub's updatedAt shape
+  local e=$(( $(date +%s) - $1 ))
   date -u -r "$e" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d "@$e" +%Y-%m-%dT%H:%M:%SZ
 }
+h_ago() { s_ago $(( $1 * 3600 )); } # $1 hours
 
 
 # Without a detail, on a box that has journalctl (stubbed onto PATH, in a
@@ -130,7 +131,10 @@ rm -f "$T/body.calls"
 GH_STUB_LAST="$(h_ago 5)" run_alert "review-loop (log: ~/.cache/pr-reviewer/gate.log)" "exited 1 again"
 lacks 'unset window: a 5-hour-old episode is not' 'issue comment' "$(cat "$T/body.calls" 2>/dev/null)"
 rm -f "$T/body.calls"
-ALERT_REPEAT=0; GH_STUB_LAST="$(date -u +%Y-%m-%dT%H:%M:%SZ)" run_alert "review-loop (log: ~/.cache/pr-reviewer/gate.log)" "exited 1 again"
+# The stamp is 30 seconds old, not "now". The script reads the clock after this
+# line does. If the clock of the box steps back by a few seconds in between,
+# the age is below zero and reads as "under the window", even for 0 hours.
+ALERT_REPEAT=0; GH_STUB_LAST="$(s_ago 30)" run_alert "review-loop (log: ~/.cache/pr-reviewer/gate.log)" "exited 1 again"
 has   'a 0-hour window comments even on a fresh episode' 'issue comment' "$(cat "$T/body.calls" 2>/dev/null)"
 rm -f "$T/body.calls"
 ALERT_REPEAT=999999; GH_STUB_LAST="2000-01-01T00:00:00Z" run_alert "review-loop (log: ~/.cache/pr-reviewer/gate.log)" "exited 1 again"
