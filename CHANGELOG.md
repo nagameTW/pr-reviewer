@@ -14,6 +14,21 @@ All notable changes to this project are recorded here. The format follows
   with a message that names both versions.
 - Alert issues in `PRREVIEW_ALERT_REPO`, and their "Still failing" comments,
   now record the time in UTC.
+- The README and SECURITY.md state the limits of their claims more precisely,
+  and the README warns that the first run reviews every open non-draft PR.
+- The reviewer requires Claude Code 2.1.305 or later. It checks
+  `claude --version` at startup and does not run on an older version, and
+  `prreview setup` checks it too. Before 2.1.295, `--tools` did not apply to
+  tools that register after launch, and 2.1.304 fails every request on
+  Vertex, Bedrock and gateways with this tool set. To upgrade, see Upgrading
+  in the README.
+- A round now skips a PR, and tries it again next round, when its merge base
+  cannot be found, when its diff cannot be fetched, or when the diff is
+  incomplete. v0.2.0 reviewed the PR without applying the diff to the tree
+  when the merge base was missing.
+- After the upgrade, each open PR based on another branch gets one more
+  review, because its review key now holds the base commit. A PR into the
+  default branch keeps its key and is not reviewed again.
 
 ### Fixed
 
@@ -36,6 +51,16 @@ All notable changes to this project are recorded here. The format follows
 - A PR that changes no files is skipped with a log line that says so. v0.2.0
   skipped it too. The new diff fetch for the exact head commit read the empty
   diff of such a PR as a diff it could not read.
+- The review prompt now says how a PR based on another branch gets its
+  convention files. The reviewer replaces each convention file that the tree
+  already tracks with the version on the newest commit of the default branch.
+  It removes a file that the default branch does not have. It does not add a
+  file that only the default branch has. The prompt said that every
+  convention file came from the default branch. The reviewer now skips the PR,
+  and tries it again next round, when a replacement step fails: the file
+  list, the checkout of a file, the removal of a file from the index, or the
+  removal of a file from the review tree. Before, such a failure went
+  unnoticed and the review went on.
 
 ### Security
 
@@ -75,24 +100,6 @@ All notable changes to this project are recorded here. The format follows
   when its parent branch moves, because its review key now holds the base
   commit. SECURITY.md lists the limit that stays for a PR into the default
   branch.
-
-### Changed
-
-- The README and SECURITY.md state the limits of their claims more precisely,
-  and the README warns that the first run reviews every open non-draft PR.
-- The reviewer requires Claude Code 2.1.305 or later. It checks
-  `claude --version` at startup and does not run on an older version, and
-  `prreview setup` checks it too. Before 2.1.295, `--tools` did not apply to
-  tools that register after launch, and 2.1.304 fails every request on
-  Vertex, Bedrock and gateways with this tool set. To upgrade, see Upgrading
-  in the README.
-- A round now skips a PR, and tries it again next round, when its merge base
-  cannot be found, when its diff cannot be fetched, or when the diff is
-  incomplete. v0.2.0 reviewed the PR without applying the diff to the tree
-  when the merge base was missing.
-- After the upgrade, each open PR based on another branch gets one more
-  review, because its review key now holds the base commit. A PR into the
-  default branch keeps its key and is not reviewed again.
 
 ## [0.2.0] - 2026-10-12
 

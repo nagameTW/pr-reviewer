@@ -71,7 +71,8 @@ the diff applied, and convention files such as `CLAUDE.md` are read as they are
 at the PR's merge base. For a PR based on another branch, the merge base is on
 that branch, so each convention file the tree has is replaced with the default
 branch's version, or removed when the default branch does not have it. A file
-that only the default branch has is not added. The match is exact in file name
+that only the default branch has is not added. If a step of the replacement
+fails, the PR is not reviewed that round. The match is exact in file name
 case, so a PR's edit to a differently cased file such as `readme.md` is not
 restored. The author's branch is never checked out.
 

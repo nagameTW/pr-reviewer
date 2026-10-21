@@ -661,7 +661,8 @@ works in place of the loop, and a lock stops two rounds from overlapping.
    from the merge base, matched by exact file name case. For a PR based on
    another branch, each one the tree has is replaced with the default branch's
    version, or removed when the default branch does not have it. A file that
-   only the default branch has is not added.
+   only the default branch has is not added. If a step of the replacement
+   fails, the round skips that PR and tries again next round.
    The diff is fetched once, for the exact head commit the verdict will name,
    and the list of changed files is read from that same diff. A push that
    lands during the round cannot swap in another head. If the merge base
