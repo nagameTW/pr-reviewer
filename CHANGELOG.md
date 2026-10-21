@@ -63,6 +63,10 @@ All notable changes to this project are recorded here. The format follows
   the review tree. A failed read of the default branch no longer counts as a
   file that the default branch does not have, so it removes no file. Before,
   such a failure went unnoticed and the review went on.
+- The round task for round 2 and later now names the exception to its delta
+  limit. A file with a prior line "N more finding(s) on this file" is
+  searched in full, also when the delta does not touch it. The task said both
+  that such a file is not searched and that it is searched in full.
 
 ### Security
 

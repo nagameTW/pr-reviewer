@@ -488,8 +488,11 @@ prompt_round_task_section() {
   else
     printf '%s' " (the list could not be computed this round: take the files the previous rounds' findings name plus what the diff obviously reworked)"
   fi
+  # The folded-file duty (last sentence of this function) is an exception to
+  # the delta limit, so the limit says so here and in the cap-on sentence.
+  printf '%s' ', and to each file with a prior line reading "N more finding(s) on this file"'
   if [ "$known" = 1 ] && [ "$cap_on" = 1 ]; then
-    printf '%s\n' ". A file outside the delta is not searched this round; a new non-CRITICAL observation about a file that NO earlier round cited and the delta does not touch goes into the summary, not into findings — the harness demotes such a finding to MEDIUM anyway. On a file an earlier round DID cite, report what you find as a finding at its honest severity: the harness keeps it. A new CRITICAL anywhere is still a finding."
+    printf '%s\n' ". A file outside the delta is not searched this round, except a file with a prior line reading \"N more finding(s) on this file\"; a new non-CRITICAL observation about a file that NO earlier round cited and the delta does not touch goes into the summary, not into findings — the harness demotes such a finding to MEDIUM anyway. On a file an earlier round DID cite, report what you find as a finding at its honest severity: the harness keeps it. A new CRITICAL anywhere is still a finding."
   else
     # Cap off (no delta list, or a prior round admitted an incomplete one):
     # FINDINGS_CONVERGE_JQ gets delta == null and demotes nothing, so nothing
@@ -501,7 +504,7 @@ prompt_round_task_section() {
   # The per-file cap (FINDINGS_FILE_CAP_JQ) folds the eighth finding on a
   # file and beyond into one line without file:line; those findings exist
   # in no list this round can verify, so the file is searched again in full.
-  printf '%s\n' "A prior line reading \"N more finding(s) on this file\" means the earlier round found more on that file than it listed: search that file in full this round and report each defect you find in it as a finding, whether or not the delta touches it."
+  printf '%s\n' "A line reading \"N more finding(s) on this file\" is the exception named above. It means the earlier round found more on that file than it listed: search that file in full this round and report each defect you find in it as a finding, whether or not the delta touches it."
 }
 
 

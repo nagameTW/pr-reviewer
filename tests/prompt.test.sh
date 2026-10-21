@@ -129,6 +129,19 @@ has 'round task: a file folded by the per-file cap is searched in full (delta un
 FOLD_ASK='search that file in full this round and report each defect you find in it as a finding'
 has 'round task: a folded file is searched in full and its defects are findings (delta known)'   "$FOLD_ASK" "$(prompt_round_task_section 2 1)"
 has 'round task: a folded file is searched in full and its defects are findings (delta unknown)' "$FOLD_ASK" "$(prompt_round_task_section 3 0)"
+# The delta limit and the folded-file duty must not contradict each other: the
+# limit names the folded file as an exception, in the sentence that restricts
+# the search and in the sentence that says a file is not searched, and the
+# sentence about the folded line points back to that exception.
+FOLD_EXC_RESTRICT=', and to each file with a prior line reading "N more finding(s) on this file"'
+has 'round task: the delta restriction names the folded file (delta known, cap on)'  "$FOLD_EXC_RESTRICT" "$(prompt_round_task_section 2 1 1)"
+has 'round task: the delta restriction names the folded file (delta known, cap off)' "$FOLD_EXC_RESTRICT" "$(prompt_round_task_section 3 1 0)"
+has 'round task: the delta restriction names the folded file (delta unknown)'        "$FOLD_EXC_RESTRICT" "$(prompt_round_task_section 3 0)"
+FOLD_EXC_CAP='is not searched this round, except a file with a prior line reading "N more finding(s) on this file"'
+has 'round task: with the cap on, the out-of-delta rule excepts the folded file' "$FOLD_EXC_CAP" "$(prompt_round_task_section 2 1 1)"
+FOLD_EXC_BACK='is the exception named above'
+has 'round task: the folded-line sentence points back to the exception (delta known)'   "$FOLD_EXC_BACK" "$(prompt_round_task_section 2 1 1)"
+has 'round task: the folded-line sentence points back to the exception (delta unknown)' "$FOLD_EXC_BACK" "$(prompt_round_task_section 3 0)"
 # The gate hands the section the late cap's own switch, and reads that same
 # switch when it decides whether to apply the cap — one predicate, two readers.
 has 'gate: the round task section gets both flags — the list flag and the cap switch' 'prompt_round_task_section "$ROUND" "$DELTA_KNOWN" "$ROUND_CAP_ON"' "$(cat pr-autoreview.sh)"
