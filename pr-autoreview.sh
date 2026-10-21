@@ -887,9 +887,11 @@ review_one_pr() { # $1 = PR number, $2 = the worktree the dispatcher made
   # For a stacked PR the base commit is in the hash too: a push to the parent
   # branch changes this PR's diff, so it asks for a new review. A PR into the
   # default branch keeps the v0.2.0 key (SECURITY.md, Known limits). No key
-  # means no base commit that is a full SHA, and then there is no merge base.
+  # means the head or the base commit is not a full SHA, or the digest step
+  # failed. Then there is no merge base, or the key would match a marker of
+  # another head.
   KEY="$(prompt_review_key "$INFO" "$DEFAULT_BRANCH")" \
-    || { note_skip "the base commit is missing or is not a full commit SHA, skipping (fail closed)"; return 0; }
+    || { note_skip "no review key: the head or the base commit is missing or is not a full commit SHA, or the digest step failed, skipping (fail closed)"; return 0; }
 
   HOLD_F="$(holdoff_path "$REPO" "$PR" "$KEY")" || HOLD_F=""
 
