@@ -1517,10 +1517,13 @@ $SPLIT_TEXT"
           # keeping one habit for both is how the wrong one does not get the
           # careless treatment later.
           : > "$SD"
+          # A part that cannot be read or written leaves a shorter slice, and
+          # -s alone cannot tell it from a whole one.
+          SD_OK=1
           while IFS= read -r part; do
-            [ -n "$part" ] && cat "$part" >> "$SD"
+            [ -z "$part" ] || cat "$part" >> "$SD" || SD_OK=0
           done < <(awk -F'\t' -v s="$s" '$1 == s { print $3 }' <<<"$PLAN")
-          if [ -s "$SD" ]; then
+          if [ "$SD_OK" = 1 ] && [ -s "$SD" ]; then
             SLICE_DIFFS+=("$SD")
             # Newline-separated, not space-joined: a file name may contain a
             # space, and the list is shown to the model as a fenced block
