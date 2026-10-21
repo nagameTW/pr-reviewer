@@ -47,10 +47,11 @@ call cannot read another PR's scratch files or another slice's scratch diff.
 A slice review can still read every source file in the review clone. Every
 call also gets `--strict-mcp-config` and `--disallowedTools "mcp__*"`, so no
 MCP server starts, and `--disable-slash-commands`, so no skill or command from
-the reviewed repo loads. `--setting-sources` is empty, so the operator's own
-Claude settings cannot widen any of that. These flags need Claude Code 2.1.305
-or later. The reviewer checks `claude --version` at startup and refuses an
-older version.
+the reviewed repo loads. The reviewer passes an empty `--setting-sources`, so
+Claude Code loads no user, project or local settings file. The check of the
+tool set on Claude Code 2.1.305 did not test this flag. These flags need
+Claude Code 2.1.305 or later. The reviewer checks `claude --version` at
+startup and refuses an older version.
 
 Every prompt goes to Claude Code on stdin, never on the command line, so
 other users of the machine cannot read it in the process list. The `claude`

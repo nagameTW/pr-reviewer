@@ -939,9 +939,10 @@ Who controls each input, and how the reviewer treats it:
   the call's diff or slice, or the PR's title and description.
   `--strict-mcp-config` and `--disallowedTools "mcp__*"` keep MCP servers out,
   and `--disable-slash-commands` keeps the reviewed repo's skills and commands
-  out. `--setting-sources` is empty, so a rule in your own
-  `~/.claude/settings.json` cannot widen any of that. These limits need Claude
-  Code 2.1.305 or later, and the reviewer refuses to start on an older one.
+  out. The reviewer passes an empty `--setting-sources`, so Claude Code loads
+  no user, project or local settings file. The check of the tool set on Claude
+  Code 2.1.305 did not test this flag. These limits need Claude Code 2.1.305
+  or later, and the reviewer refuses to start on an older one.
 - **Prompts go on stdin.** No prompt is on a command line, so other users of
   the machine cannot read it in the process list.
 - **Token variables are cleared, as defense in depth.** The `claude` process
