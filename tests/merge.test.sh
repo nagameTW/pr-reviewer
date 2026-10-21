@@ -232,7 +232,20 @@ pr_diff_pinned example/repo "$MB" "$SHA_C" "$OUTF" 1 >/dev/null; RC=$?
 [ "$RC" = 3 ] || fail "an answer that is not a diff must fail closed with 3 (rc=$RC)"
 : > "$FX/diff-$SHA_C"
 pr_diff_pinned example/repo "$MB" "$SHA_C" "$OUTF" 1 >/dev/null; RC=$?
-[ "$RC" = 3 ] || fail "an empty answer must fail closed with 3 (rc=$RC)"
+[ "$RC" = 3 ] || fail "an empty answer for a PR that changes one file must fail closed with 3 (rc=$RC)"
+# A PR that changes no files: GitHub reports changedFiles=0 and the compare
+# API returns an empty body. That is an empty file list, not an unreadable
+# diff. Only an empty body matches 0.
+SHA_Z=5555555555555555555555555555555555555555
+: > "$FX/diff-$SHA_Z"
+FILES="$(pr_diff_pinned example/repo "$MB" "$SHA_Z" "$OUTF" 0)"; RC=$?
+[ "$RC" = 0 ] || fail "changedFiles=0 with an empty answer must succeed (rc=$RC)"
+[ -z "$FILES" ] || fail "changedFiles=0 must print no file list (got: $FILES)"
+pr_diff_pinned example/repo "$MB" "$SHA_A" "$OUTF" 0 >/dev/null; RC=$?
+[ "$RC" = 4 ] || fail "changedFiles=0 with a diff that holds files must fail closed with 4 (rc=$RC)"
+printf '{"message":"Not Found"}\n' > "$FX/diff-$SHA_C"
+pr_diff_pinned example/repo "$MB" "$SHA_C" "$OUTF" 0 >/dev/null; RC=$?
+[ "$RC" = 3 ] || fail "changedFiles=0 with an answer that is not a diff must fail closed with 3 (rc=$RC)"
 # Cut off inside a hunk: git refuses a patch whose hunk is shorter than it says.
 head -n 8 "$FX/diff-$SHA_B" > "$FX/diff-$SHA_C"
 pr_diff_pinned example/repo "$MB" "$SHA_C" "$OUTF" 2 >/dev/null; RC=$?
@@ -301,6 +314,12 @@ case "$BOUT" in *reached*) fail "an unresolved merge base must end the round" ;;
 [ -s "$LOG" ] && fail "an unresolved merge base must be refused before the diff is fetched"
 MB_OUT="$MB"; GH_RC=1 run_block "$SHA_A" 2
 case "$BOUT" in *"skip 5:"*"could not fetch the diff"*"(fail closed)"*) ;; *) fail "a failed fetch must skip and say why (got: $BOUT)" ;; esac
+# No changed files: skipped like v0.2.0 skipped an empty `gh pr diff`, with a
+# note that says why. Nothing after the block may read an empty file list.
+unset GH_RC; run_block "$SHA_Z" 0
+case "$BOUT" in *"skip 5:"*"changes no files"*"(fail closed)"*) ;; *) fail "a PR with no changed files must skip and say why (got: $BOUT)" ;; esac
+case "$BOUT" in *reached*|*POSTED*) fail "a PR with no changed files must end the round without posting (got: $BOUT)" ;; esac
+[ ! -e "$DIFF" ] || fail "the empty diff must not be left on disk for the next step"
 unset GH_RC MB_OUT
 
 echo "PASS: lib/merge.sh (merge_base_allowed x6, merge_size_allowed x11, merge_base_sha x3, pr_diff_pinned, diff_changed_files + the round block, disarm_unreviewed_auto_merge x3 + caller block x3 + 1 call site)"

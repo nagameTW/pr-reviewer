@@ -1086,8 +1086,10 @@ the default branch. Edit the title and it is checked again automatically."
   PR_FILES_RC=0
   PR_FILES="$(pr_diff_pinned "$REPO" "$MERGE_BASE" "$SHA" "$DIFF" "$(jq -r '.changedFiles // ""' <<<"$INFO")")" \
     || PR_FILES_RC=$?
+  # A PR that changes no files has nothing to review. v0.2.0 skipped it too,
+  # and every step below needs a file list that is not empty.
   case "$PR_FILES_RC" in
-    0) ;;
+    0) [ -n "$PR_FILES" ] || { rm -f "$DIFF"; note_skip "the PR changes no files, nothing to review, skipping (fail closed)"; return 0; } ;;
     1) rm -f "$DIFF"; note_skip "the merge base or the head is not a full commit SHA, skipping (fail closed)"; return 0 ;;
     2) rm -f "$DIFF"; note_skip "could not fetch the diff, skipping (fail closed)"; return 0 ;;
     3) rm -f "$DIFF"; note_skip "the fetched diff could not be read (cut off, or not a diff), skipping (fail closed)"; return 0 ;;

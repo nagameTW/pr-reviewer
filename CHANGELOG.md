@@ -23,6 +23,9 @@ All notable changes to this project are recorded here. The format follows
   applied. For a PR based on another branch, the tree is that branch, and the
   red-team text was then wrong whether or not the diff applied. The red team
   now also gets the note about convention files the reviewer restored.
+- A PR that changes no files is skipped with a log line that says so. v0.2.0
+  skipped it too. The new diff fetch for the exact head commit read the empty
+  diff of such a PR as a diff it could not read.
 
 ### Security
 

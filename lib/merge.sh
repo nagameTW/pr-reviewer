@@ -107,7 +107,9 @@ diff_changed_files() {
 # The diff of a PR at ONE commit, and the files it changes.
 # $1 = owner/name, $2 = merge base SHA, $3 = head SHA, $4 = file to write the
 # diff to, $5 = changedFiles from the same `gh pr view` read that gave $3.
-# Prints the changed files, one per line. Fails closed, printing nothing:
+# Prints the changed files, one per line. A PR that changes no files gets an
+# empty body from the API: with $5 = 0 that is an empty list and a success,
+# printing nothing. Fails closed, printing nothing:
 #   1  $2 or $3 is not a full SHA
 #   2  the API call failed (rate limit, a diff too large to render, network)
 #   3  the answer is not a diff git can read (cut off, an error body)
@@ -130,6 +132,7 @@ pr_diff_pinned() {
   case "$want" in '' | *[!0123456789]*) return 4 ;; esac
   sha_is_full_hex "$base" && sha_is_full_hex "$head" || return 1
   "$GH" api "repos/$repo/compare/$base...$head" -H 'Accept: application/vnd.github.diff' > "$out" || return 2
+  if [ "$want" = 0 ] && [ ! -s "$out" ]; then return 0; fi
   files="$(diff_changed_files "$out")" || return 3
   [ "$(grep -c '' <<<"$files")" = "$want" ] || return 4
   printf '%s\n' "$files"
