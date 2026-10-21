@@ -105,8 +105,10 @@ It does:
 
 - Review every new head of every open PR in the repos you list, once. A head it
   has already commented on is skipped until the author pushes again, or edits
-  the PR's title, description or base branch: each of those is a new review,
-  and a new model call. Draft PRs are skipped until they are marked ready.
+  the PR's title, description or base branch. For a PR based on another branch
+  (a stacked PR), a push to that parent branch counts too. Each of these is a
+  new review, and a new model call. Draft PRs are skipped until they are marked
+  ready.
 - Read the repo the way a reviewer would: the whole tree at the PR's merge base
   with the PR's diff applied, plus the conventions the repo writes down for
   itself (`CLAUDE.md` or `AGENTS.md`, then `README` and `CONTRIBUTING`, and
@@ -142,7 +144,7 @@ The rest of this README uses these words in one sense each.
 | --- | --- |
 | **Gate** | The name the code and its settings use for the reviewer: `pr-autoreview.sh`, the `PRREVIEW_GATE_*` settings, `gate.log`. It only comments; it does not block or merge anything, which is why its log calls the comment a review-only verdict. |
 | **Head** | The latest commit on a PR's branch. The reviewer reviews heads, not branches. |
-| **Round** | One run of `pr-autoreview.sh`. It goes over every listed repo and reviews each PR whose head has no comment yet. The loop checks for open PRs once a minute and starts a round when it finds any; with none open, it starts one only on every 15th check. The loop's log counts checks, so `[round 12]` there is the 12th check, whether or not a round ran. For a single PR, "round 2" means the second verdict comment on it: a push, or an edited title, description or base branch, leads to the next one. |
+| **Round** | One run of `pr-autoreview.sh`. It goes over every listed repo and reviews each PR whose head has no comment yet. The loop checks for open PRs once a minute and starts a round when it finds any; with none open, it starts one only on every 15th check. The loop's log counts checks, so `[round 12]` there is the 12th check, whether or not a round ran. For a single PR, "round 2" means the second verdict comment on it: a push, an edited title, description or base branch, or (for a stacked PR) a push to its parent branch leads to the next one. |
 | **Slice** | Part of a large diff, reviewed by its own model call (`PRREVIEW_GATE_CHUNK_*`). |
 | **Verdict** | The first line of the comment: ✅ Approved or ❌ Changes requested. It is text in a comment, not a GitHub review state. |
 | **Blocking finding** | A CRITICAL or HIGH finding that counts toward ❌ Changes requested. MEDIUM and LOW are listed without changing the verdict. |
@@ -325,9 +327,10 @@ export XDG_RUNTIME_DIR=/run/user/$(id -u) # in the reviewer's session
 > [!WARNING]
 > The first run reviews every open non-draft PR in each repo you list.
 > Comments post as your own `gh` account unless you set up a
-> [GitHub App](#posting-as-a-github-app). Each push, and each edit of a PR's
-> title, description or base branch, starts a new round that costs model
-> usage. To try it first, list one repo that you own.
+> [GitHub App](#posting-as-a-github-app). Each push, each edit of a PR's
+> title, description or base branch, and each push to the parent branch of a
+> stacked PR, starts a new round that costs model usage. To try it first, list
+> one repo that you own.
 
 ### 1. Get the code
 
@@ -643,9 +646,9 @@ works in place of the loop, and a lock stops two rounds from overlapping.
 1. **Pick.** For each repo, list the open PRs that are not drafts and keep the
    ones whose current head has no comment from this reviewer yet. The comment
    carries a hidden marker with the head SHA and a hash of the title,
-   description and base branch, and only comments by the reviewer's own
-   account count. A PR on hold after a failure waits out its hold (see
-   [When something fails](#when-something-fails)).
+   description and base branch (for a stacked PR, also the base commit), and
+   only comments by the reviewer's own account count. A PR on hold after a
+   failure waits out its hold (see [When something fails](#when-something-fails)).
 2. **Scan.** Check the PR's title and description against your
    sensitive-patterns file. A hit stops the review of that PR.
 3. **Build.** Update the local clone of the repo, add a per-PR worktree, check
@@ -765,7 +768,8 @@ The reviewer does not post a verdict it could not reach. What happens instead:
   log says when the next attempt is due. To retry at once, delete the files
   named `<repo>-<PR number>-*` in
   `~/.cache/pr-reviewer/review-holdoff/`. A new push, or an
-  edited title, description or base branch, starts over with no hold.
+  edited title, description or base branch, or a push to the parent branch of a
+  stacked PR, starts over with no hold.
 - **Posting the comment fails.** The finished comment is kept, and the head
   goes on the same hold as above (5 minutes, doubling on repeats). The next
   attempt after that posts the kept comment without calling the model again.
@@ -909,7 +913,7 @@ Who controls each input, and how the reviewer treats it:
 | Convention files: `CLAUDE.md`, `AGENTS.md`, `.claude/`, README, CONTRIBUTING, `.github/review-checks.md` | The PR's merge base. For a PR based on another branch, the default branch | Rules the review follows. A PR's edits to them are reverted before the review, when the file name matches in exact case |
 | The checklist, the settings, the sensitive-data patterns | You | Rules. They live outside the reviewed repo |
 | The model's answer | The model, after reading all of the above | Untrusted. Shape-checked, blocking findings argued against, scanned before it is posted |
-| Who can make it spend model budget | Anyone who can open a non-draft PR on a watched repo | The reviewer does not filter by author. Each push, and each edit of the PR's title, description or base branch, starts a new round that costs model usage |
+| Who can make it spend model budget | Anyone who can open a non-draft PR on a watched repo | The reviewer does not filter by author. Each push, each edit of the PR's title, description or base branch, and each push to the parent branch of a stacked PR, starts a new round that costs model usage |
 
 - **The PR is data.** The model reads the diff, the PR's title and
   description, and the repo's files with its read-only tools, and the prompt
@@ -1000,8 +1004,9 @@ What one round can call for one PR, at the defaults:
 The largest first round at the defaults can make up to 16 review calls, 6
 refutation calls and 1 repair call. No run measured what that round costs.
 Every push starts a new round, and so does an edit to the PR's title,
-description or base branch. The reviewer does not filter PRs by author, so
-anyone who can open a non-draft PR on a watched repo can start these rounds.
+description or base branch. For a stacked PR, so does a push to its parent
+branch. The reviewer does not filter PRs by author, so anyone who can open a
+non-draft PR on a watched repo can start these rounds.
 
 ## Development
 
