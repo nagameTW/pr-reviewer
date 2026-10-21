@@ -1220,14 +1220,29 @@ the default branch. Edit the title and it is checked again automatically."
         return 0
       fi
       CONV_FORCED=0
+      # The list goes to a file and is read from there, so git's exit status
+      # is seen (lib/tree.sh does the same). A process substitution hides it:
+      # a listing that failed would read as a tree with no convention files.
+      CONV_LIST="$(mktemp "$GATE_SCRATCH/prreview-conv-list-XXXXXX")" && TMPFILES+=("$CONV_LIST") \
+        || { note_skip "could not create a scratch file for the convention file list, skipping (fail closed)"; return 0; }
+      git -C "$REPO_DIR" ls-files -z \
+        'CLAUDE.md' '*/CLAUDE.md' 'AGENTS.md' '*/AGENTS.md' \
+        '.claude/*' '*/.claude/*' \
+        ${TREE_CONV_EXTRA_PATHSPECS[@]+"${TREE_CONV_EXTRA_PATHSPECS[@]}"} > "$CONV_LIST" 2>/dev/null \
+        || { note_skip "could not list the convention files to replace on a stacked base, skipping (fail closed)"; return 0; }
+      # Each step must work. A failed step skips the PR: a tree where one
+      # convention file still comes from the parent branch does not hold the
+      # default branch's rules. CONV_FORCED is set after the last file is done.
       # `if`, not `[ -n ... ] || continue`: a bare continue inside
       # review_one_pr is banned (tests/parallel-discipline.test.sh) —
       # the function is a background job and the word would act on
       # whichever loop happens to enclose it.
+      CONV_DONE=0
       while IFS= read -r -d '' conv; do
         if [ -n "$conv" ]; then
           if git -C "$REPO_DIR" cat-file -e "origin/$DEFAULT_BRANCH:$conv" 2>/dev/null; then
-            git -C "$REPO_DIR" checkout "origin/$DEFAULT_BRANCH" -- "$conv" 2>/dev/null || true
+            git -C "$REPO_DIR" checkout "origin/$DEFAULT_BRANCH" -- "$conv" 2>/dev/null \
+              || { note_skip "could not check out a convention file from origin/$DEFAULT_BRANCH on a stacked base, skipping (fail closed)"; return 0; }
           else
             # The INDEX too, not just the working tree. `rm -f` alone
             # leaves the parent's blob staged, the path then shows up
@@ -1242,15 +1257,15 @@ the default branch. Edit the title and it is checked again automatically."
             # also keeps the path out of that list, so CONV_HIT is not
             # set and the prompt does not tell the model this diff
             # wrote a convention file when it did not.
-            git -C "$REPO_DIR" rm -q --cached -- "$conv" 2>/dev/null || true
-            rm -f "${REPO_DIR:?}/$conv"
+            git -C "$REPO_DIR" rm -q --cached -- "$conv" 2>/dev/null \
+              || { note_skip "could not remove a convention file from the index on a stacked base, skipping (fail closed)"; return 0; }
+            rm -f "${REPO_DIR:?}/$conv" \
+              || { note_skip "could not delete a convention file from the review tree on a stacked base, skipping (fail closed)"; return 0; }
           fi
-          CONV_FORCED=1
+          CONV_DONE=1
         fi
-      done < <(git -C "$REPO_DIR" ls-files -z \
-                 'CLAUDE.md' '*/CLAUDE.md' 'AGENTS.md' '*/AGENTS.md' \
-                 '.claude/*' '*/.claude/*' \
-                 ${TREE_CONV_EXTRA_PATHSPECS[@]+"${TREE_CONV_EXTRA_PATHSPECS[@]}"} 2>/dev/null)
+      done < "$CONV_LIST"
+      CONV_FORCED="$CONV_DONE"
       [ "$CONV_FORCED" = 1 ] && echo "PR #$PR: stacked base — convention files forced back to origin/$DEFAULT_BRANCH so the parent branch cannot supply the review rules either"
     fi
     if BIN_PATHS="$(tree_binary_paths "$DIFF")"; then

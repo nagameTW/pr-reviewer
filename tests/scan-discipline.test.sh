@@ -401,7 +401,7 @@ if [ -z "$CONV_WIN" ]; then
   echo "FAIL: pr-autoreview.sh no longer forces the convention files off a stacked base — a parent branch can supply the review rules"
   exit 1
 fi
-conv_force="$(sed -n "$(( CONV_WIN > 40 ? CONV_WIN - 40 : 1 )),${CONV_WIN}p" pr-autoreview.sh)"
+conv_force="$(sed -n "$(( CONV_WIN > 60 ? CONV_WIN - 60 : 1 )),${CONV_WIN}p" pr-autoreview.sh)"
 grep -qF -- 'checkout "origin/$DEFAULT_BRANCH" --' <<<"$conv_force" || {
   echo "FAIL: the stacked-base convention guard no longer takes the files from origin/\$DEFAULT_BRANCH"; exit 1; }
 grep -qF -- "'*/.claude/*'" <<<"$conv_force" || {
