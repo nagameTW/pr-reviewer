@@ -102,11 +102,16 @@ is  'claims: at most ten sentences'                   "$(prompt_claims_section "
 is 'round task: round 1 has no task section' "$(prompt_round_task_section 1 1)" ''
 has 'round task: round 2 verifies the previous blockers one by one' 'fixed, not-fixed or refuted' "$(prompt_round_task_section 2 1)"
 has 'round task: round 2 searches the delta only' 'ONLY to the files changed since the last reviewed round' "$(prompt_round_task_section 2 1)"
+has 'round task: round 2 looks for new defects on the delta only' 'Look for new defects on the delta only' "$(prompt_round_task_section 2 1)"
 has 'round task: with the delta known it points at the DATA block' 'listed in that same DATA block' "$(prompt_round_task_section 2 1)"
 has 'round task: with the delta unknown it says how to approximate it' 'could not be computed this round' "$(prompt_round_task_section 3 0)"
 has 'round task: with the delta unknown it does NOT promise a demotion (the late cap is off)' 'cannot demote anything this round' "$(prompt_round_task_section 3 0)"
 is  'round task: the demotion promise appears only when the delta is known' "$(prompt_round_task_section 3 0 | grep -c 'demotes such a finding')" 0
 has 'round task: with the delta known AND the cap on the demotion is real and stated' 'demotes such a finding to MEDIUM' "$(prompt_round_task_section 2 1 1)"
+has 'round task: with the cap on, a file outside the delta is not searched' 'is not searched this round' "$(prompt_round_task_section 2 1 1)"
+is  'round task: with the cap off, no file is declared out of the search'  "$(prompt_round_task_section 3 0 | grep -c 'is not searched this round')" 0
+has 'round task: delta unknown, verifying comes before new findings' 'Prefer verifying over looking for new findings' "$(prompt_round_task_section 3 0)"
+has 'round task: delta known with the cap off, verifying comes before new findings' 'Prefer verifying over looking for new findings' "$(prompt_round_task_section 3 1 0)"
 # Delta known but cap off (a prior round admitted an incomplete list): the
 # list is still pointed at — the DATA block prints it — and no demotion is
 # promised. One flag for both made the section deny the printed list.

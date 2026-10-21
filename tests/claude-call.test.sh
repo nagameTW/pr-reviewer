@@ -22,6 +22,9 @@ for h in ok bad is has lacks; do command -v "$h" >/dev/null 2>&1 || { echo "  FA
 
 STUB="$(mktemp -d)"
 trap 'rm -rf "$STUB"' EXIT
+# The stub below records what reaches `claude`. This test checks which flags
+# and which environment variables the helper passes. It does not check how
+# Claude Code enforces them.
 cat > "$STUB/claude" <<'STUB_EOF'
 #!/usr/bin/env bash
 # One bracketed field per argument, so an empty argument stays visible.
