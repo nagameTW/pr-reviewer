@@ -469,8 +469,8 @@ prompt_repeat_blocking_files() {
 }
 
 # The round's task, for round 2 and later: verify the
-# previous round's blockers one by one, and hunt ONLY on the delta. Round 1
-# gets nothing — it hunts everywhere. Sits in the prompt ahead of the
+# previous round's blockers one by one, and search ONLY on the delta. Round 1
+# gets nothing — it searches everywhere. Sits in the prompt ahead of the
 # dimension list.
 # $1 round, $2 delta-known flag (1 when the
 # between-rounds file list was computed and is in the DATA block below),
@@ -482,26 +482,26 @@ prompt_repeat_blocking_files() {
 prompt_round_task_section() {
   local round="${1:-1}" known="${2:-0}" cap_on="${3:-0}"
   [ "${round:-1}" -ge 2 ] 2>/dev/null || return 0
-  printf '%s' "THIS ROUND'S TASK (round $round of this review). Two duties, in this order. (a) Verify: for every blocking finding of the previous round — quoted in the DATA block further down — report it as fixed, not-fixed or refuted; a not-fixed one is carried into your findings verbatim (same file:line, same issue text). (b) Hunt on the delta only: apply the review dimensions below ONLY to the files changed since the last reviewed round"
+  printf '%s' "THIS ROUND'S TASK (round $round of this review). Two duties, in this order. (a) Verify: for every blocking finding of the previous round — quoted in the DATA block further down — report it as fixed, not-fixed or refuted; a not-fixed one is carried into your findings verbatim (same file:line, same issue text). (b) Look for new defects on the delta only: apply the review dimensions below ONLY to the files changed since the last reviewed round"
   if [ "$known" = 1 ]; then
     printf '%s' " (listed in that same DATA block)"
   else
     printf '%s' " (the list could not be computed this round: take the files the previous rounds' findings name plus what the diff obviously reworked)"
   fi
   if [ "$known" = 1 ] && [ "$cap_on" = 1 ]; then
-    printf '%s\n' ". A file outside the delta is not hunted this round; a new non-CRITICAL observation about a file that NO earlier round cited and the delta does not touch goes into the summary, not into findings — the harness demotes such a finding to MEDIUM anyway. On a file an earlier round DID cite, report what you find as a finding at its honest severity: the harness keeps it. A new CRITICAL anywhere is still a finding."
+    printf '%s\n' ". A file outside the delta is not searched this round; a new non-CRITICAL observation about a file that NO earlier round cited and the delta does not touch goes into the summary, not into findings — the harness demotes such a finding to MEDIUM anyway. On a file an earlier round DID cite, report what you find as a finding at its honest severity: the harness keeps it. A new CRITICAL anywhere is still a finding."
   else
     # Cap off (no delta list, or a prior round admitted an incomplete one):
     # FINDINGS_CONVERGE_JQ gets delta == null and demotes nothing, so nothing
     # mechanical stands behind a "put it in the summary" instruction: a real
     # HIGH the model dropped there would vanish from the comment and the
     # tickets. Ask for findings, and say plainly that nothing is enforced.
-    printf '%s\n' ". Prefer verifying over hunting, but report what you find as findings with your honest severity: the harness cannot demote anything this round for being late (no usable between-rounds list, or an earlier round admitted its list was incomplete), so a HIGH you leave in the summary is a HIGH nobody sees. A new CRITICAL anywhere is still a finding."
+    printf '%s\n' ". Prefer verifying over looking for new findings, but report what you find as findings with your honest severity: the harness cannot demote anything this round for being late (no usable between-rounds list, or an earlier round admitted its list was incomplete), so a HIGH you leave in the summary is a HIGH nobody sees. A new CRITICAL anywhere is still a finding."
   fi
   # The per-file cap (FINDINGS_FILE_CAP_JQ) folds the eighth finding on a
   # file and beyond into one line without file:line; those findings exist
-  # in no list this round can verify, so the file is hunted again in full.
-  printf '%s\n' "A prior line reading \"N more finding(s) on this file\" means the earlier round found more on that file than it listed: hunt that file in full this round, whether or not the delta touches it."
+  # in no list this round can verify, so the file is searched again in full.
+  printf '%s\n' "A prior line reading \"N more finding(s) on this file\" means the earlier round found more on that file than it listed: re-read that file in full this round, whether or not the delta touches it."
 }
 
 

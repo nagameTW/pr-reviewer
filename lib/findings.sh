@@ -732,7 +732,7 @@ FINDINGS_MEDIUM_ARR_JQ="[.findings[]? | select(($FINDINGS_SEVERITY_JQ) == \"MEDI
 # a HIGH on a file outside the delta that no prior round cited is MEDIUM,
 # late_reason or not. The field stays in the schema as information for the
 # reader; it used to lift the cap, and most HIGHs raised from round 2 on
-# were then new ones — the hunt never ended. A new CRITICAL is still exempt,
+# were then new ones — the search never ended. A new CRITICAL is still exempt,
 # and a HIGH inside the delta still blocks: the author's rework can break
 # something, and that is exactly what a later round is for.
 #

@@ -228,7 +228,7 @@ case "$SAMPLES" in
   ''|*[!0-9]*) SAMPLES=1 ;;
 esac
 [ "$SAMPLES" -ge 1 ] || SAMPLES=1
-# The FIRST round's sample count: round 1 hunts, later
+# The FIRST round's sample count: round 1 searches, later
 # rounds verify, so the round worth sampling is the first. Still 1 by
 # default, for the same reason PRREVIEW_GATE_SAMPLES is.
 SAMPLES_ROUND1="${PRREVIEW_GATE_SAMPLES_ROUND1:-1}"
@@ -1616,7 +1616,7 @@ This PR's title and description, and the text of the issue it says it closes (#$
   # the late-finding cap needs.
   MAIN_PRIOR="$(prompt_prior_reviews "$INFO" "$MARKER" "$PRIOR_AUTHORS")"
   ROUND=$(( $(prompt_prior_review_count "$INFO" "$MARKER" "$PRIOR_AUTHORS") + 1 ))
-  # How many passes this round runs: the first hunts (and a big diff always
+  # How many passes this round runs: the first searches (and a big diff always
   # gets two), later rounds verify (lib/chunk.sh chunk_samples_for_round).
   # An oversize PR that earned its exemption is sampled twice over in round
   # 1 (the split was refused, so the one pass has to be worth more).
@@ -1683,7 +1683,7 @@ This PR's title and description, and the text of the issue it says it closes (#$
   else
     MODE_SECTION="MODE: gatekeeper — this PR changes $SIZE lines ($GATE_COACH_MAX_LINES or more): only a HIGH that breaks the product blocks (correctness, security, contract, data, silent-failure, sibling, dependency, constraint, design, or a doc a non-maintainer follows); a HIGH in test, convention, wording, process or a maintainer-only doc is reported, not blocking."
   fi
-  # Round 2+: verify the previous blockers, hunt only on the delta (lib/prompt.sh).
+  # Round 2+: verify the previous blockers, look for new defects only on the delta (lib/prompt.sh).
   # Two flags go in: DELTA_KNOWN says whether the file list is in the DATA
   # block (the section must not deny a list the prompt prints), ROUND_CAP_ON
   # is the late cap's OWN switch — the cap also needs the memory section in
@@ -1842,7 +1842,7 @@ $REVIEW_CHECKS
 
 Do NOT report (discarded as noise): $REVIEW_NOISE_LIST
 
-Scope: a finding must be about something THIS diff introduces, changes, or leaves broken. In scope, and not an exception to hunt for reasons to skip: the added and modified lines; an existing caller, test, doc, or config the change breaks or leaves describing the old behaviour; unchanged code cited because the exploit path or the regression runs through it. Out of scope: a pre-existing problem this PR neither touches nor affects — at most one line in the summary, never a finding.
+Scope: a finding must be about something THIS diff introduces, changes, or leaves broken. In scope, and not an exception to search for reasons to skip: the added and modified lines; an existing caller, test, doc, or config the change breaks or leaves describing the old behaviour; unchanged code cited because the exploit path or the regression runs through it. Out of scope: a pre-existing problem this PR neither touches nor affects — at most one line in the summary, never a finding.
 
 Report every finding you have, at every severity, whatever your confidence — do NOT hold one back to keep the list short or clean. Put your honest number in the confidence field: nothing is filtered by it, and the number is shown to the human who reads the result, so it is how you say \"I am not certain\" without withholding. What the severity does decide: $REVIEW_CRITICAL_RULE; HIGH blocks unless the finding's kind is wording or judgment (the harness caps those to MEDIUM); MEDIUM and LOW never block. Every finding is listed on the PR whatever its severity$REVIEW_TICKET_CLAUSE. A finding you are unsure of costs a line in the review; one you withhold is lost for good. $REVIEW_HALF_SURE
 

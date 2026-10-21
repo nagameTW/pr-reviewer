@@ -81,8 +81,8 @@ NBJ="{\"reviews\":[{\"author\":{\"login\":\"review-bot\"},\"submittedAt\":\"1\",
 is 'blocking files: a not-blocking HIGH line is not a blocking file' \
    "$(prompt_blocking_files_of_round "$NBJ" "$M" "$GATE_AUTHORS" | tr '\n' ',')" 'c.py,'
 
-# Round 2+ gets a task section: verify the previous blockers, hunt on the
-# delta only. Round 1 gets nothing — it hunts everywhere.
+# Round 2+ gets a task section: verify the previous blockers, look for new
+# defects on the delta only. Round 1 gets nothing — it searches everywhere.
 # PR-body claims become DATA the model must match to hunks.
 CB=$'## Testing\n`bash tests/run-all.sh`: 12 files, all green, shellcheck clean.\nMutation verified: dropping that line turns the test red.\n> quoting someone who says all tests pass does not count\nNo claim in this sentence.'
 CS="$(prompt_claims_section "$CB" NONCE1)"
@@ -101,7 +101,7 @@ is  'claims: at most ten sentences'                   "$(prompt_claims_section "
 
 is 'round task: round 1 has no task section' "$(prompt_round_task_section 1 1)" ''
 has 'round task: round 2 verifies the previous blockers one by one' 'fixed, not-fixed or refuted' "$(prompt_round_task_section 2 1)"
-has 'round task: round 2 hunts on the delta only' 'ONLY to the files changed since the last reviewed round' "$(prompt_round_task_section 2 1)"
+has 'round task: round 2 searches the delta only' 'ONLY to the files changed since the last reviewed round' "$(prompt_round_task_section 2 1)"
 has 'round task: with the delta known it points at the DATA block' 'listed in that same DATA block' "$(prompt_round_task_section 2 1)"
 has 'round task: with the delta unknown it says how to approximate it' 'could not be computed this round' "$(prompt_round_task_section 3 0)"
 has 'round task: with the delta unknown it does NOT promise a demotion (the late cap is off)' 'cannot demote anything this round' "$(prompt_round_task_section 3 0)"
@@ -117,8 +117,8 @@ is  'round task: delta known, cap off — does not claim the list is missing' "$
 has 'round task: the demotion is scoped to files no earlier round cited (the late cap needs both)' 'earlier round DID cite' "$(prompt_round_task_section 2 1 1)"
 # The fold line the per-file cap writes in place of the findings it hides.
 FOLD='N more finding(s) on this file'
-has 'round task: a file folded by the per-file cap is hunted in full (delta known)'   "$FOLD" "$(prompt_round_task_section 2 1)"
-has 'round task: a file folded by the per-file cap is hunted in full (delta unknown)' "$FOLD" "$(prompt_round_task_section 3 0)"
+has 'round task: a file folded by the per-file cap is searched in full (delta known)'   "$FOLD" "$(prompt_round_task_section 2 1)"
+has 'round task: a file folded by the per-file cap is searched in full (delta unknown)' "$FOLD" "$(prompt_round_task_section 3 0)"
 # The gate hands the section the late cap's own switch, and reads that same
 # switch when it decides whether to apply the cap — one predicate, two readers.
 has 'gate: the round task section gets both flags — the list flag and the cap switch' 'prompt_round_task_section "$ROUND" "$DELTA_KNOWN" "$ROUND_CAP_ON"' "$(cat pr-autoreview.sh)"
