@@ -857,7 +857,7 @@ even when you run `prreview once` from a terminal. After moving a tool, run
 | `PRREVIEW_GATE_TICKETS` | `0` | `1` opens follow-up issues for some findings that do not block (see [Follow-up issues](#follow-up-issues)); the token then needs to open issues |
 | `PRREVIEW_GATE_ISSUE_MIN_SEVERITY` | `high` | Which of those findings get an issue: `critical`, `high`, `medium` or `low` |
 | `PRREVIEW_GATE_DISARM_AUTO_MERGE` | `0` | `1` turns off an auto-merge that was armed on a head the reviewer has not reviewed yet; the token then needs write access |
-| `PRREVIEW_ALERT_REPO` | empty | `owner/repo` where the loop opens an issue when a round fails, or when `pr-autoreview.sh` itself no longer parses (the token then needs to open issues there); empty only logs it |
+| `PRREVIEW_ALERT_REPO` | empty | `owner/repo` where the loop opens an issue when a round fails, or when `pr-autoreview.sh` itself no longer parses (the token then needs to open issues there); empty only logs it. Use a private repository. Each alert issue records a time when the host was up. |
 | `PRREVIEW_ALERT_REPEAT_HOURS` | `6` | Hours between "Still failing" comments on an alert issue that is still open |
 | `PRREVIEW_LOOP_INTERVAL` | `60` | Seconds between the loop's checks for open PRs; a check that finds any starts a round |
 | `PRREVIEW_LOOP_IDLE_EVERY` | `15` | With no open PRs, start a round only on every this-many-th check |

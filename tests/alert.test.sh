@@ -53,6 +53,14 @@ mkdir -p "$T/bin"; printf '#!/bin/sh\nexit 0\n' > "$T/bin/journalctl"; chmod +x 
 BODY="$(cat "$T/body" 2>/dev/null)"
 lacks 'a box with journalctl still gets the log pointer, not a journal line' 'journalctl' "$BODY"
 
+# The time is in UTC whatever zone the host uses. TZ=CST-8 makes a local-time
+# stamp read "CST", so the pattern below fails without `date -u`.
+(TZ=CST-8; run_alert "review-loop")
+BODY="$(cat "$T/body" 2>/dev/null)"
+UTC_RE='failed on the reviewer host at [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} UTC\.'
+[[ $BODY =~ $UTC_RE ]] && ok 'the body records the time in UTC' \
+                       || bad 'the body records the time in UTC' "a stamp that matches $UTC_RE" "$BODY"
+
 # Without a detail, the body points at the round logs.
   # A title WITHOUT a log path, so the pointer below can only come from DIAG.
   run_alert "review-loop"
@@ -94,13 +102,16 @@ lacks 'a fresh episode (updated under the repeat window) gets no comment' 'issue
 # still-failing comment, never a second issue. An "exists, not duplicating"
 # exit with no comment would swallow every alert while the issue stays open.
 rm -f "$T/body.calls" "$T/body.comment"
-GH_STUB_LAST="2000-01-01T00:00:00Z" run_alert "review-loop (log: ~/.cache/pr-reviewer/gate.log)" "exited 1 again"; RC=$?
+GH_STUB_LAST="2000-01-01T00:00:00Z" TZ=CST-8 run_alert "review-loop (log: ~/.cache/pr-reviewer/gate.log)" "exited 1 again"; RC=$?
 has   'a stale open episode gets a comment' 'issue comment' "$(cat "$T/body.calls" 2>/dev/null)"
 lacks 'and still no second issue' 'issue create' "$(cat "$T/body.calls" 2>/dev/null)"
 COMMENT="$(cat "$T/body.comment" 2>/dev/null)"
 has   'the comment names the unit' 'review-loop (log: ~/.cache/pr-reviewer/gate.log)' "$COMMENT"
 has   'the comment carries the caller detail' 'exited 1 again' "$COMMENT"
 has   'the comment says it is a repeat' 'Still failing' "$COMMENT"
+UTC_RE='Still failing at [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} UTC:'
+[[ $COMMENT =~ $UTC_RE ]] && ok 'the comment records the time in UTC' \
+                          || bad 'the comment records the time in UTC' "a stamp that matches $UTC_RE" "$COMMENT"
 [ "$RC" -eq 0 ] && ok 'the commented run exits 0' || bad 'the commented run exits 0' 'rc 0' "rc $RC: $(cat "$T/out")"
 
 # An updatedAt that will not parse is NOT "due": the throttle's failure mode
