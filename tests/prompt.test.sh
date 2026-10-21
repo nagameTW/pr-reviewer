@@ -356,6 +356,13 @@ is 'linked issue: an empty body yields nothing, not an error' \
 is 'repo context: prints a sentence' "$(prompt_repo_context >/dev/null && echo yes)" 'yes'
 is 'repo context: PRREVIEW_GATE_REPO_CONTEXT replaces the conventions sentence' "$(PRREVIEW_GATE_REPO_CONTEXT='mine' prompt_repo_context | cut -d' ' -f1)" 'mine'
 is 'repo context: the review-checks sentence stays when it is set' "$(PRREVIEW_GATE_REPO_CONTEXT='mine' prompt_repo_context | grep -c 'review-checks.md')" '1'
+# Where the convention files come from. For a PR based on another branch the
+# harness takes them from the default branch, not from the PR's base branch.
+CTX="$(prompt_repo_context)"
+has 'repo context: the conventions come from the default branch' 'All of them come from the default branch.' "$CTX"
+has '...at the branch point for a PR into the default branch' 'For a PR into the default branch, they are as they were at the commit the author branched from.' "$CTX"
+has '...and from the newest commit for a stacked PR' 'For a PR based on another branch, they are as the newest commit of the default branch has them, not as the parent branch has them.' "$CTX"
+is 'repo context: it never says the base branch' "$(grep -c 'base branch' <<<"$CTX")" '0'
 
 # ── prompt_tree_clause: the model must be told what it is standing in ──────
 # Getting this backwards is worse than saying nothing. Told "pre-change" when
