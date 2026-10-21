@@ -49,9 +49,9 @@ All notable changes to this project are recorded here. The format follows
   Vertex, Bedrock and gateways with this tool set. To upgrade, see Upgrading
   in the README.
 - A round now skips a PR, and tries it again next round, when its merge base
-  or its diff cannot be fetched, or when the diff is incomplete. Before, an
-  unresolved merge base reviewed the diff without the PR's changes in the
-  tree.
+  cannot be found, when its diff cannot be fetched, or when the diff is
+  incomplete. v0.2.0 reviewed the PR without applying the diff to the tree
+  when the merge base was missing.
 
 ## [0.2.0] - 2026-10-12
 

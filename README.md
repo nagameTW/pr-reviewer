@@ -461,8 +461,10 @@ git pull --ff-only
 ./prreview setup
 ```
 
-Setup stops at the Claude Code step when `claude --version` is older than
-2.1.305. Run `claude update`, then run `./prreview setup` again.
+After `git pull --ff-only`, run `./prreview setup` again. Claude Code 2.1.305
+or later is required. Setup stops at the Claude Code step when
+`claude --version` is older. Run `claude update`, then run `./prreview setup`
+again.
 
 Press Enter through the questions to keep your answers, except at the
 Checklist step: when setup lists built-in items your copy lacks, answer `y`
@@ -648,9 +650,10 @@ works in place of the loop, and a lock stops two rounds from overlapping.
    from the merge base, matched by exact file name case.
    The diff is fetched once, for the exact head commit the verdict will name,
    and the list of changed files is read from that same diff. A push that
-   lands during the round cannot swap in another head. If the diff cannot be
-   fetched, or holds a different number of files than GitHub reports for the
-   PR, the round skips that PR and tries again next round.
+   lands during the round cannot swap in another head. If the merge base
+   cannot be found, if the diff cannot be fetched, or if it holds a different
+   number of files than GitHub reports for the PR, the round skips that PR and
+   tries again next round.
    A symlink to a regular file inside the clone, such as
    `AGENTS.md -> CLAUDE.md`, is fine. Any other symlink stops the review: one
    that points outside the clone, into `.git` or nowhere; one to a folder,
@@ -764,9 +767,9 @@ The reviewer does not post a verdict it could not reach. What happens instead:
   run. A short notice is posted instead, and the full text goes only to the
   round log, in a directory only you can read.
 - **Something stops a PR or a whole repo from being reviewed at all**: a repo
-  or a PR that cannot be read, a diff that cannot be fetched whole, a symlink
-  on the base branch, an App token that cannot be created, a review job that
-  crashes. The round finishes the other
+  or a PR that cannot be read, a merge base that cannot be found, a diff that
+  cannot be fetched whole, a symlink on the base branch, an App token that
+  cannot be created, a review job that crashes. The round finishes the other
   PRs and then exits with an error. `review-loop.sh` then opens one issue in
   `PRREVIEW_ALERT_REPO` if you set it; it opens no second one while that issue is
   open, and closing it re-arms the alert. While it stays open and rounds keep
