@@ -119,6 +119,11 @@ has 'round task: the demotion is scoped to files no earlier round cited (the lat
 FOLD='N more finding(s) on this file'
 has 'round task: a file folded by the per-file cap is searched in full (delta known)'   "$FOLD" "$(prompt_round_task_section 2 1)"
 has 'round task: a file folded by the per-file cap is searched in full (delta unknown)' "$FOLD" "$(prompt_round_task_section 3 0)"
+# The sentence has to ask for a search and for findings. A request only to read
+# the file again does not make the model report what it finds there.
+FOLD_ASK='search that file in full this round and report each defect you find in it as a finding'
+has 'round task: a folded file is searched in full and its defects are findings (delta known)'   "$FOLD_ASK" "$(prompt_round_task_section 2 1)"
+has 'round task: a folded file is searched in full and its defects are findings (delta unknown)' "$FOLD_ASK" "$(prompt_round_task_section 3 0)"
 # The gate hands the section the late cap's own switch, and reads that same
 # switch when it decides whether to apply the cap — one predicate, two readers.
 has 'gate: the round task section gets both flags — the list flag and the cap switch' 'prompt_round_task_section "$ROUND" "$DELTA_KNOWN" "$ROUND_CAP_ON"' "$(cat pr-autoreview.sh)"

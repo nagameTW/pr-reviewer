@@ -501,7 +501,7 @@ prompt_round_task_section() {
   # The per-file cap (FINDINGS_FILE_CAP_JQ) folds the eighth finding on a
   # file and beyond into one line without file:line; those findings exist
   # in no list this round can verify, so the file is searched again in full.
-  printf '%s\n' "A prior line reading \"N more finding(s) on this file\" means the earlier round found more on that file than it listed: re-read that file in full this round, whether or not the delta touches it."
+  printf '%s\n' "A prior line reading \"N more finding(s) on this file\" means the earlier round found more on that file than it listed: search that file in full this round and report each defect you find in it as a finding, whether or not the delta touches it."
 }
 
 
