@@ -12,9 +12,12 @@ All notable changes to this project are recorded here. The format follows
   review, red-team and output-repair prompts never said which line number the
   `line` field means. In an end-to-end check, a model that had Read the diff
   file cited that file's line numbers, for example `db.py:35` where the code
-  was at line 43. The prompts now say it: the number Read shows for the cited
-  file after the change, and for a deleted line the nearest line that still
-  exists.
+  was at line 43. The prompts now say it: the line number on the new side of
+  the cited file, counted from the hunk header. A number that Read shows is
+  used only when the file on disk is the version after the change. That is
+  not so when the diff did not apply, or for a convention file the reviewer
+  restored. For a deleted line the model uses the nearest line that still
+  exists, and for a deleted file it uses 0.
 
 ### Security
 

@@ -151,10 +151,12 @@ is     'the merge base is looked up once' "$(grep -c 'MERGE_BASE="$(merge_base_s
 # A prompt that leaves it out lets the model cite a line of the diff file it
 # Read, and the comment then points at the wrong code.
 LINE_SPEC="$(grep -E '^REVIEW_LINE_SPEC=' lib/review-spec.sh)"
-has    'the line definition names the file the number counts in' 'the line number in the cited file' "$LINE_SPEC"
-has    '...says to use the number Read shows for that file' 'Use the number that Read shows for that file' "$LINE_SPEC"
-has    '...rules out a line of the diff file' 'Never use a line number of a diff file' "$LINE_SPEC"
-has    '...and says what a deleted line gets' 'use the nearest line that still exists' "$LINE_SPEC"
+has    'the line definition names the side the number counts on' 'the line number on the new (after-change) side of the cited file' "$LINE_SPEC"
+has    '...says to count it from the hunk header' 'take it from the hunk header "@@ -a,b +c,d @@"' "$LINE_SPEC"
+has    '...rules out a line of the diff file' 'Never use a line number of the diff file itself' "$LINE_SPEC"
+has    '...allows a number from Read only on the after-change file' 'Use the number that Read shows only when the file on disk holds the version after this change' "$LINE_SPEC"
+has    '...says what a deleted line gets' 'use the nearest line that still exists on the new side' "$LINE_SPEC"
+has    '...and when the value is 0' 'Use 0 when the new side has no reliable line, for example for a deleted file' "$LINE_SPEC"
 is     'the review prompt gives the line definition right after the schema' "$(awk '/^\$REVIEW_SCHEMA$/{getline; print; exit}' pr-autoreview.sh)" '$REVIEW_LINE_SPEC'
 pin    'the structural repair gets the same definition' 'findings_repair_prompt "$OUT" "$REVIEW_SCHEMA" "$REVIEW_LINE_SPEC")"' pr-autoreview.sh
 

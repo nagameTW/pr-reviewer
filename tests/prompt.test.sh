@@ -395,6 +395,13 @@ is 'tree clause: not applied says DEFAULT branch' \
    "$(grep -c 'DEFAULT branch' <<<"$NOTAPPLIED")" '1'
 is 'tree clause: not applied warns the numbers do not line up' \
    "$(grep -c 'will not line up' <<<"$NOTAPPLIED")" '1'
+# The numbers the clause talks about are the new-side numbers of a hunk, the
+# ones REVIEW_LINE_SPEC tells the model to cite. A bare "line number from the
+# diff" reads as a line of the diff file itself.
+for tc in "$APPLIED" "$NOTAPPLIED" "$BASE_NOTAPPLIED"; do
+  is 'tree clause: every arm names the new-side line numbers of a hunk' \
+     "$(grep -c 'new-side line number from a hunk' <<<"$tc")" '1'
+done
 is 'tree clause: the two answers are never the same sentence' \
    "$([ "$APPLIED" = "$NOTAPPLIED" ] && echo same || echo different)" 'different'
 is 'tree clause: anything that is not 1 is the conservative answer' \
