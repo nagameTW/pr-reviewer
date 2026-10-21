@@ -55,7 +55,10 @@ case "$OUT" in *'unbound variable'*) bad 'no unbound variable at startup' "$(pri
 
 # Claude Code 2.1.305 or later. Each field is compared as an integer, so
 # 2.1.1000 and 10.0.0 pass, where a string compare would refuse them.
-for v in '2.2.0 (Claude Code)' '3.0.0 (Claude Code)' '2.1.1000 (Claude Code)' '10.0.0 (Claude Code)'; do
+# Build metadata (+...) does not change the order. A pre-release (-...) of a
+# later version passes.
+for v in '2.2.0 (Claude Code)' '3.0.0 (Claude Code)' '2.1.1000 (Claude Code)' '10.0.0 (Claude Code)' \
+         '2.1.306-beta.1 (Claude Code)' '2.1.305+build.7 (Claude Code)'; do
   OUT="$(run_head "$v")"
   case "$OUT" in
     *STARTUP-OK*) ok "Claude Code '$v' is accepted" ;;
@@ -64,7 +67,9 @@ for v in '2.2.0 (Claude Code)' '3.0.0 (Claude Code)' '2.1.1000 (Claude Code)' '1
 done
 # 2.1.304 fails every request on Vertex, Bedrock and gateways when --tools
 # leaves out ToolSearch. Older versions do not apply --tools to every tool.
-for v in '2.1.304 (Claude Code)' '2.0.999 (Claude Code)' '1.99.999 (Claude Code)' 'Claude Code' '2.1' ''; do
+# A pre-release of 2.1.305 comes before 2.1.305 (SemVer), so it is refused.
+for v in '2.1.304 (Claude Code)' '2.0.999 (Claude Code)' '1.99.999 (Claude Code)' 'Claude Code' '2.1' '' \
+         '2.1.305-rc.1 (Claude Code)' '2.1.306- (Claude Code)'; do
   OUT="$(run_head "$v")"; RC=$?
   case "$OUT" in
     *STARTUP-OK*) bad "Claude Code '$v' is refused" 'the head ran to the end' ;;

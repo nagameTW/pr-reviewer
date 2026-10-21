@@ -56,9 +56,16 @@ claude_call() {
 # claude_version_ok TEXT: 0 when TEXT, the output of `claude --version` such
 # as "2.1.305 (Claude Code)", starts with CLAUDE_MIN_VERSION or a later one.
 # Each field is compared as an integer, so 2.1.1000 is later than 2.1.305.
+# As in SemVer, build metadata (+...) is ignored, and a pre-release (-...)
+# comes before its release: 2.1.306-beta.1 passes, 2.1.305-rc.1 does not.
 # Text that is not three numbers is refused.
 claude_version_ok() {
-  local v="${1%%[[:space:]]*}" maj min pat want_maj want_min want_pat
+  local v="${1%%[[:space:]]*}" pre="" maj min pat want_maj want_min want_pat
+  v="${v%%+*}"
+  case "$v" in
+    *-) return 1 ;;
+    *-*) pre="${v#*-}"; v="${v%%-*}" ;;
+  esac
   case "$v" in *[!0-9.]* | .* | *. | *..* | *.*.*.*) return 1 ;; esac
   case "$v" in *.*.*) ;; *) return 1 ;; esac
   IFS=. read -r maj min pat <<<"$v"
@@ -67,7 +74,8 @@ claude_version_ok() {
   maj=$((10#$maj)); min=$((10#$min)); pat=$((10#$pat))
   if [ "$maj" -ne "$want_maj" ]; then [ "$maj" -gt "$want_maj" ]; return; fi
   if [ "$min" -ne "$want_min" ]; then [ "$min" -gt "$want_min" ]; return; fi
-  [ "$pat" -ge "$want_pat" ]
+  if [ "$pat" -ne "$want_pat" ]; then [ "$pat" -gt "$want_pat" ]; return; fi
+  [ -z "$pre" ]
 }
 
 # claude_version_check: 0 when the installed claude is new enough. If not, it
