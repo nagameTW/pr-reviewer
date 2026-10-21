@@ -215,13 +215,17 @@ prompt_gate_bodies() {
 # Prints nothing and returns 1 when baseRefOid is missing or is not a full
 # SHA, for every PR: the merge base comes from it, so no review can run.
 prompt_review_key() {
-  local oid extra=""
+  local oid extra="" digest
   oid="$(jq -r '.baseRefOid // ""' <<<"${1-}" 2>/dev/null)"
   sha_is_full_hex "$oid" || return 1
   merge_base_allowed "$(jq -r '.baseRefName // ""' <<<"${1-}" 2>/dev/null)" "${2-}" || extra="$oid"
-  printf '%s-%s\n' "$(jq -r '.headRefOid' <<<"${1-}" 2>/dev/null)" \
-    "$(jq -r --arg extra "$extra" '(.title // "") + "\n" + (.body // "") + "\n" + (.baseRefName // "")
-      + (if $extra == "" then "" else "\n" + $extra end)' <<<"${1-}" 2>/dev/null | sha256sum | cut -c1-12)"
+  # A digest stage that dies must not leave `<head>-`: grep -F finds that in
+  # every marker posted for the head. No 12 hex digits, no key.
+  digest="$(set -o pipefail; jq -r --arg extra "$extra" '(.title // "") + "\n" + (.body // "") + "\n" + (.baseRefName // "")
+      + (if $extra == "" then "" else "\n" + $extra end)' <<<"${1-}" 2>/dev/null | sha256sum | cut -c1-12)" || return 1
+  [ "${#digest}" = 12 ] || return 1
+  case "$digest" in *[!0123456789abcdef]*) return 1 ;; esac
+  printf '%s-%s\n' "$(jq -r '.headRefOid' <<<"${1-}" 2>/dev/null)" "$digest"
 }
 
 # 0 when $1 (the same output plus comments and reviews) holds a body from one
