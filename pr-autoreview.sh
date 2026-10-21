@@ -2253,6 +2253,13 @@ $SLICE_CLEAN"
     CLEANED="$(findings_cite "$KNOWN_F" <<<"$CLEANED")"
     N_POST="$(jq -r "$FINDINGS_BLOCKING_COUNT_JQ" <<<"$CLEANED")"
     N_ALL_POST="$(jq -r '[.findings[]?] | length' <<<"$CLEANED")"
+    # A count whose jq failed is empty, and empty reads as 0 in the sums below:
+    # a dropped blocker would go uncounted and the flip guard would be off.
+    case "$N_PRE:$N_ALL_PRE:$N_POST:$N_ALL_POST" in
+      *[!0-9:]*|:*|*::*|*:)
+        N_PRE=1; N_POST=0; N_ALL_PRE=0; N_ALL_POST=0
+        echo "PR #$PR: WARNING — could not count the findings around the citation check; treated as a dropped blocker" ;;
+    esac
     N_DROPPED_CITE=$((N_PRE - N_POST))
     N_DROPPED_ANY=$((N_ALL_PRE - N_ALL_POST))
     [ "$N_DROPPED_ANY" -gt 0 ] \
@@ -2316,6 +2323,9 @@ $SLICE_CLEAN"
       # Assigned through a temp: a jq failure here must leave the findings
       # alone, never empty them. Same direction as the caps below.
       LINE_FILTERED="$(jq -c --argjson counts "$LINE_COUNTS" "$FINDINGS_LINE_JQ" <<<"$CLEANED" 2>/dev/null)"
+      # An empty count (its jq failed) reads as 0 below and hides a dropped
+      # blocker from the flip guard: treat the check as not run.
+      case "$N_PRE_LINE:$N_ALL_PRE_LINE" in *[!0-9:]*|:*|*:) LINE_FILTERED="" ;; esac
       if [ -n "$LINE_FILTERED" ]; then
         CLEANED="$LINE_FILTERED"
         N_DROPPED_LINE=$(( N_ALL_PRE_LINE - $(jq -r '[.findings[]?] | length' <<<"$CLEANED") ))
@@ -2740,6 +2750,16 @@ $SLICE_CLEAN"
   # closed. Matching ignores case and surrounding whitespace.
   N_BLOCKING="$(jq -r "$FINDINGS_BLOCKING_COUNT_JQ" <<<"$CLEANED")"
   N_FINDINGS="$(jq -r '[.findings[]?] | length' <<<"$CLEANED")"
+  # The check above proved CLEANED is a review, not that these two jq calls
+  # worked. An empty count reads as 0 blockers below, and the verdict rule
+  # turns a request_changes whose blocker went uncounted into an approve.
+  case "$N_BLOCKING:$N_FINDINGS" in
+    *[!0-9:]*|:*|*:)
+      note_skip "the blocking tally (jq) failed — no action (fail closed)"
+      [ -n "${HOLD_F:-}" ] && holdoff_set "$HOLD_F" failed "$(date +%s)"
+      rm -f "$DIFF"
+      return 0 ;;
+  esac
   # A repaired reply counts as "we are not holding the whole list" for the flip
   # guard, exactly like a citation drop: the usual reason a review needs
   # repairing is that it was cut off mid-JSON, so the findings that survived
