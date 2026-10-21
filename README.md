@@ -14,8 +14,10 @@ with a verdict and the findings.
 - **It only comments.** It never submits a GitHub approval, never requests
   changes as a formal review, and never merges. The person who holds the merge
   button decides what to do with the verdict.
-- **The model can only read.** Claude Code gets `Read`, `Grep` and `Glob` in a
-  per-PR worktree: no shell, no network, and your code is never run.
+- **The model can only read.** `--tools` limits Claude Code to `Read`, `Grep`
+  and `Glob` in a per-PR worktree, so it has no shell and no web tools, and
+  your code is never run. MCP servers and slash commands are off. This needs
+  Claude Code 2.1.305 or later.
 - **A PR's edits to convention files are reverted.** `CLAUDE.md`, `AGENTS.md`
   and the repo's other convention files are read as they are at the PR's
   merge base. The match is exact in file name case, so an edit to a file such
@@ -122,10 +124,11 @@ It does not:
   defaults it also opens no issues and leaves auto-merge alone: it only
   comments.
 - Run your tests or read your CI results. It reads code; it does not execute it.
-- Give the model a shell or the network. Claude Code gets `Read`, `Grep` and
-  `Glob`, scoped to the review clone, plus `Read` on the round's own copies of
-  the diff and of the PR's title and description (with the title and body of
-  the issue the PR links, when it links one).
+- Give the model a shell, web tools, MCP servers or slash commands. `--tools`
+  limits Claude Code to `Read`, `Grep` and `Glob`, scoped to the review clone,
+  plus `Read` on the round's own copies of the diff and of the PR's title and
+  description (with the title and body of the issue the PR links, when it
+  links one).
 - Review a PR whose title or description matches your sensitive-data patterns,
   or post a comment that does.
 
@@ -239,8 +242,11 @@ chooses one the same way it does for the built-in items.
   `gh`'s own login. With `ssh`, the background service has to use your SSH
   key with no prompt and possibly no ssh-agent (a systemd user service gets
   none), so `prreview setup` offers to switch `gh` to `https`.
-- **[Claude Code](https://code.claude.com/docs/en/overview)**, the
-  `claude` CLI, logged in; `prreview setup` checks with `claude auth status`. The
+- **[Claude Code](https://code.claude.com/docs/en/overview) 2.1.305
+  or later**, the `claude` CLI, logged in. `prreview setup` checks both, with
+  `claude --version` and `claude auth status`, and the reviewer refuses to start
+  on an older version: the tool limits in [Security model](#security-model)
+  need it. `claude update` installs the latest version. The
   default models are `claude-opus-5-5` for reviews and `claude-sonnet-5-5` for a
   cheap output-repair call.
 - `git`, `jq`, `curl`, `openssl`, `flock`, `timeout` and `sha256sum`.
@@ -454,6 +460,9 @@ cd ~/pr-reviewer
 git pull --ff-only
 ./prreview setup
 ```
+
+Setup stops at the Claude Code step when `claude --version` is older than
+2.1.305. Run `claude update`, then run `./prreview setup` again.
 
 Press Enter through the questions to keep your answers, except at the
 Checklist step: when setup lists built-in items your copy lacks, answer `y`
@@ -895,12 +904,23 @@ Who controls each input, and how the reviewer treats it:
   cannot close its block early. This is an instruction to the model, not a
   sandbox: the tool limits in the next point are what hold if the model is
   fooled anyway.
-- **Read-only tools, in the clone only.** Claude Code runs with `Read`, `Grep`
-  and `Glob` limited to the review clone, plus `Read` on the round's scratch
-  copies of the diff and of the PR's title and description, which include the
-  title and body of the issue the PR links.
-  `--setting-sources` is empty, so a rule in your own
-  `~/.claude/settings.json` cannot widen that.
+- **Read-only tools, in the clone only.** `--tools` limits Claude Code to
+  `Read`, `Grep` and `Glob`, so no other built-in tool, a shell and web tools
+  included, exists in the session. The three are limited to the review clone,
+  plus `Read` on the round's scratch copies of the diff and of the PR's title
+  and description, which include the title and body of the issue the PR
+  links. The repair call, which only reshapes an answer, gets no tool.
+  `--strict-mcp-config` and `--disallowedTools "mcp__*"` keep MCP servers out,
+  and `--disable-slash-commands` keeps the reviewed repo's skills and commands
+  out. `--setting-sources` is empty, so a rule in your own
+  `~/.claude/settings.json` cannot widen any of that. These limits need Claude
+  Code 2.1.305 or later, and the reviewer refuses to start on an older one.
+- **Prompts go on stdin.** No prompt is on a command line, so other users of
+  the machine cannot read it in the process list.
+- **Token variables are cleared, as defense in depth.** The `claude` process
+  starts with `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN` and
+  `GITHUB_ENTERPRISE_TOKEN` empty. The model has no shell to read them with,
+  so this is an extra layer only.
 - **The merge base sets the rules.** The tree is the merge base plus the diff,
   and convention files, `.github/review-checks.md` included, are read as they
   are at the PR's merge base. The match is exact in file name case, so a PR's

@@ -6,10 +6,36 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Security
+
+- The reviewer now sets the model's tools explicitly. Every review,
+  refutation and red-team call gets `--tools "Read,Grep,Glob"`, and the
+  output-repair call gets no tool. v0.2.0 set only path rules on top of
+  Claude Code's defaults, so `Bash` was in the tool set, and read-only shell
+  commands inside the review clone could run without a rule. In a check on
+  Claude Code 2.1.305, shell commands that named a path outside the clone
+  were refused.
+- Every call also turns off MCP servers (`--strict-mcp-config`,
+  `--disallowedTools "mcp__*"`, `ENABLE_CLAUDEAI_MCP_SERVERS=false`), skills
+  and slash commands (`--disable-slash-commands`) and auto memory
+  (`CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`).
+- Every prompt now goes to Claude Code on stdin. Before, the refutation,
+  red-team and repair prompts were on the command line, where other users of
+  the same machine could read them in the process list. Those prompts quote
+  finding text and code from the pull request.
+- As defense in depth, the `claude` process starts with `GH_TOKEN`,
+  `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN` and `GITHUB_ENTERPRISE_TOKEN` empty.
+
 ### Changed
 
 - The README and SECURITY.md state the limits of their claims more precisely,
   and the README warns that the first run reviews every open non-draft PR.
+- The reviewer requires Claude Code 2.1.305 or later. It checks
+  `claude --version` at startup and does not run on an older version, and
+  `prreview setup` checks it too. Before 2.1.295, `--tools` did not apply to
+  tools that register after launch, and 2.1.304 fails every request on
+  Vertex, Bedrock and gateways with this tool set. To upgrade, see Upgrading
+  in the README.
 
 ## [0.2.0] - 2026-10-12
 

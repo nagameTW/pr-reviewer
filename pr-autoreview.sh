@@ -36,26 +36,8 @@ GH="${GH_BIN:-$(command -v gh)}"
 # cost grounds — it DELETES blocking findings, so a weaker model there fails in
 # the direction that ships defects.
 CHEAP_MODEL="${PRREVIEW_GATE_CHEAP_MODEL:-claude-sonnet-5-5}"
-# Same argument as pinning the model, for permissions. `--allowedTools` is
-# ADDITIVE to whatever ~/.claude/settings.json already allows, so a rule you
-# add for your own convenience (or defaultMode: bypassPermissions) would
-# silently widen what the review model may read — including the GitHub App's
-# private key, which acts as the App on every repo it is installed on.
-#
-# `--setting-sources` is the right lever: it controls which setting layers get
-# loaded and nothing else. An empty list loads none, so `--allowedTools` below
-# is the complete permission story, while auth, model and built-in tools are
-# untouched.
-#
-# NOT CLAUDE_CONFIG_DIR, which is what this started as: credentials live under
-# that directory, so pointing it at a gate-owned path made headless claude
-# answer "Not logged in · Please run /login". Verified before it shipped —
-# every review would have failed to parse, every PR would have sat
-# pending, and the fail-closed path means it would have been quiet about it.
-SETTING_SOURCES=""
-# stdin closed on both model calls: without it headless claude waits 3s for
-# piped input it is never going to get, twice per PR per round, and says so on
-# stderr. Its own warning names the fix.
+# Every model call goes through claude_call (lib/claude-call.sh). That file
+# says which tools, settings and MCP servers each call gets, and why.
 PATTERNS_FILE="${PRREVIEW_SENSITIVE_PATTERNS_FILE:-$HOME/.config/pr-reviewer/sensitive-patterns}"
 # Where the gate keeps its own clone of each reviewed repo. Deliberately
 # NOT a working tree anybody uses: the gate checks out, cleans and patches
@@ -360,6 +342,11 @@ command -v git >/dev/null || { echo "git missing"; exit 1; }
 command -v flock >/dev/null || { echo "flock missing"; exit 1; }
 command -v timeout >/dev/null || { echo "timeout(1) missing — refusing to run (per-review budget cannot be enforced)"; exit 1; }
 [ -x "$CLAUDE_BIN" ] || { echo "claude missing"; exit 1; }
+# Sourced here, before the lock and before the other libs: the version check
+# must stop a round on a Claude Code that is too old for the tool limits.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/lib/claude-call.sh" || { echo "lib/claude-call.sh missing, refusing to run"; exit 1; }
+claude_version_check || exit 1
 
 # Single-instance lock. The gate fetches and checks out in $GATE_WORKROOT,
 # so a manual run overlapping the scheduled one would have two
@@ -434,8 +421,7 @@ ensure_gate_clone() {
 
 # Pure logic lives in lib/ so tests can source it without the
 # token-minting preamble below. Guarded: set -u alone won't stop the
-# script on a failed source.
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# script on a failed source. SCRIPT_DIR is set above, next to the version check.
 # The severity ladder and the output contract: shared so the three prompts here
 # cannot drift apart.
 . "$SCRIPT_DIR/lib/review-spec.sh" || { echo "lib/review-spec.sh missing — refusing to run"; exit 1; }
@@ -1876,9 +1862,8 @@ Rules: any finding that remains blocking after the harness caps — every CRITIC
     # --output-format json is EITHER an event array or the bare result object,
     # depending on the CLI version (see lib/findings.sh); CLAUDE_RESULT_JQ
     # normalises both and prefixes whether the call completed at all.
-    timeout "$REVIEW_TIMEOUT" "$CLAUDE_BIN" -p --model "$REVIEW_MODEL" --setting-sources "$SETTING_SOURCES" \
-           --allowedTools "${ALLOWED[@]}" \
-           --output-format json <"$PROMPT_F" >"$SLICE_RAW_F" 2>"$REVIEW_ERR" &
+    claude_call "$REVIEW_TIMEOUT" "$REVIEW_MODEL" "$CLAUDE_READ_TOOLS" "${ALLOWED[@]}" \
+      <"$PROMPT_F" >"$SLICE_RAW_F" 2>"$REVIEW_ERR" &
     SLICE_PIDS+=("$!"); SLICE_RAWF+=("$SLICE_RAW_F"); SLICE_ERRF+=("$REVIEW_ERR")
     SLICE_OF+=("$SI")
   done
@@ -2055,11 +2040,11 @@ $SLICE_CLEAN"
         REPAIR_TRUNCATED=1
         echo "PR #$PR: repair input truncated ($OUT_BYTES -> $FINDINGS_REPAIR_MAX_BYTES bytes) — findings past that point cannot be recovered"
       fi
-      REPAIR_OUT="$(timeout "$REPAIR_TIMEOUT" "$CLAUDE_BIN" \
-             -p "$(findings_repair_prompt "$OUT" "$REVIEW_SCHEMA")" \
-             --model "$CHEAP_MODEL" --setting-sources "$SETTING_SOURCES" \
-             --allowedTools "Read(/nonexistent-repair-scope/**)" \
-             --output-format json </dev/null 2>"$REPAIR_ERR" \
+      # No tool: a repair only reshapes text it was given. The rule that
+      # matches no file stays, so --allowedTools always has a value.
+      # printf is a builtin, so the prompt is in no process's argv.
+      REPAIR_OUT="$(printf '%s' "$(findings_repair_prompt "$OUT" "$REVIEW_SCHEMA")" \
+             | claude_call "$REPAIR_TIMEOUT" "$CHEAP_MODEL" "" "Read(/nonexistent-repair-scope/**)" 2>"$REPAIR_ERR" \
              | tee "$REPAIR_RAW" | jq -r "$CLAUDE_RESULT_JQ")"
       # Counted like every other model call, so ROUND USAGE covers it too.
       usage_record "$REPAIR_RAW" "repair-pr$PR"
@@ -2372,12 +2357,10 @@ $SLICE_CLEAN"
       # Round 1's own list, so the red team cannot spend its one call re-raising
       # a MEDIUM at HIGH. Fenced and labelled DATA inside the prompt.
       RT_PRIOR="$(jq -r "$FINDINGS_RENDER_PLAIN_JQ" <<<"$CLEANED" 2>/dev/null)" || RT_PRIOR=""
-      timeout "$VERIFY_TIMEOUT" "$CLAUDE_BIN" \
-        -p "$(redteam_prompt "$REPO" "$PR" "$DIFF" "$DIFF_APPLIED" "$RT_PRIOR" \
+      printf '%s' "$(redteam_prompt "$REPO" "$PR" "$DIFF" "$DIFF_APPLIED" "$RT_PRIOR" \
               "$REVIEW_LANGUAGE_SPEC" "$SEVERITY_SPEC" "$REPO_DIR" "$TREE_BIN_NOTE")" \
-        --model "$REVIEW_MODEL" --setting-sources "$SETTING_SOURCES" \
-        --allowedTools "Read(/$REPO_DIR/**)" "Grep(/$REPO_DIR/**)" "Glob(/$REPO_DIR/**)" "Read(/$DIFF)" \
-        --output-format json </dev/null >"$RT_OUT" 2>"$RT_ERR"
+        | claude_call "$VERIFY_TIMEOUT" "$REVIEW_MODEL" "$CLAUDE_READ_TOOLS" "Read(/$REPO_DIR/**)" "Grep(/$REPO_DIR/**)" "Glob(/$REPO_DIR/**)" "Read(/$DIFF)" \
+        >"$RT_OUT" 2>"$RT_ERR"
       # has("candidates"), not `.candidates | length > 0`: an empty list is the
       # answer this stage expects most, and asking for a non-empty one would
       # file every clean PR under "the red team produced nothing usable", the
@@ -2490,11 +2473,10 @@ $SLICE_CLEAN"
       # that dies silently reads as "the finding stands" — the safe outcome,
       # but indistinguishable from a stage that never ran at all.
       # Same path-scoped tools as the review: repo + this diff, nothing else.
-      timeout "$VERIFY_TIMEOUT" "$CLAUDE_BIN" \
-        -p "$(findings_verify_prompt "$REPO" "$PR" "$DIFF" "$V_SEV" "$V_FILE" "$V_LINE" "$V_ISSUE" "$DIFF_APPLIED" "$TREE_BIN_NOTE")" \
-        --model "$REVIEW_MODEL" --setting-sources "$SETTING_SOURCES" \
-        --allowedTools "Read(/$REPO_DIR/**)" "Grep(/$REPO_DIR/**)" "Glob(/$REPO_DIR/**)" "Read(/$DIFF)" \
-        --output-format json </dev/null >"$V_FILE_OUT" 2>"$V_FILE_ERR" &
+      # $! is the PID of the last command in this pipeline, the model call.
+      printf '%s' "$(findings_verify_prompt "$REPO" "$PR" "$DIFF" "$V_SEV" "$V_FILE" "$V_LINE" "$V_ISSUE" "$DIFF_APPLIED" "$TREE_BIN_NOTE")" \
+        | claude_call "$VERIFY_TIMEOUT" "$REVIEW_MODEL" "$CLAUDE_READ_TOOLS" "Read(/$REPO_DIR/**)" "Grep(/$REPO_DIR/**)" "Glob(/$REPO_DIR/**)" "Read(/$DIFF)" \
+        >"$V_FILE_OUT" 2>"$V_FILE_ERR" &
       VERIFY_PIDS+=("$!"); VERIFY_FILES+=("$V_FILE_OUT"); VERIFY_ERRS+=("$V_FILE_ERR")
       VERIFY_IDX+=("$V_IDX"); VERIFY_ISSUE+=("$V_ISSUE")
     done

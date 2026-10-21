@@ -15,6 +15,7 @@ PRREVIEW_HOME="$(cd "$(dirname "$_src")" && pwd -P)"
 . "$PRREVIEW_HOME/lib/prreview-service.sh" || { echo "lib/prreview-service.sh missing" >&2; exit 1; }
 . "$PRREVIEW_HOME/lib/review-spec.sh" || { echo "lib/review-spec.sh missing" >&2; exit 1; }
 . "$PRREVIEW_HOME/lib/app.sh" || { echo "lib/app.sh missing" >&2; exit 1; }
+. "$PRREVIEW_HOME/lib/claude-call.sh" || { echo "lib/claude-call.sh missing" >&2; exit 1; }
 
 CONFIG="$(prreview_config_file)"
 STATE_DIR="$(prreview_state_dir)"
@@ -234,6 +235,9 @@ setup_tools() {
 # only waits and tries again, so setup is where it has to show.
 setup_claude() {
   local st
+  # The reviewer refuses to start on an older Claude Code, so setup says it
+  # first. The function prints the found and the needed version.
+  claude_version_check || return 1
   # stdin closed and a deadline: a claude that does not know the subcommand
   # must not wait for, or eat, the answers setup reads from stdin.
   st="$(timeout 20 "${CLAUDE_BIN:-claude}" auth status </dev/null 2>/dev/null)"

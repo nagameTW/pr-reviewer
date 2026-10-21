@@ -94,7 +94,7 @@ pin    'the repo list asks gh for more than its default 30 PRs' 'pr list --repo 
 GUARD_AT="$(grep -n 'if ! findings_cleaned_ok "$CLEANED"; then' pr-autoreview.sh | head -1 | cut -d: -f1)"
 TALLY_AT="$(grep -n '^  N_BLOCKING=' pr-autoreview.sh | head -1 | cut -d: -f1)"
 is  'a failed findings jq step fails closed ahead of the tally'         "$([ -n "$GUARD_AT" ] && [ -n "$TALLY_AT" ] && [ "$GUARD_AT" -lt "$TALLY_AT" ] && echo yes)" yes
-is  'the review call reads its prompt from a file, not an argument'    "$(grep -c -- '-p --model "$REVIEW_MODEL".*' pr-autoreview.sh) $(grep -c -- '--output-format json <"$PROMPT_F" >"$SLICE_RAW_F"' pr-autoreview.sh)" '1 1'
+is  'the review call reads its prompt from a file, not an argument'    "$(grep -c -- 'claude_call "$REVIEW_TIMEOUT" "$REVIEW_MODEL"' pr-autoreview.sh) $(grep -c -- '<"$PROMPT_F" >"$SLICE_RAW_F"' pr-autoreview.sh)" '1 1'
 is  'no loop counts down through seq (BSD seq 0 -1 prints two numbers)' "$(grep -hE 'seq 0 \$\(\(' pr-autoreview.sh lib/*.sh | grep -vcE '^[[:space:]]*#')" 0
 near() { # $1 file, $2 definition line pattern, $3 window: the lines right after the definition
   local l; l="$(grep -nE "$2" "$1" | head -1 | cut -d: -f1)"; [ -n "$l" ] && sed -n "${l},$((l + $3))p" "$1"; }
@@ -108,5 +108,20 @@ is  'the post-merge alert last verdict body KEEPS the split request' "$(near lib
 LIB_LN="$(grep -nF '. "$SCRIPT_DIR/lib/split.sh"' pr-autoreview.sh | head -1 | cut -d: -f1)"
 EARLY="$( [ -n "$LIB_LN" ] && sed -n "1,${LIB_LN}p" pr-autoreview.sh | grep -v '^[[:space:]]*#' | grep -c 'SPLIT_EXEMPT_RE_DEFAULT')"
 if [ -n "$LIB_LN" ] && [ "${EARLY:-1}" = 0 ]; then ok 'no code above the lib/split.sh source line reads SPLIT_EXEMPT_RE_DEFAULT'; else bad 'no code above the lib/split.sh source line reads SPLIT_EXEMPT_RE_DEFAULT' "lib sourced at ${LIB_LN:-none}, early reads: ${EARLY:-?}"; fi
+
+# One way to start the model: claude_call (lib/claude-call.sh). A call
+# written outside it gets none of its tool limits, and every other test
+# stays green. An invocation is the binary followed by a flag or by a line
+# continuation. The `-x` check and the `--version` probe are not model calls.
+CALL_RE='\$\{?CLAUDE_BIN[^"]*"?[[:space:]]+(-p|--print|\\$)'
+OTHERS=()
+for f in pr-autoreview.sh review-loop.sh owner-alert.sh prreview lib/*.sh; do [ "$f" = lib/claude-call.sh ] || OTHERS+=("$f"); done
+is  'no model call outside lib/claude-call.sh' "$(grep -hE "$CALL_RE" "${OTHERS[@]}" | grep -vE '^[[:space:]]*#' | wc -l | tr -d ' ')" 0
+CALL_BODY="$(awk '/^claude_call\(\) \{/{f=1} f{print} f&&/^\}/{exit}' lib/claude-call.sh 2>/dev/null)"
+is  'claude_call is in lib/claude-call.sh and starts the binary' "$(grep -cE "$CALL_RE" <<<"$CALL_BODY")" 1
+is  '...and nothing else in that file starts a model call' \
+    "$( (grep -vFx "$CALL_BODY" lib/claude-call.sh 2>/dev/null || cat lib/claude-call.sh 2>/dev/null) | grep -E "$CALL_RE" | grep -vcE '^[[:space:]]*#')" 0
+is  'no --allowedTools outside lib/claude-call.sh' "$(grep -hE '^[^#]*--allowedTools' "${OTHERS[@]}" | wc -l | tr -d ' ')" 0
+before 'the Claude Code version is checked before the lock' 'claude_version_check || exit 1' 'LOCKFILE=' pr-autoreview.sh
 
 if [ "$FAILED" -eq 0 ]; then echo "PASS: gate wiring"; else echo "FAIL: gate wiring"; exit 1; fi

@@ -35,17 +35,31 @@ early. This is an instruction to the model, not a sandbox; the tool limits
 below are what hold if the model is fooled.
 
 **The model can only read, and only the review clone.** Claude Code runs
-headless with `Read`, `Grep` and `Glob`, each limited to the review clone,
-plus `Read` on the round's own scratch copies of the diff and of the PR's title
-and description (with the title and body of the issue the PR links, when it
-links one). `--setting-sources` is empty, so the operator's own Claude
-settings cannot widen that. Every other tool, a shell and the network
-included, needs a permission a headless run has nobody to grant, so it is
-refused. Checked against Claude Code 2.1 with the reviewer's own flags: `Bash`,
-`Write`, `WebFetch` and a `Read` outside the clone were all refused, and an
-`.mcp.json` or `CLAUDE.local.md` a pull request adds was not loaded. This was a
-manual test. The Claude Code patch version and the exact command were not
-recorded.
+headless with `--tools "Read,Grep,Glob"`, so no other built-in tool, a shell
+and web tools included, exists in the session. Each of the three is limited
+to the review clone, plus `Read` on the round's own scratch copies of the diff
+and of the PR's title and description (with the title and body of the issue
+the PR links, when it links one). The output-repair call gets no tool
+(`--tools ""`). Every call also gets `--strict-mcp-config` and
+`--disallowedTools "mcp__*"`, so no MCP server starts, and
+`--disable-slash-commands`, so no skill or command from the reviewed repo
+loads. `--setting-sources` is empty, so the operator's own Claude settings
+cannot widen any of that. These flags need Claude Code 2.1.305 or later. The
+reviewer checks `claude --version` at startup and refuses an older version.
+
+Every prompt goes to Claude Code on stdin, never on the command line, so
+other users of the machine cannot read it in the process list. The `claude`
+process starts with `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN` and
+`GITHUB_ENTERPRISE_TOKEN` empty. That is defense in depth only: the model has
+no shell to read its environment with.
+
+Checked on Claude Code 2.1.305 with these flags: the session's tool list was
+exactly `Glob`, `Grep` and `Read`, with no MCP server, skill or slash command.
+A `Bash` call got "No such tool available", and a `Read` outside the clone
+was refused. Before these flags, `Bash` was in the tool set, and read-only
+shell commands inside the clone ran without an allow rule. An earlier manual
+check on a Claude Code 2.1 release, with no recorded patch version, found
+that an `.mcp.json` or `CLAUDE.local.md` a pull request adds was not loaded.
 
 **The merge base sets the rules.** The review tree is the PR's merge base with
 the diff applied, and convention files such as `CLAUDE.md` are read as they are

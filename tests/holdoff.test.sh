@@ -382,7 +382,7 @@ holdoff_prune 2
 # Asked BEFORE the model. A cache consulted after the review has already run
 # saves nothing at all, which is the whole point of this change.
 LOAD_LN="$(grep -n 'holdoff_verdict_load' pr-autoreview.sh | head -1 | cut -d: -f1)"
-CALL_LN="$(grep -n 'timeout "$REVIEW_TIMEOUT" "$CLAUDE_BIN" -p --model "$REVIEW_MODEL"' pr-autoreview.sh | head -1 | cut -d: -f1)"
+CALL_LN="$(grep -n 'claude_call "$REVIEW_TIMEOUT" "$REVIEW_MODEL"' pr-autoreview.sh | head -1 | cut -d: -f1)"
 [ -n "$LOAD_LN" ] && [ -n "$CALL_LN" ] && [ "$LOAD_LN" -lt "$CALL_LN" ] \
   && ok "the parked verdict is looked for before the model is called" \
   || fail "the parked verdict is not looked for before the model is called (load=$LOAD_LN review call=$CALL_LN)"
