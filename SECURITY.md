@@ -11,7 +11,7 @@ Report privately through GitHub's security advisories:
 **https://github.com/nagameTW/pr-reviewer/security/advisories/new**
 
 Please do not open a public issue for a security problem. Expect a first
-response within a few days. Once there is a fix, we will agree on the
+response within a few days. Once there is a fix, I will agree on the
 disclosure timing with you.
 
 The useful details are the commit you ran, the `PRREVIEW_*` settings that differ
