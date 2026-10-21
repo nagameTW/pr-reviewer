@@ -1501,7 +1501,21 @@ $SPLIT_TEXT"
   if [ "$SIZE" -gt "$CHUNK_MIN_LINES" ]; then
     SLICE_DIR="$(mktemp -d "$GATE_SCRATCH/prreview-slice-XXXX")"
     if SPLIT="$(chunk_split "$DIFF" "$SLICE_DIR")" && [ -n "$SPLIT" ]; then
-      PLAN="$(printf '%s\n' "$SPLIT" | chunk_plan "$CHUNK_TARGET_LINES" "$CHUNK_MAX")"
+      # A planner that prints a prefix and then fails gives a shorter plan,
+      # and the slices built from it match each other, so the count check
+      # below passes. Two tests close that. The planner must succeed. Its
+      # rows, with the slice column cut off, must be the rows of the split:
+      # every part once, in order. Anything else is one pass over the diff.
+      PLAN_OK=0
+      PLAN="$(printf '%s\n' "$SPLIT" | chunk_plan "$CHUNK_TARGET_LINES" "$CHUNK_MAX")" \
+        && [ "$(cut -f2- <<<"$PLAN")" = "$SPLIT" ] && PLAN_OK=1
+      # The rows of one slice go to a file, so that the status of the
+      # selector is seen. A mktemp that fails is the same as a bad plan.
+      ROWS_F="$(mktemp "$GATE_SCRATCH/prreview-slice-rows-XXXXXX")" && TMPFILES+=("$ROWS_F") || PLAN_OK=0
+      if [ "$PLAN_OK" != 1 ]; then
+        echo "PR #$PR: the slice plan is missing or does not cover every changed file — reviewing the whole diff in one pass instead"
+        PLAN=""
+      fi
       N_SLICES="$(cut -f1 <<<"$PLAN" | sort -u | grep -c .)"
       if [ "${N_SLICES:-1}" -gt 1 ]; then
         for s in $(cut -f1 <<<"$PLAN" | sort -un); do
@@ -1518,17 +1532,21 @@ $SPLIT_TEXT"
           # careless treatment later.
           : > "$SD"
           # A part that cannot be read or written leaves a shorter slice, and
-          # -s alone cannot tell it from a whole one.
+          # -s alone cannot tell it from a whole one. The same holds for a
+          # selector that prints some rows and then fails.
           SD_OK=1
-          while IFS= read -r part; do
+          awk -F'\t' -v s="$s" '$1 == s' <<<"$PLAN" > "$ROWS_F" || SD_OK=0
+          # Newline-separated, not space-joined: a file name may contain a
+          # space, and the list is shown to the model as a fenced block
+          # where one name per line is the only unambiguous form.
+          SD_NAMES=""
+          while IFS=$'\t' read -r _ _ part name; do
             [ -z "$part" ] || cat "$part" >> "$SD" || SD_OK=0
-          done < <(awk -F'\t' -v s="$s" '$1 == s { print $3 }' <<<"$PLAN")
+            SD_NAMES="${SD_NAMES:+$SD_NAMES$'\n'}$name"
+          done < "$ROWS_F"
           if [ "$SD_OK" = 1 ] && [ -s "$SD" ]; then
             SLICE_DIFFS+=("$SD")
-            # Newline-separated, not space-joined: a file name may contain a
-            # space, and the list is shown to the model as a fenced block
-            # where one name per line is the only unambiguous form.
-            SLICE_FILES+=("$(awk -F'\t' -v s="$s" '$1 == s { print $4 }' <<<"$PLAN")")
+            SLICE_FILES+=("$SD_NAMES")
           fi
         done
         # All or nothing. A partial slice list would review some of the diff
