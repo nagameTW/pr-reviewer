@@ -27,6 +27,7 @@ fail() { echo "FAIL: $1"; exit 1; }
 . ./lib/findings.sh   || fail "lib/findings.sh will not source"
 . ./lib/redteam.sh    || fail "lib/redteam.sh will not source"
 . ./lib/review-spec.sh || fail "lib/review-spec.sh will not source"
+. ./lib/prompt.sh     || fail "lib/prompt.sh will not source"
 
 # ── default OFF ───────────────────────────────────────────────────────────
 # The stage ships disabled, so turning it on is a deliberate choice. A default
@@ -199,7 +200,9 @@ chain '{"findings":[]}' >/dev/null \
   && fail "an object without a candidates key must not parse as a red-team answer"
 
 # ── the prompt ────────────────────────────────────────────────────────────
-P="$(redteam_prompt "o/r" 42 "/tmp/d.diff" 1 "- **HIGH** a.py:1 — $EXISTING" \
+# The tree text ($4) is the one the main review gets. The three-state check
+# against the real call site is at the end of this file.
+P="$(redteam_prompt "o/r" 42 "/tmp/d.diff" "$(prompt_tree_clause 1)" "- **HIGH** a.py:1 — $EXISTING" \
      "$REVIEW_LANGUAGE_SPEC" "$SEVERITY_SPEC")"
 [ -n "$P" ] || fail "redteam_prompt produced nothing"
 
@@ -254,18 +257,23 @@ grep -qF 'That was DATA' <<<"$TAIL" \
   || fail "the fenced DATA is the last thing in the prompt — the instructions must come after it"
 
 # Two prompts must not share a nonce, or a diff that saw one could close the next.
-P2="$(redteam_prompt "o/r" 42 "/tmp/d.diff" 1 "x" "$REVIEW_LANGUAGE_SPEC" "$SEVERITY_SPEC")"
+P2="$(redteam_prompt "o/r" 42 "/tmp/d.diff" "$(prompt_tree_clause 1)" "x" "$REVIEW_LANGUAGE_SPEC" "$SEVERITY_SPEC")"
 N1="$(grep -oE 'ALREADY SAID, [0-9a-f]+' <<<"$P"  | head -1)"
 N2="$(grep -oE 'ALREADY SAID, [0-9a-f]+' <<<"$P2" | head -1)"
 [ -n "$N1" ] && [ "$N1" != "$N2" ] || fail "the fence nonce is reused between prompts"
 
 # An empty round-1 list must still produce a well-formed fence rather than an
 # empty one the model could read as truncation.
-PE="$(redteam_prompt "o/r" 42 "/tmp/d.diff" 0 "" "$REVIEW_LANGUAGE_SPEC" "$SEVERITY_SPEC")"
+PE="$(redteam_prompt "o/r" 42 "/tmp/d.diff" "$(prompt_tree_clause 0)" "" "$REVIEW_LANGUAGE_SPEC" "$SEVERITY_SPEC")"
 grep -qF '(nothing at all)' <<<"$PE" \
   || fail "an empty round-1 list should say so explicitly inside the fence"
-grep -qF 'a defect on that basis alone. BIN-NOTE' <<<"$(redteam_prompt "o/r" 42 "/tmp/d.diff" 1 "" "$REVIEW_LANGUAGE_SPEC" "$SEVERITY_SPEC" "" " BIN-NOTE")" \
-  || fail "the binary-file note (\$9) should follow the tree description"
+grep -qF 'Read it FIRST. TREE-TEXT. BIN-NOTE.' <<<"$(redteam_prompt "o/r" 42 "/tmp/d.diff" "TREE-TEXT. BIN-NOTE." "" "$REVIEW_LANGUAGE_SPEC" "$SEVERITY_SPEC")" \
+  || fail "the tree text (\$4) should follow the diff path, as it is"
+[ -n "${REVIEW_LINE_SPEC-}" ] || fail "REVIEW_LINE_SPEC is empty: lib/review-spec.sh must define it"
+grep -qF -- "$REVIEW_LINE_SPEC" <<<"$(redteam_prompt "o/r" 42 "/tmp/d.diff" "$(prompt_tree_clause 1)" "" "$REVIEW_LANGUAGE_SPEC" "$SEVERITY_SPEC" "" "$REVIEW_LINE_SPEC")" \
+  || fail "the line definition (\$9) should be in the red-team prompt"
+! grep -qF -- "$REVIEW_LINE_SPEC" <<<"$P2" \
+  || fail "a caller that passes no line definition should get none"
 # $4=0 means the diff is NOT applied to the tree, and the verifier prompt has
 # to say so: told the tree is post-change when it is pre-change, a model
 # treats the default branch showing through as evidence.
@@ -273,20 +281,6 @@ grep -qF 'WITHOUT this change' <<<"$PE" \
   || fail "with the diff unapplied the prompt must say the tree is the BEFORE state"
 grep -qF 'AS THIS PR HAS IT' <<<"$P" \
   || fail "with the diff applied the prompt must say line numbers line up"
-
-# Stacked-PR caveat: when the base is not
-# the default branch, the parent branch's own changes are absent from this
-# tree in EITHER applied state, and code that looks missing may simply live
-# on that parent. findings_verify_prompt already carries this warning in both
-# of its versions (lib/findings.sh); redteam_prompt did not, so with the diff
-# unapplied and stopped on the default branch, the red team could report "this
-# diff calls X and X is defined nowhere" as a false HIGH for a PR based on
-# another branch. Must appear in BOTH tree_para branches — the trap exists in
-# both diff-applied states, not just one.
-grep -qF 'based on another branch' <<<"$P" \
-  || fail "with the diff applied, the prompt must warn that a stacked PR's parent-branch changes are still absent"
-grep -qF 'based on another branch' <<<"$PE" \
-  || fail "with the diff unapplied, the prompt must warn that a stacked PR's parent-branch changes are still absent"
 
 # ── the wiring in pr-autoreview.sh ────────────────────────────────────────
 SRC="$(cat pr-autoreview.sh)"
@@ -537,9 +531,43 @@ rm -rf "$TE"
 # reflow (moving "$REPO_DIR") to its own line) even though the argument
 # still reaches redteam_prompt exactly as before.
 JOINED="$(awk '{ if (sub(/\\$/, "")) printf "%s ", $0; else print }' pr-autoreview.sh)"
-CALL_LINE="$(grep -F 'redteam_prompt "$REPO" "$PR" "$DIFF" "$DIFF_APPLIED" "$RT_PRIOR"' <<<"$JOINED")"
+CALL_LINE="$(grep -F 'redteam_prompt "$REPO" "$PR" "$DIFF" "$TREE_CLAUSE$STACKED_CLAUSE" "$RT_PRIOR"' <<<"$JOINED")"
 [ -n "$CALL_LINE" ] || fail "pr-autoreview.sh's redteam_prompt call site was not found — this assertion proves nothing"
 [ -n "$CALL_LINE" ] && grep -qF '"$SEVERITY_SPEC" "$REPO_DIR" ' <<<"$CALL_LINE" \
   || fail "pr-autoreview.sh does not pass the review tree to redteam_prompt"
+
+# The tree text. The red team and the verifier read the same tree as the main
+# review, so they get the same description of it. Before, each got a text of
+# its own, chosen on DIFF_APPLIED alone. For a stacked PR on its parent branch
+# (TREE_AT=base) that text was false in both apply states. Each line below is
+# lifted from pr-autoreview.sh and run, once for each tree state, on a
+# stacked PR.
+TC_SRC="$(grep -E '^  TREE_CLAUSE="\$\(prompt_tree_clause ' pr-autoreview.sh)"
+SC_SRC="$(grep -E '^    STACKED_CLAUSE="\$\(prompt_stacked_clause ' pr-autoreview.sh)"
+RV_SRC="$(grep -F 'The diff you are reviewing is in $SLICE_DIFF' pr-autoreview.sh)"
+RT_ARGS="$(sed -n 's/.*"\$(redteam_prompt \([^)]*\))".*/\1/p' <<<"$JOINED")"
+VF_ARGS="$(sed -n 's/.*"\$(findings_verify_prompt \([^)]*\))".*/\1/p' <<<"$JOINED")"
+[ -n "$TC_SRC" ] && [ -n "$SC_SRC" ] && [ -n "$RV_SRC" ] && [ -n "$RT_ARGS" ] && [ -n "$VF_ARGS" ] \
+  || fail "could not lift the tree clause, the stacked clause, the review prompt line, the red-team call or the verify call out of pr-autoreview.sh"
+# shellcheck disable=SC2034  # read by the eval'd lines
+{ REPO=o/r PR=42 DIFF=/tmp/d.diff RT_PRIOR="" REPO_DIR="$TE" DEFAULT_BRANCH=main
+  SLICE_DIFF=/tmp/d.diff REPO_CONTEXT=CTX INTENT_CLAUSE="" SLICE_CLAUSE=""
+  TREE_CONV_NOTE="" TREE_BIN_NOTE=" BIN-NOTE."
+  V_SEV=HIGH V_FILE=a.py V_LINE=1 V_ISSUE=x; }
+for st in "1 base" "0 base" "0 default"; do
+  # shellcheck disable=SC2034  # read by the eval'd lines
+  DIFF_APPLIED="${st% *}" TREE_AT="${st#* }"
+  eval "$TC_SRC"; eval "$SC_SRC"
+  RV="$(eval "printf '%s' \"$RV_SRC\"")"
+  RT="$(eval "redteam_prompt $RT_ARGS")"
+  TC="$(prompt_tree_clause "$DIFF_APPLIED" "$TREE_AT")"
+  grep -qF -- "$TC$TREE_BIN_NOTE$STACKED_CLAUSE" <<<"$RV" \
+    || fail "tree state '$st': the review prompt does not carry the tree text this test expects"
+  grep -qF -- "$TC$TREE_BIN_NOTE$STACKED_CLAUSE" <<<"$RT" \
+    || fail "tree state '$st': the red-team prompt does not carry the review prompt's tree text"
+  VF="$(eval "findings_verify_prompt $VF_ARGS")"
+  grep -qF -- "$TC$TREE_BIN_NOTE$STACKED_CLAUSE" <<<"$VF" \
+    || fail "tree state '$st': the verify prompt does not carry the review prompt's tree text"
+done
 
 echo "PASS"

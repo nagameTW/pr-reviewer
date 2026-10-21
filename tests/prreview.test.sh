@@ -141,6 +141,7 @@ FAKE="$T/bin"; mkdir -p "$FAKE"
 cat > "$FAKE/gh" <<'EOF'
 #!/usr/bin/env bash
 case "$1 $2" in
+  "--version"*) printf 'gh version %s (2024-11-27)\n' "${FAKE_GH_VERSION:-2.63.0}" ;;
   "auth status") exit 0 ;;
   "api user") echo me ;;
   "repo list") printf 'me/api\nme/web\n' ;;
@@ -152,9 +153,11 @@ case "$1 $2" in
 esac
 EOF
 chmod +x "$FAKE/gh"
-# claude answers only `auth status`, logged in unless FAKE_CLAUDE_LOGGED says not.
+# claude answers only `--version` (FAKE_CLAUDE_VERSION, default 2.1.305) and
+# `auth status`, logged in unless FAKE_CLAUDE_LOGGED says not.
 cat > "$FAKE/claude" <<'EOF'
 #!/usr/bin/env bash
+[ "$1" = --version ] && { printf '%s (Claude Code)\n' "${FAKE_CLAUDE_VERSION:-2.1.305}"; exit 0; }
 [ "$1 $2" = "auth status" ] || exit 0
 printf '{"loggedIn":%s}\n' "${FAKE_CLAUDE_LOGGED:-true}"
 [ "${FAKE_CLAUDE_LOGGED:-true}" = true ]
@@ -216,6 +219,13 @@ has '...unless the user chooses to run it only in a terminal' "$OUT" '── Too
 OUT="$(printf 'n\n' | FAKE_CLAUDE_LOGGED=false prreview setup 2>&1)"
 has 'setup stops at Claude Code when it is not logged in' "$OUT" "setup stopped at 'Claude Code'"
 has '...and says how to log in' "$OUT" 'claude auth login'
+OUT="$(printf 'n\n' | FAKE_CLAUDE_VERSION=2.1.304 prreview setup 2>&1)"
+has 'setup stops at Claude Code when it is older than 2.1.305' "$OUT" "setup stopped at 'Claude Code'"
+has '...and names the version it needs' "$OUT" '2.1.305 or later'
+OUT="$(printf 'n\n' | FAKE_GH_VERSION=2.62.0 prreview setup 2>&1)"
+has 'setup stops at GitHub when gh is older than 2.63.0' "$OUT" "setup stopped at 'GitHub'"
+has '...and names the version it needs' "$OUT" '2.63.0 or later'
+has '...and the version it found' "$OUT" 'gh version 2.62.0'
 is 'WSL 1 is told apart by its kernel string' "$(prreview_is_wsl1 'Linux version 9.9.9-Microsoft' && echo 1)" 1
 is '...from WSL 2' "$(prreview_is_wsl1 'Linux version 9.9.9-microsoft-standard-WSL2' || echo 2)" 2
 OUT="$(printf 'nobody/else\nn\n' | prreview setup 2>&1)"

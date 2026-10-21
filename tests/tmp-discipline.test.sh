@@ -30,7 +30,7 @@ ok()   { printf '  ok   %s\n' "$*"; }
 # count decides whether an alert fires), they are simply not part of this
 # table.
 TRACKED=(
-  "pr-autoreview.sh|GATE_SCRATCH|PATS_FILE DIFF SLICE_DIR INTENT_FILE TREE_LIST REVIEW_ERR SLICE_RAW_F SLICE_JSONS RT_OUT RT_ERR V_FILE_OUT V_FILE_ERR"
+  "pr-autoreview.sh|GATE_SCRATCH|PATS_FILE DIFF_DIR CONV_LIST SLICE_DIR INTENT_DIR TREE_LIST REVIEW_ERR SLICE_RAW_F SLICE_JSONS RT_OUT RT_ERR V_FILE_OUT V_FILE_ERR"
   "owner-alert.sh|ALERT_WORKROOT|PATS_FILE"
 )
 

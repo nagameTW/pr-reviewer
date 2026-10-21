@@ -275,6 +275,47 @@ is 'slices: a slice with zero parsed samples, and only that, marks the round inc
 is 'slices: SLICE_INCOMPLETE is set in exactly one place inside the tally' \
    "$(grep -cF 'SLICE_INCOMPLETE=1' <<<"$TALLY")" '1'
 
+# Each slice's read dir. A review call gets --restricted and --add-dir with
+# the dir of its slice diff, so that dir must hold that one diff and nothing
+# else. $SLICE_DIR itself holds the parts of every slice. This runs the
+# slice-writing block of pr-autoreview.sh on a two-file diff that packs into
+# two slices.
+cat > "$TMP/two.diff" <<'EOF2'
+diff --git a/one.py b/one.py
+index 111..222 100644
+--- a/one.py
++++ b/one.py
+@@ -1,1 +1,2 @@
+-one old
++one new
++one added
+diff --git a/two.py b/two.py
+index 333..444 100644
+--- a/two.py
++++ b/two.py
+@@ -1,1 +1,2 @@
+-two old
++two new
++two added
+EOF2
+SLICE_BLOCK="$(awk -v a='SLICE_DIFFS=(); SLICE_FILES=(); SLICE_DIR=""' -v b='SLICE_DIFFS=("$DIFF"); SLICE_FILES=("")' \
+  'index($0, a) { f = 1 } f { print } f && index($0, b) { d = 1 } d && /^  fi$/ { exit }' pr-autoreview.sh)"
+is 'read dir: the slice-writing block is where it was pinned' \
+   "$(grep -cF 'chunk_split "$DIFF" "$SLICE_DIR"' <<<"$SLICE_BLOCK")" '1'
+mkdir -p "$TMP/scratch"
+# shellcheck disable=SC2034  # read by the eval'd block
+GATE_SCRATCH="$TMP/scratch" DIFF="$TMP/two.diff" SIZE=4 CHUNK_MIN_LINES=0 CHUNK_TARGET_LINES=1 CHUNK_MAX=8 PR=7
+SLICE_DIFFS=(); SLICE_DIR=""
+eval "$SLICE_BLOCK" >/dev/null
+is 'read dir: the plan has two slices' "${#SLICE_DIFFS[@]}" '2'
+S1_DIR="${SLICE_DIFFS[0]%/*}"
+is 'read dir: slice 1 dir holds only its diff' "$(ls -A "$S1_DIR" 2>&1)" "${SLICE_DIFFS[0]##*/}"
+is 'read dir: slice 1 diff has slice 1 file' "$(grep -c '^+++ b/one.py$' "${SLICE_DIFFS[0]}")" '1'
+is 'read dir: slice 1 diff has no slice 2 file' "$(grep -c 'two.py' "${SLICE_DIFFS[0]}")" '0'
+is 'read dir: slice 1 dir is not SLICE_DIR' "$([ "$S1_DIR" != "$SLICE_DIR" ] && echo yes)" 'yes'
+is 'read dir: slice 1 dir is not GATE_SCRATCH' "$([ "$S1_DIR" != "$GATE_SCRATCH" ] && echo yes)" 'yes'
+is 'read dir: slice 2 has its own dir' "$([ "${SLICE_DIFFS[1]%/*}" != "$S1_DIR" ] && echo yes)" 'yes'
+
 # How many passes a round gets.
 is 'samples: round 1 takes the first-round count'        "$(chunk_samples_for_round 1 100 2 1 1000)" 2
 is 'samples: round 2 takes the later-round count'        "$(chunk_samples_for_round 2 100 2 1 1000)" 1

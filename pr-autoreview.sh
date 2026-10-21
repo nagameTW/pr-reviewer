@@ -36,26 +36,8 @@ GH="${GH_BIN:-$(command -v gh)}"
 # cost grounds — it DELETES blocking findings, so a weaker model there fails in
 # the direction that ships defects.
 CHEAP_MODEL="${PRREVIEW_GATE_CHEAP_MODEL:-claude-sonnet-5-5}"
-# Same argument as pinning the model, for permissions. `--allowedTools` is
-# ADDITIVE to whatever ~/.claude/settings.json already allows, so a rule you
-# add for your own convenience (or defaultMode: bypassPermissions) would
-# silently widen what the review model may read — including the GitHub App's
-# private key, which acts as the App on every repo it is installed on.
-#
-# `--setting-sources` is the right lever: it controls which setting layers get
-# loaded and nothing else. An empty list loads none, so `--allowedTools` below
-# is the complete permission story, while auth, model and built-in tools are
-# untouched.
-#
-# NOT CLAUDE_CONFIG_DIR, which is what this started as: credentials live under
-# that directory, so pointing it at a gate-owned path made headless claude
-# answer "Not logged in · Please run /login". Verified before it shipped —
-# every review would have failed to parse, every PR would have sat
-# pending, and the fail-closed path means it would have been quiet about it.
-SETTING_SOURCES=""
-# stdin closed on both model calls: without it headless claude waits 3s for
-# piped input it is never going to get, twice per PR per round, and says so on
-# stderr. Its own warning names the fix.
+# Every model call goes through claude_call (lib/claude-call.sh). That file
+# says which tools, settings and MCP servers each call gets, and why.
 PATTERNS_FILE="${PRREVIEW_SENSITIVE_PATTERNS_FILE:-$HOME/.config/pr-reviewer/sensitive-patterns}"
 # Where the gate keeps its own clone of each reviewed repo. Deliberately
 # NOT a working tree anybody uses: the gate checks out, cleans and patches
@@ -246,7 +228,7 @@ case "$SAMPLES" in
   ''|*[!0-9]*) SAMPLES=1 ;;
 esac
 [ "$SAMPLES" -ge 1 ] || SAMPLES=1
-# The FIRST round's sample count: round 1 hunts, later
+# The FIRST round's sample count: round 1 searches, later
 # rounds verify, so the round worth sampling is the first. Still 1 by
 # default, for the same reason PRREVIEW_GATE_SAMPLES is.
 SAMPLES_ROUND1="${PRREVIEW_GATE_SAMPLES_ROUND1:-1}"
@@ -360,6 +342,12 @@ command -v git >/dev/null || { echo "git missing"; exit 1; }
 command -v flock >/dev/null || { echo "flock missing"; exit 1; }
 command -v timeout >/dev/null || { echo "timeout(1) missing — refusing to run (per-review budget cannot be enforced)"; exit 1; }
 [ -x "$CLAUDE_BIN" ] || { echo "claude missing"; exit 1; }
+# Sourced here, before the lock and before the other libs: the version check
+# must stop a round on a Claude Code that is too old for the tool limits.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/lib/claude-call.sh" || { echo "lib/claude-call.sh missing, refusing to run"; exit 1; }
+claude_version_check || exit 1
+gh_version_check "$GH" || exit 1
 
 # Single-instance lock. The gate fetches and checks out in $GATE_WORKROOT,
 # so a manual run overlapping the scheduled one would have two
@@ -434,8 +422,7 @@ ensure_gate_clone() {
 
 # Pure logic lives in lib/ so tests can source it without the
 # token-minting preamble below. Guarded: set -u alone won't stop the
-# script on a failed source.
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# script on a failed source. SCRIPT_DIR is set above, next to the version check.
 # The severity ladder and the output contract: shared so the three prompts here
 # cannot drift apart.
 . "$SCRIPT_DIR/lib/review-spec.sh" || { echo "lib/review-spec.sh missing — refusing to run"; exit 1; }
@@ -851,9 +838,13 @@ review_one_pr() { # $1 = PR number, $2 = the worktree the dispatcher made
     cleanup_tmpfiles
     # The slice parts live in a DIRECTORY, and cleanup_tmpfiles is `rm -f`,
     # which leaves one behind per PR per round. Removed here rather than by
-    # listing every part in TMPFILES: the parts are created inside it and
-    # nothing else ever is.
+    # listing every part in TMPFILES: the parts and each slice's own dir are
+    # created inside it, and nothing else is.
     [ -n "${SLICE_DIR:-}" ] && rm -rf "$SLICE_DIR"
+    # The same for the dirs that hold the diff and the intent file. The
+    # happy paths rm the files, and this removes the dirs.
+    [ -n "${DIFF_DIR:-}" ] && rm -rf "$DIFF_DIR"
+    [ -n "${INTENT_DIR:-}" ] && rm -rf "$INTENT_DIR"
     # cd out first: worktree remove refuses while a process sits inside.
     cd / 2>/dev/null || true
     git -C "$CLONE_DIR" worktree remove --force "$WT_DIR" 2>/dev/null || true
@@ -872,15 +863,19 @@ review_one_pr() { # $1 = PR number, $2 = the worktree the dispatcher made
   # marker above treats every nonzero exit as an unexpected death.
   cd "$REPO_DIR" || { note_skip "review worktree missing — skipping (fail closed)"; return 0; }
   INFO="$("$GH" pr view "$PR" --repo "$REPO" \
-        --json headRefOid,isDraft,reviews,comments,title,body,additions,deletions,autoMergeRequest,baseRefName)"
+        --json headRefOid,isDraft,reviews,comments,title,body,additions,deletions,changedFiles,autoMergeRequest,baseRefName,baseRefOid)"
   [ -n "$INFO" ] || { note_skip "could not fetch PR info — skipping (fail closed)"; return 0; }
   [ "$(jq -r '.isDraft' <<<"$INFO")" = "true" ] && return 0
   SHA="$(jq -r '.headRefOid' <<<"$INFO")"
-  # Where this PR wants to land. Read once here because it is needed to
-  # resolve the merge base the diff is applied onto.
+  # Where this PR wants to land. Read once here because the stacked-base
+  # convention guard below needs it.
   # The other call sites still ask INFO directly; they predate this
   # and re-reading the same field is harmless, unlike a SECOND source of truth.
   PR_BASE="$(jq -r '.baseRefName // ""' <<<"$INFO")"
+  # The commit the base branch pointed to in this same read. The merge base
+  # is resolved from it and from $SHA, never from the branch name: a branch
+  # can move between two calls, and a commit ID cannot.
+  PR_BASE_OID="$(jq -r '.baseRefOid // ""' <<<"$INFO")"
   # Review key = head SHA + title/body digest: fixing the title/description
   # re-triggers the review even though the head SHA is unchanged.
   #
@@ -888,19 +883,22 @@ review_one_pr() { # $1 = PR number, $2 = the worktree the dispatcher made
   # it and the review that was made no longer answers the question being
   # asked. Retargeting a PR from a feature branch onto main is exactly the
   # case — the old verdict was reached against a different base.
-  KEY="$(prompt_review_key "$INFO")"
+  #
+  # For a stacked PR the base commit is in the hash too: a push to the parent
+  # branch changes this PR's diff, so it asks for a new review. A PR into the
+  # default branch keeps the v0.2.0 key (SECURITY.md, Known limits). No key
+  # means no base commit that is a full SHA, and then there is no merge base.
+  KEY="$(prompt_review_key "$INFO" "$DEFAULT_BRANCH")" \
+    || { note_skip "the base commit is missing or is not a full commit SHA, skipping (fail closed)"; return 0; }
 
   HOLD_F="$(holdoff_path "$REPO" "$PR" "$KEY")" || HOLD_F=""
 
-  # Both of the following are materialized on purpose, never piped straight
+  # Materialized on purpose, never piped straight
   # into `grep -q`: under pipefail an early-quitting grep SIGPIPEs the
   # producer, so the pipeline reports non-zero EVEN ON A MATCH and a hit reads
   # as a miss. Large outputs are the ones that trip it (a small one fits the
   # pipe buffer and the producer exits cleanly), which is the worst possible
   # bias here — the consequence is re-reviewing an already-handled head.
-  # Failing to list the changed files is fatal for this PR: the checklist,
-  # the convention-file revert and the size check all read them, and
-  # guessing means guessing in the unsafe direction.
   # Gate-authored bodies only: anyone can type `$MARKER $KEY`.
   HANDLED_BODIES="$(prompt_gate_bodies "$INFO" "$PRIOR_AUTHORS")"
   # Does this exact head + title/body carry a verdict from this gate?
@@ -919,12 +917,6 @@ review_one_pr() { # $1 = PR number, $2 = the worktree the dispatcher made
     disarm_unreviewed_auto_merge "$INFO" "$PR" \
       || { note_skip "auto-merge could not be disarmed — skipping (fail closed)"; return 0; }
   fi
-  if ! PR_FILES="$("$GH" pr diff "$PR" --repo "$REPO" --name-only 2>/dev/null)" \
-     || [ -z "$PR_FILES" ]; then
-    note_skip "could not list changed files — skipping (fail closed)"
-    return 0
-  fi
-
   # already handled this exact head + title/body?
   if [ "$HEAD_HANDLED" = 1 ]; then
     echo "PR #$PR: this head was already handled — nothing to do until it changes (review-only: this gate never merges)"
@@ -966,8 +958,7 @@ review_one_pr() { # $1 = PR number, $2 = the worktree the dispatcher made
   # message, and the failure is silent: review, approve, squash. It needs no
   # attacker either: the pipe buffer is a fixed 64KiB and multibyte text
   # (most non-Latin scripts, emoji) takes 2 to 4 bytes a character, so a long-but-ordinary body
-  # reaches it. Same discipline as HANDLED_BODIES / PR_FILES above, for the
-  # same reason.
+  # reaches it. Same discipline as HANDLED_BODIES above, for the same reason.
   TITLE_BODY="$(jq -r '(.title // "") + "\n" + (.body // "")' <<<"$INFO")"
   if scan_hit_or_unknown "$PATS_FILE" "$TITLE_BODY"; then
     NOTICE_TEXT="
@@ -1068,14 +1059,55 @@ the default branch. Edit the title and it is checked again automatically."
   # The X's LAST: BSD mktemp only replaces a trailing run, so `XXXX.diff` was
   # one fixed name on macOS, and the second of two parallel jobs failed to
   # create it and reported the diff as unfetchable.
-  DIFF="$(mktemp "$GATE_SCRATCH/prreview-pr-diff-XXXXXX")" \
+  # The diff is alone in its own dir. The verify and red-team calls get that
+  # dir with --add-dir, and they must not see any other file.
+  DIFF_DIR="$(mktemp -d "$GATE_SCRATCH/prreview-pr-diff-XXXXXX")" \
     || { note_skip "could not create a scratch file for the diff — skipping (fail closed)"; return 0; }
+  DIFF="$DIFF_DIR/pr.diff"
   TMPFILES+=("$DIFF")
-  # Not silent: a 406 on a >20k-line diff, a rate limit and a
-  # dropped connection all land here, and this used to be the one skip in the
-  # file that left no line at all.
-  "$GH" pr diff "$PR" --repo "$REPO" > "$DIFF" \
-    || { rm -f "$DIFF"; note_skip "could not fetch the diff — skipping (fail closed)"; return 0; }
+  # The diff, the file list and the marker SHA must describe ONE commit.
+  # $SHA and $KEY come from the `gh pr view` read at the top of this job, and
+  # a fetch that follows the PR's current head can return a different head if
+  # the author force-pushes in between: the verdict, and the marker
+  # that says "handled", would then name a head the model never saw. So the
+  # diff is fetched for exactly $SHA, from the merge base to $SHA, and the
+  # file list is read out of that same file (lib/merge.sh pr_diff_pinned).
+  # Re-reading headRefOid afterwards would not do: A-B-A passes that check.
+  #
+  # The merge base is looked up first because the URL needs it, and the tree
+  # below is built on it. It is the PR's own base (the parent branch for a
+  # stacked PR), not the default branch. It comes from the base commit and the
+  # head commit of the read at the top, so it belongs to the comparison the
+  # key names, even when the base branch moves. A merge base that is not a
+  # full SHA skips the round: the tree and the diff would not line up, and the old
+  # fallback (review the diff without its changes in the tree) quietly
+  # weakened the review.
+  #
+  # changedFiles is from the same `gh pr view` read as $SHA. A diff with a
+  # different file count was cut short or is for another head, and reading it
+  # would approve what nobody read: skipping costs one round, and the PR is
+  # picked up again by the next one.
+  #
+  # Failing to read the changed files is fatal for this PR: the checklist, the
+  # convention-file revert and the size check all read them, and guessing
+  # means guessing in the unsafe direction.
+  #
+  # Not silent: a diff too large to render, a rate limit and a dropped
+  # connection all land here, and this used to be the one skip in the file that
+  # left no line at all.
+  MERGE_BASE="$(merge_base_sha "$REPO" "$PR_BASE_OID" "$SHA")"
+  PR_FILES_RC=0
+  PR_FILES="$(pr_diff_pinned "$REPO" "$MERGE_BASE" "$SHA" "$DIFF" "$(jq -r '.changedFiles // ""' <<<"$INFO")")" \
+    || PR_FILES_RC=$?
+  # A PR that changes no files has nothing to review. v0.2.0 skipped it too,
+  # and every step below needs a file list that is not empty.
+  case "$PR_FILES_RC" in
+    0) [ -n "$PR_FILES" ] || { rm -f "$DIFF"; note_skip "the PR changes no files, nothing to review, skipping (fail closed)"; return 0; } ;;
+    1) rm -f "$DIFF"; note_skip "the merge base or the head is not a full commit SHA, skipping (fail closed)"; return 0 ;;
+    2) rm -f "$DIFF"; note_skip "could not fetch the diff, skipping (fail closed)"; return 0 ;;
+    3) rm -f "$DIFF"; note_skip "the fetched diff could not be read (cut off, or not a diff), skipping (fail closed)"; return 0 ;;
+    *) rm -f "$DIFF"; note_skip "no file count to check the diff against, or the diff holds another number of files than GitHub reports, skipping (fail closed)"; return 0 ;;
+  esac
 
   # Put the change INTO the tree the model reads (the biggest single gap this
   # gate had). Until now every Read/Grep returned pre-change source, so the
@@ -1093,7 +1125,7 @@ the default branch. Edit the title and it is checked again automatically."
   # conventions, the reason for reviewing off the default branch.
   #
   # The patch has to be applied to the commit it was COMPUTED against, which
-  # is the merge base, not the tip of the default branch. `gh pr diff` is a
+  # is the merge base, not the tip of the default branch. The fetched diff is a
   # three-dot diff, so its hunks describe the difference from
   # merge-base(base, head) to head; against a tip that has moved on since the
   # author branched, they conflict on every file main touched in the meantime.
@@ -1108,7 +1140,7 @@ the default branch. Edit the title and it is checked again automatically."
   #
   # Atomic by construction: `git apply` without --reject applies the whole
   # patch or none of it, so there is no half-patched tree to reason about.
-  # Binary files are the one exception, on purpose: `gh pr diff` renders each
+  # Binary files are the one exception, on purpose: the diff API renders each
   # as a "Binary files differ" stub with no content, so they are excluded by
   # path (lib/tree.sh tree_binary_paths) and the text changes still apply.
   # Keeping them off the disk the model can Read is a bonus: a PNG carrying
@@ -1128,7 +1160,6 @@ the default branch. Edit the title and it is checked again automatically."
   # unconditionally and contradict each other.
   TREE_AT=default
   APPLY_ERR=""
-  MERGE_BASE=""
   TREE_CONV_NOTE=""
   TREE_BIN_NOTE=""
   BIN_EXCLUDES=()
@@ -1144,104 +1175,133 @@ the default branch. Edit the title and it is checked again automatically."
   # convention files come from the default branch, the ones the patch wrote
   # are reverted, and a symlink that could lead the model elsewhere
   # (tree_has_symlinks says which) refuses the whole review.
-  MERGE_BASE="$(merge_base_sha "$REPO" "$PR_BASE" "$SHA")"
-  # A full 40-hex SHA or nothing. `git checkout` accepts refs, short SHAs and
-  # `HEAD@{...}`, so a partial or error-shaped answer from the API must not
-  # reach it as a revision to resolve — the value comes off the network and
-  # the tree it selects decides what the model reads.
-  case "$MERGE_BASE" in
-    ????????????????????????????????????????)
-      case "$MERGE_BASE" in
-        *[!0-9a-f]*) APPLY_ERR="merge base is not a SHA" ;;
-        *)
-          # A checkout that fails leaves the tree where it was — still a
-          # commit of the default branch, still a truthful "the code without
-          # this change" — so the fallback needs no repair, only the honest
-          # wording below.
-          if git -C "$REPO_DIR" checkout -q --detach "$MERGE_BASE" 2>/dev/null; then
-            TREE_AT=base
-            # A merge base OFF the default branch sits on an unprotected ref,
-            # so its convention files are author-written even though this
-            # patch never touched them — and the revert further down cannot
-            # see them: it walks `ls-files --others` (what the patch created)
-            # and `diff --name-only` (what the patch modified), and a file the
-            # PARENT committed is in neither. `git checkout -- <path>` would
-            # not help either; it restores the parent's version, which is the
-            # author's. So the attack is: push a CLAUDE.md saying whatever you
-            # like to feat/parent (feature branches are unprotected), open a
-            # PR based on feat/parent, and the gate reads your rules as the
-            # project's from its own cwd. The comment this replaces claimed
-            # the tree was "author-controlled either way, the diff is the
-            # author's" — that was wrong, because the diff's half IS reverted
-            # and the parent's half was not.
-            #
-            # Taken from the default branch, not merely deleted: the review
-            # needs the real conventions present, not absent. Deleting is only
-            # for a path the default branch does not have at all.
-            if ! merge_base_allowed "$PR_BASE" "$DEFAULT_BRANCH"; then
-              # `*/.claude/*`, NOT `*/.claude`. A pathspec wildcard only
-              # tail-matches, so `*/.claude` matches nothing at all — measured,
-              # and it is the same trap three versions of the revert below fell
-              # into. `.claude` bare does work (git treats it as a prefix), and
-              # is kept alongside so a root-level one is never missed.
-              # The ref has to resolve before anything is removed. Measured
-              # while writing this: against an unresolvable origin/<default>,
-              # every `cat-file -e` fails, every path takes the `rm` arm, and
-              # the tree ends up with NO conventions at all — the model then
-              # reviews against nothing and says nothing about why. Refusing
-              # is the honest answer; a review without the project's rules is
-              # not a cheaper review, it is a different one.
-              if ! git -C "$REPO_DIR" rev-parse --verify -q "origin/$DEFAULT_BRANCH^{commit}" >/dev/null; then
-                note_skip "cannot resolve origin/$DEFAULT_BRANCH to force the convention files off a stacked base — refusing to review (fail closed)"
-                return 0
-              fi
-              CONV_FORCED=0
-              # `if`, not `[ -n ... ] || continue`: a bare continue inside
-              # review_one_pr is banned (tests/parallel-discipline.test.sh) —
-              # the function is a background job and the word would act on
-              # whichever loop happens to enclose it.
-              while IFS= read -r -d '' conv; do
-                if [ -n "$conv" ]; then
-                  if git -C "$REPO_DIR" cat-file -e "origin/$DEFAULT_BRANCH:$conv" 2>/dev/null; then
-                    git -C "$REPO_DIR" checkout "origin/$DEFAULT_BRANCH" -- "$conv" 2>/dev/null || true
-                  else
-                    # The INDEX too, not just the working tree. `rm -f` alone
-                    # leaves the parent's blob staged, the path then shows up
-                    # in the `git diff --name-only` list the revert loop below
-                    # walks, and that loop's `git checkout -- <path>` writes
-                    # the parent's version straight back out. Measured: the
-                    # file was deleted, listed, and resurrected in the same
-                    # round. It is the easiest arrangement of this attack too,
-                    # because a path the default branch does not track at all
-                    # (.claude/skills/<name>/SKILL.md, a subdirectory
-                    # CLAUDE.md) always takes this arm. Clearing the index
-                    # also keeps the path out of that list, so CONV_HIT is not
-                    # set and the prompt does not tell the model this diff
-                    # wrote a convention file when it did not.
-                    git -C "$REPO_DIR" rm -q --cached -- "$conv" 2>/dev/null || true
-                    rm -f "${REPO_DIR:?}/$conv"
-                  fi
-                  CONV_FORCED=1
-                fi
-              done < <(git -C "$REPO_DIR" ls-files -z \
-                         'CLAUDE.md' '*/CLAUDE.md' 'AGENTS.md' '*/AGENTS.md' \
-                         '.claude/*' '*/.claude/*' \
-                         ${TREE_CONV_EXTRA_PATHSPECS[@]+"${TREE_CONV_EXTRA_PATHSPECS[@]}"} 2>/dev/null)
-              [ "$CONV_FORCED" = 1 ] && echo "PR #$PR: stacked base — convention files forced back to origin/$DEFAULT_BRANCH so the parent branch cannot supply the review rules either"
-            fi
-            if BIN_PATHS="$(tree_binary_paths "$DIFF")"; then
-              while IFS= read -r bp; do
-                [ -z "$bp" ] || BIN_EXCLUDES+=("--exclude=$bp")
-              done <<<"$BIN_PATHS"
-            fi
-            APPLY_ERR="$(git -C "$REPO_DIR" apply --whitespace=nowarn ${BIN_EXCLUDES[@]+"${BIN_EXCLUDES[@]}"} "$DIFF" 2>&1)" \
-              && DIFF_APPLIED=1
+  # $MERGE_BASE is a full 40-hex SHA by now: pr_diff_pinned refused anything
+  # else. That check must stay, because the value comes off the network and
+  # `git checkout` accepts refs, short SHAs and `HEAD@{...}`.
+  # A checkout that fails leaves the tree where it was — still a
+  # commit of the default branch, still a truthful "the code without
+  # this change" — so the fallback needs no repair, only the honest
+  # wording below.
+  if git -C "$REPO_DIR" checkout -q --detach "$MERGE_BASE" 2>/dev/null; then
+    TREE_AT=base
+    # A merge base OFF the default branch sits on an unprotected ref,
+    # so its convention files are author-written even though this
+    # patch never touched them — and the revert further down cannot
+    # see them: it walks `ls-files --others` (what the patch created)
+    # and `diff --name-only` (what the patch modified), and a file the
+    # PARENT committed is in neither. `git checkout -- <path>` would
+    # not help either; it restores the parent's version, which is the
+    # author's. So the attack is: push a CLAUDE.md saying whatever you
+    # like to feat/parent (feature branches are unprotected), open a
+    # PR based on feat/parent, and the gate reads your rules as the
+    # project's from its own cwd. The comment this replaces claimed
+    # the tree was "author-controlled either way, the diff is the
+    # author's" — that was wrong, because the diff's half IS reverted
+    # and the parent's half was not.
+    #
+    # Taken from the default branch, not merely deleted: the review
+    # needs the real conventions present, not absent. Deleting is only
+    # for a path the default branch does not have at all.
+    if ! merge_base_allowed "$PR_BASE" "$DEFAULT_BRANCH"; then
+      # `*/.claude/*`, NOT `*/.claude`. A pathspec wildcard only
+      # tail-matches, so `*/.claude` matches nothing at all — measured,
+      # and it is the same trap three versions of the revert below fell
+      # into. `.claude` bare does work (git treats it as a prefix), and
+      # is kept alongside so a root-level one is never missed.
+      # The ref has to resolve before anything is removed. Measured
+      # while writing this: against an unresolvable origin/<default>,
+      # every `cat-file -e` fails, every path takes the `rm` arm, and
+      # the tree ends up with NO conventions at all — the model then
+      # reviews against nothing and says nothing about why. Refusing
+      # is the honest answer; a review without the project's rules is
+      # not a cheaper review, it is a different one.
+      if ! git -C "$REPO_DIR" rev-parse --verify -q "origin/$DEFAULT_BRANCH^{commit}" >/dev/null; then
+        note_skip "cannot resolve origin/$DEFAULT_BRANCH to force the convention files off a stacked base — refusing to review (fail closed)"
+        return 0
+      fi
+      CONV_FORCED=0
+      # The list goes to a file and is read from there, so git's exit status
+      # is seen (lib/tree.sh does the same). A process substitution hides it:
+      # a listing that failed would read as a tree with no convention files.
+      CONV_LIST="$(mktemp "$GATE_SCRATCH/prreview-conv-list-XXXXXX")" && TMPFILES+=("$CONV_LIST") \
+        || { note_skip "could not create a scratch file for the convention file list, skipping (fail closed)"; return 0; }
+      git -C "$REPO_DIR" ls-files -z \
+        'CLAUDE.md' '*/CLAUDE.md' 'AGENTS.md' '*/AGENTS.md' \
+        '.claude/*' '*/.claude/*' \
+        ${TREE_CONV_EXTRA_PATHSPECS[@]+"${TREE_CONV_EXTRA_PATHSPECS[@]}"} > "$CONV_LIST" 2>/dev/null \
+        || { note_skip "could not list the convention files to replace on a stacked base, skipping (fail closed)"; return 0; }
+      # The default branch's files go to a file the same way. A per-file
+      # `git cat-file -e` gives one status for "the tree has no such path" and
+      # for "git could not read the tree", and only the first one may remove a
+      # file. Here a failed read skips the PR before any file is touched.
+      CONV_TREE="$(mktemp "$GATE_SCRATCH/prreview-conv-tree-XXXXXX")" && TMPFILES+=("$CONV_TREE") \
+        || { note_skip "could not create a scratch file for the file list of origin/$DEFAULT_BRANCH, skipping (fail closed)"; return 0; }
+      git -C "$REPO_DIR" ls-tree -r --name-only -z "origin/$DEFAULT_BRANCH" > "$CONV_TREE" 2>/dev/null \
+        || { note_skip "could not list the files of origin/$DEFAULT_BRANCH on a stacked base, skipping (fail closed)"; return 0; }
+      # The listing goes into an array once, so a look-up below is a plain
+      # string comparison. grep -z is GNU only, and macOS has no GNU grep.
+      # `read -d ''` keeps a newline inside a name. git ends every name with a
+      # NUL, so a last name without one means the listing is cut off.
+      # Trade-off: one comparison per file for each convention file. A repo with
+      # 50000 files and 100 convention files takes about 15 s per stacked PR.
+      CONV_TREE_NAMES=(); CONV_TREE_LAST=""
+      { while IFS= read -r -d '' CONV_TREE_LAST; do
+          CONV_TREE_NAMES[${#CONV_TREE_NAMES[@]}]="$CONV_TREE_LAST"
+        done < "$CONV_TREE" && [ -z "$CONV_TREE_LAST" ]; } \
+        || { note_skip "the file list of origin/$DEFAULT_BRANCH ends in the middle of a name on a stacked base, skipping (fail closed)"; return 0; }
+      # Each step must work. A failed step skips the PR: a tree where one
+      # convention file still comes from the parent branch does not hold the
+      # default branch's rules. CONV_FORCED is set after the last file is done.
+      # `if`, not `[ -n ... ] || continue`: a bare continue inside
+      # review_one_pr is banned (tests/parallel-discipline.test.sh) —
+      # the function is a background job and the word would act on
+      # whichever loop happens to enclose it.
+      CONV_DONE=0
+      while IFS= read -r -d '' conv; do
+        if [ -n "$conv" ]; then
+          # CONV_HAVE: 0 = the default tree has the path, 1 = it has not.
+          CONV_HAVE=1
+          for CONV_TREE_NAME in ${CONV_TREE_NAMES[@]+"${CONV_TREE_NAMES[@]}"}; do
+            if [ "$CONV_TREE_NAME" = "$conv" ]; then CONV_HAVE=0; break; fi
+          done
+          if [ "$CONV_HAVE" = 0 ]; then
+            git -C "$REPO_DIR" checkout "origin/$DEFAULT_BRANCH" -- "$conv" 2>/dev/null \
+              || { note_skip "could not check out a convention file from origin/$DEFAULT_BRANCH on a stacked base, skipping (fail closed)"; return 0; }
           else
-            APPLY_ERR="could not check out merge base ${MERGE_BASE:0:8}"
-          fi ;;
-      esac ;;
-    *) APPLY_ERR="could not resolve the merge base for $PR_BASE...${SHA:0:8}" ;;
-  esac
+            # The INDEX too, not just the working tree. `rm -f` alone
+            # leaves the parent's blob staged, the path then shows up
+            # in the `git diff --name-only` list the revert loop below
+            # walks, and that loop's `git checkout -- <path>` writes
+            # the parent's version straight back out. Measured: the
+            # file was deleted, listed, and resurrected in the same
+            # round. It is the easiest arrangement of this attack too,
+            # because a path the default branch does not track at all
+            # (.claude/skills/<name>/SKILL.md, a subdirectory
+            # CLAUDE.md) always takes this arm. Clearing the index
+            # also keeps the path out of that list, so CONV_HIT is not
+            # set and the prompt does not tell the model this diff
+            # wrote a convention file when it did not.
+            git -C "$REPO_DIR" rm -q --cached -- "$conv" 2>/dev/null \
+              || { note_skip "could not remove a convention file from the index on a stacked base, skipping (fail closed)"; return 0; }
+            rm -f "${REPO_DIR:?}/$conv" \
+              || { note_skip "could not delete a convention file from the review tree on a stacked base, skipping (fail closed)"; return 0; }
+          fi
+          CONV_DONE=1
+        fi
+      done < "$CONV_LIST"
+      CONV_FORCED="$CONV_DONE"
+      [ "$CONV_FORCED" = 1 ] && echo "PR #$PR: stacked base — convention files forced back to origin/$DEFAULT_BRANCH so the parent branch cannot supply the review rules either"
+    fi
+    if BIN_PATHS="$(tree_binary_paths "$DIFF")"; then
+      while IFS= read -r bp; do
+        [ -z "$bp" ] || BIN_EXCLUDES+=("--exclude=$bp")
+      done <<<"$BIN_PATHS"
+    fi
+    APPLY_ERR="$(git -C "$REPO_DIR" apply --whitespace=nowarn ${BIN_EXCLUDES[@]+"${BIN_EXCLUDES[@]}"} "$DIFF" 2>&1)" \
+      && DIFF_APPLIED=1
+  else
+    APPLY_ERR="could not check out merge base ${MERGE_BASE:0:8}"
+  fi
   if [ "$DIFF_APPLIED" = 1 ]; then
     # Convention files the PATCH wrote are removed before anything reads
     # them, for EVERY repo, so a PR adding a root CLAUDE.md or
@@ -1445,7 +1505,12 @@ $SPLIT_TEXT"
       N_SLICES="$(cut -f1 <<<"$PLAN" | sort -u | grep -c .)"
       if [ "${N_SLICES:-1}" -gt 1 ]; then
         for s in $(cut -f1 <<<"$PLAN" | sort -un); do
-          SD="$SLICE_DIR/slice-$s.diff"
+          # Its own subdir, because the review call of this slice gets the
+          # dir with --add-dir. $SLICE_DIR holds the parts of every slice.
+          # If mkdir fails, the diff is not written and the check below
+          # falls back to one pass.
+          mkdir "$SLICE_DIR/slice-$s" 2>/dev/null
+          SD="$SLICE_DIR/slice-$s/diff"
           # `while read` over the plan's part paths, not `xargs cat`: a part
           # path is built by this script from mktemp -d, but the FILE paths in
           # the same table come from the diff and are author-chosen text, and
@@ -1500,8 +1565,11 @@ $SPLIT_TEXT"
   #
   # It also unlocks a finding class the gate could not produce at all: the
   # description claims X and the diff does not do X.
-  INTENT_FILE="$(mktemp "$GATE_SCRATCH/prreview-pr-intent-XXXXXX")" \
+  # Alone in its own dir, which every review call of this PR gets with
+  # --add-dir.
+  INTENT_DIR="$(mktemp -d "$GATE_SCRATCH/prreview-pr-intent-XXXXXX")" \
     || { note_skip "could not create a scratch file for the title and description — skipping (fail closed)"; rm -f "$DIFF"; return 0; }
+  INTENT_FILE="$INTENT_DIR/intent.txt"
   TMPFILES+=("$INTENT_FILE")
   jq -r '"PR TITLE: " + (.title // "") + "\n\nPR DESCRIPTION:\n" + (.body // "(empty)")' \
      <<<"$INFO" > "$INTENT_FILE" 2>/dev/null || : > "$INTENT_FILE"
@@ -1587,7 +1655,7 @@ This PR's title and description, and the text of the issue it says it closes (#$
   # the late-finding cap needs.
   MAIN_PRIOR="$(prompt_prior_reviews "$INFO" "$MARKER" "$PRIOR_AUTHORS")"
   ROUND=$(( $(prompt_prior_review_count "$INFO" "$MARKER" "$PRIOR_AUTHORS") + 1 ))
-  # How many passes this round runs: the first hunts (and a big diff always
+  # How many passes this round runs: the first searches (and a big diff always
   # gets two), later rounds verify (lib/chunk.sh chunk_samples_for_round).
   # An oversize PR that earned its exemption is sampled twice over in round
   # 1 (the split was refused, so the one pass has to be worth more).
@@ -1654,7 +1722,7 @@ This PR's title and description, and the text of the issue it says it closes (#$
   else
     MODE_SECTION="MODE: gatekeeper — this PR changes $SIZE lines ($GATE_COACH_MAX_LINES or more): only a HIGH that breaks the product blocks (correctness, security, contract, data, silent-failure, sibling, dependency, constraint, design, or a doc a non-maintainer follows); a HIGH in test, convention, wording, process or a maintainer-only doc is reported, not blocking."
   fi
-  # Round 2+: verify the previous blockers, hunt only on the delta (lib/prompt.sh).
+  # Round 2+: verify the previous blockers, look for new defects only on the delta (lib/prompt.sh).
   # Two flags go in: DELTA_KNOWN says whether the file list is in the DATA
   # block (the section must not deny a list the prompt prints), ROUND_CAP_ON
   # is the late cap's OWN switch — the cap also needs the memory section in
@@ -1813,7 +1881,7 @@ $REVIEW_CHECKS
 
 Do NOT report (discarded as noise): $REVIEW_NOISE_LIST
 
-Scope: a finding must be about something THIS diff introduces, changes, or leaves broken. In scope, and not an exception to hunt for reasons to skip: the added and modified lines; an existing caller, test, doc, or config the change breaks or leaves describing the old behaviour; unchanged code cited because the exploit path or the regression runs through it. Out of scope: a pre-existing problem this PR neither touches nor affects — at most one line in the summary, never a finding.
+Scope: a finding must be about something THIS diff introduces, changes, or leaves broken. In scope, and not an exception to search for reasons to skip: the added and modified lines; an existing caller, test, doc, or config the change breaks or leaves describing the old behaviour; unchanged code cited because the exploit path or the regression runs through it. Out of scope: a pre-existing problem this PR neither touches nor affects — at most one line in the summary, never a finding.
 
 Report every finding you have, at every severity, whatever your confidence — do NOT hold one back to keep the list short or clean. Put your honest number in the confidence field: nothing is filtered by it, and the number is shown to the human who reads the result, so it is how you say \"I am not certain\" without withholding. What the severity does decide: $REVIEW_CRITICAL_RULE; HIGH blocks unless the finding's kind is wording or judgment (the harness caps those to MEDIUM); MEDIUM and LOW never block. Every finding is listed on the PR whatever its severity$REVIEW_TICKET_CLAUSE. A finding you are unsure of costs a line in the review; one you withhold is lost for good. $REVIEW_HALF_SURE
 
@@ -1835,6 +1903,7 @@ $MAIN_PRIOR_SECTION
 
 Your ENTIRE reply must be exactly one JSON object — no markdown fence, no prose before or after (any surrounding text is discarded and wastes the review; reasoning belongs in the summary field):
 $REVIEW_SCHEMA
+$REVIEW_LINE_SPEC
 
 unverified: 1-3 short items naming what a read-only review could not establish — $REVIEW_UNVERIFIED_EXAMPLES. Residual risk must be explicit; never present a dimension as verified when it was only read. Nothing meaningful to declare: empty array.
 
@@ -1850,6 +1919,10 @@ Rules: any finding that remains blocking after the harness caps — every CRITIC
   # again with extra steps.
   ALLOWED=("Read(/$REPO_DIR/**)" "Grep(/$REPO_DIR/**)" "Glob(/$REPO_DIR/**)" "Read(/$SLICE_DIFF)")
   [ -n "$INTENT_FILE" ] && ALLOWED+=("Read(/$INTENT_FILE)")
+  # The dirs for --restricted. Each holds only this slice's diff or only
+  # this PR's intent file. With one slice, the slice diff is $DIFF.
+  READ_DIRS=("${SLICE_DIFF%/*}")
+  [ -n "$INTENT_FILE" ] && READ_DIRS+=("$INTENT_DIR")
   # SAMPLES independent passes over the SAME prompt (see the knob's comment for
   # why, and why they are unioned rather than voted on). Nothing in the prompt
   # tells a pass that it is one of several: a pass told "another copy of you is
@@ -1876,9 +1949,8 @@ Rules: any finding that remains blocking after the harness caps — every CRITIC
     # --output-format json is EITHER an event array or the bare result object,
     # depending on the CLI version (see lib/findings.sh); CLAUDE_RESULT_JQ
     # normalises both and prefixes whether the call completed at all.
-    timeout "$REVIEW_TIMEOUT" "$CLAUDE_BIN" -p --model "$REVIEW_MODEL" --setting-sources "$SETTING_SOURCES" \
-           --allowedTools "${ALLOWED[@]}" \
-           --output-format json <"$PROMPT_F" >"$SLICE_RAW_F" 2>"$REVIEW_ERR" &
+    claude_call "$REVIEW_TIMEOUT" "$REVIEW_MODEL" "$CLAUDE_READ_TOOLS" "${READ_DIRS[@]}" -- "${ALLOWED[@]}" \
+      <"$PROMPT_F" >"$SLICE_RAW_F" 2>"$REVIEW_ERR" &
     SLICE_PIDS+=("$!"); SLICE_RAWF+=("$SLICE_RAW_F"); SLICE_ERRF+=("$REVIEW_ERR")
     SLICE_OF+=("$SI")
   done
@@ -2055,11 +2127,11 @@ $SLICE_CLEAN"
         REPAIR_TRUNCATED=1
         echo "PR #$PR: repair input truncated ($OUT_BYTES -> $FINDINGS_REPAIR_MAX_BYTES bytes) — findings past that point cannot be recovered"
       fi
-      REPAIR_OUT="$(timeout "$REPAIR_TIMEOUT" "$CLAUDE_BIN" \
-             -p "$(findings_repair_prompt "$OUT" "$REVIEW_SCHEMA")" \
-             --model "$CHEAP_MODEL" --setting-sources "$SETTING_SOURCES" \
-             --allowedTools "Read(/nonexistent-repair-scope/**)" \
-             --output-format json </dev/null 2>"$REPAIR_ERR" \
+      # No tool: a repair only reshapes text it was given. The rule that
+      # matches no file stays, so --allowedTools always has a value.
+      # printf is a builtin, so the prompt is in no process's argv.
+      REPAIR_OUT="$(printf '%s' "$(findings_repair_prompt "$OUT" "$REVIEW_SCHEMA" "$REVIEW_LINE_SPEC")" \
+             | claude_call "$REPAIR_TIMEOUT" "$CHEAP_MODEL" "" -- "Read(/nonexistent-repair-scope/**)" 2>"$REPAIR_ERR" \
              | tee "$REPAIR_RAW" | jq -r "$CLAUDE_RESULT_JQ")"
       # Counted like every other model call, so ROUND USAGE covers it too.
       usage_record "$REPAIR_RAW" "repair-pr$PR"
@@ -2372,12 +2444,12 @@ $SLICE_CLEAN"
       # Round 1's own list, so the red team cannot spend its one call re-raising
       # a MEDIUM at HIGH. Fenced and labelled DATA inside the prompt.
       RT_PRIOR="$(jq -r "$FINDINGS_RENDER_PLAIN_JQ" <<<"$CLEANED" 2>/dev/null)" || RT_PRIOR=""
-      timeout "$VERIFY_TIMEOUT" "$CLAUDE_BIN" \
-        -p "$(redteam_prompt "$REPO" "$PR" "$DIFF" "$DIFF_APPLIED" "$RT_PRIOR" \
-              "$REVIEW_LANGUAGE_SPEC" "$SEVERITY_SPEC" "$REPO_DIR" "$TREE_BIN_NOTE")" \
-        --model "$REVIEW_MODEL" --setting-sources "$SETTING_SOURCES" \
-        --allowedTools "Read(/$REPO_DIR/**)" "Grep(/$REPO_DIR/**)" "Glob(/$REPO_DIR/**)" "Read(/$DIFF)" \
-        --output-format json </dev/null >"$RT_OUT" 2>"$RT_ERR"
+      # The tree text is the main review's own, so a stacked PR gets the
+      # sentence that matches where the tree landed (lib/prompt.sh).
+      printf '%s' "$(redteam_prompt "$REPO" "$PR" "$DIFF" "$TREE_CLAUSE$STACKED_CLAUSE" "$RT_PRIOR" \
+              "$REVIEW_LANGUAGE_SPEC" "$SEVERITY_SPEC" "$REPO_DIR" "$REVIEW_LINE_SPEC")" \
+        | claude_call "$VERIFY_TIMEOUT" "$REVIEW_MODEL" "$CLAUDE_READ_TOOLS" "$DIFF_DIR" -- "Read(/$REPO_DIR/**)" "Grep(/$REPO_DIR/**)" "Glob(/$REPO_DIR/**)" "Read(/$DIFF)" \
+        >"$RT_OUT" 2>"$RT_ERR"
       # has("candidates"), not `.candidates | length > 0`: an empty list is the
       # answer this stage expects most, and asking for a non-empty one would
       # file every clean PR under "the red team produced nothing usable", the
@@ -2490,11 +2562,11 @@ $SLICE_CLEAN"
       # that dies silently reads as "the finding stands" — the safe outcome,
       # but indistinguishable from a stage that never ran at all.
       # Same path-scoped tools as the review: repo + this diff, nothing else.
-      timeout "$VERIFY_TIMEOUT" "$CLAUDE_BIN" \
-        -p "$(findings_verify_prompt "$REPO" "$PR" "$DIFF" "$V_SEV" "$V_FILE" "$V_LINE" "$V_ISSUE" "$DIFF_APPLIED" "$TREE_BIN_NOTE")" \
-        --model "$REVIEW_MODEL" --setting-sources "$SETTING_SOURCES" \
-        --allowedTools "Read(/$REPO_DIR/**)" "Grep(/$REPO_DIR/**)" "Glob(/$REPO_DIR/**)" "Read(/$DIFF)" \
-        --output-format json </dev/null >"$V_FILE_OUT" 2>"$V_FILE_ERR" &
+      # $! is the PID of the last command in this pipeline, the model call.
+      # The tree text is the main review's own, as for the red team.
+      printf '%s' "$(findings_verify_prompt "$REPO" "$PR" "$DIFF" "$V_SEV" "$V_FILE" "$V_LINE" "$V_ISSUE" "$TREE_CLAUSE$STACKED_CLAUSE")" \
+        | claude_call "$VERIFY_TIMEOUT" "$REVIEW_MODEL" "$CLAUDE_READ_TOOLS" "$DIFF_DIR" -- "Read(/$REPO_DIR/**)" "Grep(/$REPO_DIR/**)" "Glob(/$REPO_DIR/**)" "Read(/$DIFF)" \
+        >"$V_FILE_OUT" 2>"$V_FILE_ERR" &
       VERIFY_PIDS+=("$!"); VERIFY_FILES+=("$V_FILE_OUT"); VERIFY_ERRS+=("$V_FILE_ERR")
       VERIFY_IDX+=("$V_IDX"); VERIFY_ISSUE+=("$V_ISSUE")
     done
@@ -3045,8 +3117,11 @@ $(findings_threshold_note "$TICKET_MIN_SEV" "${N_BELOW:-0}" "$REPO" "$PR")"
 
 # --limit: gh lists 30 by default, so a repo with more open PRs than that
 # would never reach its oldest ones.
-# What the dispatcher's one pre-check call below reads.
-PRE_FIELDS=headRefOid,isDraft,reviews,comments,title,body,baseRefName
+# What the dispatcher's one pre-check call below reads. baseRefOid is there
+# because a stacked PR's key holds it. DEFAULT_BRANCH, read once for this repo
+# above, says which PR is stacked, so this check and the job compute the same
+# key with no extra call.
+PRE_FIELDS=headRefOid,isDraft,reviews,comments,title,body,baseRefName,baseRefOid
 # A list that fails is not an empty repo: read as "no open PRs", a token
 # without pull-request access left every round clean and nothing reviewed.
 OPEN_PRS="$("$GH" pr list --repo "$REPO" --state open --limit 1000 --json number -q '.[].number')" \
@@ -3058,7 +3133,7 @@ for PR in $OPEN_PRS; do
   # full job, which makes the same checks and fails closed on its own.
   if PRE="$("$GH" pr view "$PR" --repo "$REPO" --json "$PRE_FIELDS" 2>/dev/null)"; then
     [ "$(jq -r '.isDraft' <<<"$PRE" 2>/dev/null)" = true ] && continue
-    if prompt_head_handled "$PRE" "$MARKER" "$PRIOR_AUTHORS"; then
+    if prompt_head_handled "$PRE" "$MARKER" "$PRIOR_AUTHORS" "$DEFAULT_BRANCH"; then
       echo "[$REPO_KEY#$PR] PR #$PR: this head was already handled — nothing to do until it changes (review-only: this gate never merges)"
       continue
     fi
@@ -3124,7 +3199,7 @@ wait
 # CREATED first), so a long-lived PR merged just now can sit past row 10
 # and miss the 48h window; and this scan runs outside the ROUND_BUDGET
 # check, adding 1+N cheap calls after a budget-exhausted round. Both are
-# bounded by --limit 10, which covers a repo that merges a handful a day.
+# bounded by --limit 10, which covers up to 10 merges in the 48-hour window.
 MERGED_RECENT="$("$GH" pr list --repo "$REPO" --state merged --limit 10 \
     --json number,mergedAt 2>/dev/null \
   | jq -r '.[] | select(.mergedAt > (now - 172800 | todate)) | .number' 2>/dev/null)" \

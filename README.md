@@ -4,41 +4,48 @@
 [![License](https://img.shields.io/github/license/nagameTW/pr-reviewer?style=flat-square&logo=opensourceinitiative&logoColor=white&color=3DA639)](./LICENSE)
 [![bash 3.2+](https://img.shields.io/badge/bash-3.2%2B-4EAA25)](#requirements)
 
-**A pull-request reviewer that reads your code and comments on the PR. That is
-all it does.**
+**A pull-request reviewer that reads your code and comments on the PR.**
 
 It runs on your own machine. It watches the repos you list, asks headless
-[Claude Code](https://docs.claude.com/en/docs/claude-code/overview) to review
+[Claude Code](https://code.claude.com/docs/en/overview) to review
 every new head of every open PR, checks what comes back, and posts one comment
 with a verdict and the findings.
 
 - **It only comments.** It never submits a GitHub approval, never requests
   changes as a formal review, and never merges. The person who holds the merge
   button decides what to do with the verdict.
-- **The model can only read.** Claude Code gets `Read`, `Grep` and `Glob` in a
-  disposable clone: no shell, no network, and your code is never run.
-- **A PR cannot change the rules it is judged by.** `CLAUDE.md`, `AGENTS.md`
-  and the repo's other convention files are read as they are on the base
-  branch.
+- **The model can only read.** `--tools` limits Claude Code to `Read`, `Grep`
+  and `Glob` in a per-PR worktree, so it has no shell and no web tools, and
+  your code is never run. MCP servers and slash commands are off. This needs
+  Claude Code 2.1.305 or later.
+- **A PR's edits to convention files are reverted.** `CLAUDE.md`, `AGENTS.md`
+  and the repo's other convention files are read as they are at the PR's
+  merge base. For a PR based on another branch, each one the tree has is
+  replaced with the default branch's version, or removed when the default
+  branch does not have it. The match is exact in file name case, so an edit to
+  a file such as `readme.md` is not reverted.
 - **It tries to prove itself wrong.** Each blocking finding, up to six a
   round, gets a second call that argues against it, and a finding that call
   refutes is dropped.
-- **It fails closed.** An answer it cannot parse or scan is not posted, and a
-  review that only partly ran never approves.
+- **It holds back when a step fails.** An answer it cannot parse or scan is
+  not posted. A repaired answer never approves. A slice that fails forces a
+  Changes requested verdict.
 
 [Security model](#security-model) lists what it trusts and what it does not.
 
-One real run on a test PR, with the waits cut out. Three pushes, three rounds,
-$1.14 in all: round 1 finds an SQL injection and a paging bug, round 2 sees the
-injection fixed and carries the paging finding over word for word, round 3
-approves.
+One real run on a test PR (Run A), with the waits cut out. Three pushes, three
+rounds: round 1 finds an SQL injection and a paging bug, round 2 sees the
+injection fixed and carries the paging finding over, round 3 approves. Round 1
+cost $0.54 and the three rounds cost $1.14 in all. These figures were measured
+on a test PR in September and October 2026, before v0.2.0 changed the default
+models. Current costs can differ.
 
 <p align="center">
   <img src="docs/images/demo.gif" alt="A terminal runs prreview once on a test PR. The log shows three blocking findings, a CRITICAL SQL injection and two HIGH findings, each upheld by a refutation call with its reason, and a comment posted with verdict request_changes for $0.54. The PR comment shows Changes requested, 3 blocking, with the CRITICAL finding opened to its trace and its citation A05:2025 Injection, CWE-89. After a commit that binds the search term as a parameter, round 2 posts Changes requested, 1 blocking: two of the three findings are fixed and the paging finding is marked Carried over. After a commit that makes pages 1-based, round 3 posts Approved." width="100%">
 </p>
 
 <p align="center">
-  <img src="docs/images/overview.svg" alt="The reviewer reads open PRs through gh, has Claude Code review a disposable clone with read-only tools, scans the result against your sensitive-data patterns, and posts one comment per new head. It never approves or merges." width="100%">
+  <img src="docs/images/overview.svg" alt="The reviewer reads open PRs through gh, has Claude Code review a per-PR worktree with read-only tools, scans the result against your sensitive-data patterns, and posts one comment per new head. It never approves or merges." width="100%">
 </p>
 
 It is plain bash on top of `gh`, `git`, `jq` and the `claude` CLI. There is no
@@ -73,10 +80,12 @@ the loop as a background service.
 
 ## What a review looks like
 
-This is the comment one round posted on a test PR. The PR added a query
+This is the comment one round posted on a test PR (Run B). The PR added a query
 function with two planted bugs: SQL built with an f-string, which the repo's
 README forbids, and paging that is off by one page. The round made three model
-calls and cost $0.75.
+calls and cost $0.75. This figure was measured on a test PR in September and
+October 2026, before v0.2.0 changed the default models. Current costs can
+differ.
 
 <p align="center">
   <img src="docs/images/example-comment.png" alt="A review comment: a Changes requested banner counting 2 blocking and 1 not blocking findings, a one-line summary, a CRITICAL SQL injection finding opened to show its trace from input to sink and its citation A05:2025 Injection, CWE-89, and a HIGH paging finding. The rest of the summary, the MEDIUM finding and what the review could not verify are folded." width="820">
@@ -96,8 +105,10 @@ It does:
 
 - Review every new head of every open PR in the repos you list, once. A head it
   has already commented on is skipped until the author pushes again, or edits
-  the PR's title, description or base branch: each of those is a new review,
-  and a new model call. Draft PRs are skipped until they are marked ready.
+  the PR's title, description or base branch. For a PR based on another branch
+  (a stacked PR), a push to that parent branch counts too. Each of these is a
+  new review, and a new model call. Draft PRs are skipped until they are marked
+  ready.
 - Read the repo the way a reviewer would: the whole tree at the PR's merge base
   with the PR's diff applied, plus the conventions the repo writes down for
   itself (`CLAUDE.md` or `AGENTS.md`, then `README` and `CONTRIBUTING`, and
@@ -105,7 +116,8 @@ It does:
 - Split big diffs into slices and review each one with the full checklist.
 - Make one refutation call per blocking finding (up to six a round), which
   tries to prove the finding wrong, and drop the ones it refutes.
-- Carry unfixed findings from one round to the next, word for word.
+- Ask the model to repeat each unfixed finding in the next round, word for
+  word. The harness does not check that it does.
 - Post one alert comment if a PR is merged while the reviewer's last comment
   on it still asks for changes or withholds the review (see
   [Across rounds](#across-rounds)).
@@ -116,10 +128,11 @@ It does not:
   defaults it also opens no issues and leaves auto-merge alone: it only
   comments.
 - Run your tests or read your CI results. It reads code; it does not execute it.
-- Give the model a shell or the network. Claude Code gets `Read`, `Grep` and
-  `Glob`, scoped to the review clone, plus `Read` on the round's own copies of
-  the diff and of the PR's title and description (with the title and body of
-  the issue the PR links, when it links one).
+- Give the model a shell, web tools, MCP servers or slash commands. `--tools`
+  limits Claude Code to `Read`, `Grep` and `Glob`, scoped to the review clone,
+  plus `Read` on the round's own copies of the diff and of the PR's title and
+  description (with the title and body of the issue the PR links, when it
+  links one).
 - Review a PR whose title or description matches your sensitive-data patterns,
   or post a comment that does.
 
@@ -131,7 +144,7 @@ The rest of this README uses these words in one sense each.
 | --- | --- |
 | **Gate** | The name the code and its settings use for the reviewer: `pr-autoreview.sh`, the `PRREVIEW_GATE_*` settings, `gate.log`. It only comments; it does not block or merge anything, which is why its log calls the comment a review-only verdict. |
 | **Head** | The latest commit on a PR's branch. The reviewer reviews heads, not branches. |
-| **Round** | One run of `pr-autoreview.sh`. It goes over every listed repo and reviews each PR whose head has no comment yet. The loop checks for open PRs once a minute and starts a round when it finds any; with none open, it starts one only on every 15th check. The loop's log counts checks, so `[round 12]` there is the 12th check, whether or not a round ran. For a single PR, "round 2" means the second verdict comment on it: a push, or an edited title, description or base branch, leads to the next one. |
+| **Round** | One run of `pr-autoreview.sh`. It goes over every listed repo and reviews each PR whose head has no comment yet. The loop checks for open PRs once a minute and starts a round when it finds any; with none open, it starts one only on every 15th check. The loop's log counts checks, so `[round 12]` there is the 12th check, whether or not a round ran. For a single PR, "round 2" means the second verdict comment on it: a push, an edited title, description or base branch, or (for a stacked PR) a push to its parent branch leads to the next one. |
 | **Slice** | Part of a large diff, reviewed by its own model call (`PRREVIEW_GATE_CHUNK_*`). |
 | **Verdict** | The first line of the comment: ✅ Approved or ❌ Changes requested. It is text in a comment, not a GitHub review state. |
 | **Blocking finding** | A CRITICAL or HIGH finding that counts toward ❌ Changes requested. MEDIUM and LOW are listed without changing the verdict. |
@@ -203,8 +216,11 @@ Two more places add rules for a single repo:
   repo wants on every PR. The model applies each one like a numbered item,
   with the same severities.
 
-Files in the repo are read as they are on the base branch, so a PR cannot
-loosen a check in the same diff it is reviewed against.
+Files in the repo are read as they are at the PR's merge base, so a PR cannot
+loosen a check in the same diff it is reviewed against. For a PR based on
+another branch, the ones the tree has are replaced with the default branch's
+versions, so the parent branch cannot loosen a check either. This holds only
+when the file name matches in exact case.
 
 A `.github/review-checks.md` can be as short as this:
 
@@ -223,7 +239,10 @@ chooses one the same way it does for the built-in items.
 
 - **macOS or Linux.** On Windows it runs inside WSL2; see [Windows](#windows).
 - **bash 3.2 or newer.** The bash macOS ships at `/bin/bash` works.
-- **[gh](https://cli.github.com/)**, logged in. With the defaults it needs to
+- **[gh](https://cli.github.com/) 2.63.0 or later**, logged in. The reviewer
+  reads `baseRefOid` with `gh pr view --json`, and gh 2.63.0 is the first
+  release that lists it. `prreview setup` checks `gh --version`, and the
+  reviewer refuses to start on an older version. With the defaults it needs to
   read the repos and comment on their pull requests; the settings that open
   issues or touch auto-merge need more (see [Security model](#security-model)).
   Comments come from this account unless you set up a GitHub App (see
@@ -232,8 +251,11 @@ chooses one the same way it does for the built-in items.
   `gh`'s own login. With `ssh`, the background service has to use your SSH
   key with no prompt and possibly no ssh-agent (a systemd user service gets
   none), so `prreview setup` offers to switch `gh` to `https`.
-- **[Claude Code](https://docs.claude.com/en/docs/claude-code/overview)**, the
-  `claude` CLI, logged in; `prreview setup` checks with `claude auth status`. The
+- **[Claude Code](https://code.claude.com/docs/en/overview) 2.1.305
+  or later**, the `claude` CLI, logged in. `prreview setup` checks both, with
+  `claude --version` and `claude auth status`, and the reviewer refuses to start
+  on an older version: the tool limits in [Security model](#security-model)
+  need it. `claude update` installs the latest version. The
   default models are `claude-opus-5-5` for reviews and `claude-sonnet-5-5` for a
   cheap output-repair call.
 - `git`, `jq`, `curl`, `openssl`, `flock`, `timeout` and `sha256sum`.
@@ -305,6 +327,14 @@ export XDG_RUNTIME_DIR=/run/user/$(id -u) # in the reviewer's session
 
 ## Quick start
 
+> [!WARNING]
+> The first run reviews every open non-draft PR in each repo you list.
+> Comments post as your own `gh` account unless you set up a
+> [GitHub App](#posting-as-a-github-app). Each push, each edit of a PR's
+> title, description or base branch, and each push to the parent branch of a
+> stacked PR, starts a new round that costs model usage. To try it first, list
+> one repo that you own.
+
 ### 1. Get the code
 
 ```bash
@@ -343,7 +373,8 @@ brackets:
 8. **Sensitive-data patterns.** Writes a starter file from
    `sensitive-patterns.example`. Add what is secret where you work: internal
    hostnames, private address ranges, customer names. The reviewer checks
-   every comment against it before posting.
+   every comment that carries PR text or model output against it before
+   posting.
 9. **Checklist.** Offers to copy `checks/` to
    `~/.config/pr-reviewer/checks`, so you can add and remove items
    without touching the clone.
@@ -377,7 +408,9 @@ next check, within a minute, starts a round for it.
 `prreview logs` shows the service's own log, a few lines per round. Each round's
 full output is in `~/.cache/pr-reviewer/gate-logs/round-*.log`.
 
-A round that reviews one PR prints something like this:
+A round that reviews one PR prints something like this. This is a sample log.
+Its cost was measured on a test PR in September and October 2026, before v0.2.0
+changed the default models. Current costs can differ.
 
 ```text
 [your-name__your-repo#3] PR #3: refutation upheld CRITICAL app/store.py:30 (refuted=false, confidence 0.97)
@@ -437,6 +470,12 @@ cd ~/pr-reviewer
 git pull --ff-only
 ./prreview setup
 ```
+
+After `git pull --ff-only`, run `./prreview setup` again. Claude Code 2.1.305
+or later and gh 2.63.0 or later are required. Setup stops at the Claude Code
+step when `claude --version` is older, and at the GitHub step when
+`gh --version` is older. Run `claude update` or update gh, then run
+`./prreview setup` again.
 
 Press Enter through the questions to keep your answers, except at the
 Checklist step: when setup lists built-in items your copy lacks, answer `y`
@@ -611,14 +650,25 @@ works in place of the loop, and a lock stops two rounds from overlapping.
 1. **Pick.** For each repo, list the open PRs that are not drafts and keep the
    ones whose current head has no comment from this reviewer yet. The comment
    carries a hidden marker with the head SHA and a hash of the title,
-   description and base branch, and only comments by the reviewer's own
-   account count. A PR on hold after a failure waits out its hold (see
-   [When something fails](#when-something-fails)).
+   description and base branch (for a stacked PR, also the base commit), and
+   only comments by the reviewer's own account count. A PR on hold after a
+   failure waits out its hold (see [When something fails](#when-something-fails)).
 2. **Scan.** Check the PR's title and description against your
    sensitive-patterns file. A hit stops the review of that PR.
-3. **Build.** Update a disposable clone of the repo, check out the merge base
-   of the PR, and apply the PR's diff on top. The author's branch is never
-   checked out, so a PR cannot change the conventions it is judged by.
+3. **Build.** Update the local clone of the repo, add a per-PR worktree, check
+   out the merge base of the PR in it, and apply the PR's diff on top. The
+   author's branch is never checked out, and the convention files are restored
+   from the merge base, matched by exact file name case. For a PR based on
+   another branch, each one the tree has is replaced with the default branch's
+   version, or removed when the default branch does not have it. A file that
+   only the default branch has is not added. If a step of the replacement
+   fails, the round skips that PR and tries again next round.
+   The diff is fetched once, for the exact head commit the verdict will name,
+   and the list of changed files is read from that same diff. A push that
+   lands during the round cannot swap in another head. If the merge base
+   cannot be found, if the diff cannot be fetched, or if it holds a different
+   number of files than GitHub reports for the PR, the round skips that PR and
+   tries again next round.
    A symlink to a regular file inside the clone, such as
    `AGENTS.md -> CLAUDE.md`, is fine. Any other symlink stops the review: one
    that points outside the clone, into `.git` or nowhere; one to a folder,
@@ -674,9 +724,11 @@ The refutation calls in step 6 can only remove findings. The red team is the
 one step that looks for a defect the review missed, and it runs only on a
 round that is about to post ✅ Approved.
 
-It is off by default because it adds cost and time to every approval. On a
-small clean PR in the test repo, the review cost $0.34 and the red-team call
-$0.23. Each candidate it raises adds one refutation call, so at most three
+It is off by default because it adds cost and time to every approval. In
+Run C, a small clean PR in the test repo, the review cost $0.34 and the
+red-team call $0.23. These figures were measured on a test PR in September and
+October 2026, before v0.2.0 changed the default models. Current costs can
+differ. Each candidate it raises adds one refutation call, so at most three
 more. The red-team call runs after the review, and the refutation calls run
 together after it, so an approval can take up to twice
 `PRREVIEW_GATE_VERIFY_TIMEOUT` (1200 seconds) longer to appear.
@@ -684,13 +736,14 @@ together after it, so an approval can take up to twice
 ## Across rounds
 
 <p align="center">
-  <img src="docs/images/rounds.svg" alt="Round 2 marks the round-1 CRITICAL as fixed and carries the HIGH over word for word; a new HIGH about an untouched, uncited file is shown as MEDIUM. Round 3 has no blockers. A PR merged while its verdict is changes requested gets one alert comment." width="100%">
+  <img src="docs/images/rounds.svg" alt="Round 2 marks the round-1 CRITICAL as fixed and carries the HIGH over; a new HIGH about an untouched, uncited file is shown as MEDIUM. Round 3 has no blockers. A PR merged while its verdict is changes requested gets one alert comment." width="100%">
 </p>
 
 Every push is a new round, and the previous round's blocking findings go back
-into the prompt. The model has to say which ones are fixed. One that is not
-fixed is repeated word for word with a `Carried over:` prefix, so the author
-sees the same finding, not a rewording of it.
+into the prompt. The prompt asks the model to say which ones are fixed, and to
+repeat each one that is not, word for word, with a `Carried over:` prefix. The
+aim is that the author sees the same finding, not a rewording of it. The
+harness does not check that the model does this.
 
 From round 2 on, a new blocking finding about a file that the changes since
 the last reviewed round did not touch and that no earlier round cited is
@@ -721,7 +774,8 @@ The reviewer does not post a verdict it could not reach. What happens instead:
   log says when the next attempt is due. To retry at once, delete the files
   named `<repo>-<PR number>-*` in
   `~/.cache/pr-reviewer/review-holdoff/`. A new push, or an
-  edited title, description or base branch, starts over with no hold.
+  edited title, description or base branch, or a push to the parent branch of a
+  stacked PR, starts over with no hold.
 - **Posting the comment fails.** The finished comment is kept, and the head
   goes on the same hold as above (5 minutes, doubling on repeats). The next
   attempt after that posts the kept comment without calling the model again.
@@ -729,7 +783,8 @@ The reviewer does not post a verdict it could not reach. What happens instead:
   run. A short notice is posted instead, and the full text goes only to the
   round log, in a directory only you can read.
 - **Something stops a PR or a whole repo from being reviewed at all**: a repo
-  or a PR that cannot be read, a symlink on the base branch, an App token that
+  or a PR that cannot be read, a merge base that cannot be found, a diff that
+  cannot be fetched whole, a symlink on the base branch, an App token that
   cannot be created, a review job that crashes. The round finishes the other
   PRs and then exits with an error. `review-loop.sh` then opens one issue in
   `PRREVIEW_ALERT_REPO` if you set it; it opens no second one while that issue is
@@ -763,7 +818,7 @@ even when you run `prreview once` from a terminal. After moving a tool, run
 | `PRREVIEW_REVIEW_APP_ID` | empty | A GitHub App's ID; when set, comments are posted as the App (see [Posting as a GitHub App](#posting-as-a-github-app)) |
 | `PRREVIEW_REVIEW_APP_KEY` | empty | The App's private key file |
 | `PRREVIEW_REVIEW_APP_SLUG` | read from GitHub every round | The App's URL name; its comments are authored by `<slug>[bot]`. Leave it unset, so renaming the App cannot leave a stale one |
-| `PRREVIEW_SENSITIVE_PATTERNS_FILE` | `~/.config/pr-reviewer/sensitive-patterns` | The regex list every outgoing comment and every PR title and description is checked against |
+| `PRREVIEW_SENSITIVE_PATTERNS_FILE` | `~/.config/pr-reviewer/sensitive-patterns` | The regex list that every comment carrying PR text or model output, and every PR title and description, is checked against |
 | `PRREVIEW_GATE_REPO_CONTEXT` | a sentence pointing at `CLAUDE.md`/`AGENTS.md`, `README`, `CONTRIBUTING` | Replaces the sentence that tells the model where a repo's conventions live |
 | `PRREVIEW_REVIEW_MODEL` | `claude-opus-5-5` | Model for the review, the refutation pass and the red team |
 | `PRREVIEW_GATE_CHEAP_MODEL` | `claude-sonnet-5-5` | Model for repairing unparseable output |
@@ -804,7 +859,7 @@ even when you run `prreview once` from a terminal. After moving a tool, run
 | `PRREVIEW_GATE_TICKETS` | `0` | `1` opens follow-up issues for some findings that do not block (see [Follow-up issues](#follow-up-issues)); the token then needs to open issues |
 | `PRREVIEW_GATE_ISSUE_MIN_SEVERITY` | `high` | Which of those findings get an issue: `critical`, `high`, `medium` or `low` |
 | `PRREVIEW_GATE_DISARM_AUTO_MERGE` | `0` | `1` turns off an auto-merge that was armed on a head the reviewer has not reviewed yet; the token then needs write access |
-| `PRREVIEW_ALERT_REPO` | empty | `owner/repo` where the loop opens an issue when a round fails, or when `pr-autoreview.sh` itself no longer parses (the token then needs to open issues there); empty only logs it |
+| `PRREVIEW_ALERT_REPO` | empty | `owner/repo` where the loop opens an issue when a round fails, or when `pr-autoreview.sh` itself no longer parses (the token then needs to open issues there); empty only logs it. Use a private repository. Each alert issue records a time when the host was up. |
 | `PRREVIEW_ALERT_REPEAT_HOURS` | `6` | Hours between "Still failing" comments on an alert issue that is still open |
 | `PRREVIEW_LOOP_INTERVAL` | `60` | Seconds between the loop's checks for open PRs; a check that finds any starts a round |
 | `PRREVIEW_LOOP_IDLE_EVERY` | `15` | With no open PRs, start a round only on every this-many-th check |
@@ -861,9 +916,10 @@ Who controls each input, and how the reviewer treats it:
 | --- | --- | --- |
 | PR title and description, the title and body of the issue the PR links | The PR author, or whoever wrote the issue | Data. A match with your sensitive patterns stops the review |
 | The diff and every file the PR adds or changes | The PR author | Data, read with read-only tools and never run. Symlinks are checked first |
-| Convention files: `CLAUDE.md`, `AGENTS.md`, `.claude/`, README, CONTRIBUTING, `.github/review-checks.md` | The base branch | Rules the review follows. A PR's edits to them are reverted before the review |
+| Convention files: `CLAUDE.md`, `AGENTS.md`, `.claude/`, README, CONTRIBUTING, `.github/review-checks.md` | The PR's merge base. For a PR based on another branch, the default branch | Rules the review follows. A PR's edits to them are reverted before the review, when the file name matches in exact case |
 | The checklist, the settings, the sensitive-data patterns | You | Rules. They live outside the reviewed repo |
 | The model's answer | The model, after reading all of the above | Untrusted. Shape-checked, blocking findings argued against, scanned before it is posted |
+| Who can make it spend model budget | Anyone who can open a non-draft PR on a watched repo | The reviewer does not filter by author. Each push, each edit of the PR's title, description or base branch, and each push to the parent branch of a stacked PR, starts a new round that costs model usage |
 
 - **The PR is data.** The model reads the diff, the PR's title and
   description, and the repo's files with its read-only tools, and the prompt
@@ -873,35 +929,65 @@ Who controls each input, and how the reviewer treats it:
   cannot close its block early. This is an instruction to the model, not a
   sandbox: the tool limits in the next point are what hold if the model is
   fooled anyway.
-- **Read-only tools, in the clone only.** Claude Code runs with `Read`, `Grep`
-  and `Glob` limited to the review clone, plus `Read` on the round's scratch
-  copies of the diff and of the PR's title and description, which include the
-  title and body of the issue the PR links.
-  `--setting-sources` is empty, so a rule in your own
-  `~/.claude/settings.json` cannot widen that.
-- **The base branch sets the rules.** The tree is the merge base plus the diff,
+- **Read-only tools, in the clone only.** `--tools` limits Claude Code to
+  `Read`, `Grep` and `Glob`, so no other built-in tool, a shell and web tools
+  included, exists in the session. The three are limited to the review clone,
+  plus `Read` on the round's scratch copies of the diff and of the PR's title
+  and description, which include the title and body of the issue the PR
+  links. The repair call, which only reshapes an answer, gets no tool.
+  With `--restricted`, Claude Code itself confines the file tools to the
+  review clone and the call's private directories. Each of those holds only
+  the call's diff or slice, or the PR's title and description.
+  `--strict-mcp-config` and `--disallowedTools "mcp__*"` keep MCP servers out,
+  and `--disable-slash-commands` keeps the reviewed repo's skills and commands
+  out. The reviewer passes an empty `--setting-sources`, so Claude Code loads
+  no user, project or local settings file. The check of the tool set on Claude
+  Code 2.1.305 did not test this flag. These limits need Claude Code 2.1.305
+  or later, and the reviewer refuses to start on an older one.
+- **Prompts go on stdin.** No prompt is on a command line, so other users of
+  the machine cannot read it in the process list.
+- **Token variables are cleared, as defense in depth.** The `claude` process
+  starts with `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN` and
+  `GITHUB_ENTERPRISE_TOKEN` empty. The model has no shell to read them with,
+  so this is an extra layer only.
+- **The merge base sets the rules.** The tree is the merge base plus the diff,
   and convention files, `.github/review-checks.md` included, are read as they
-  are on the base branch. A PR cannot edit `CLAUDE.md` to tell the reviewer
-  what to accept.
+  are at the PR's merge base. For a PR based on another branch, each one the
+  tree has is replaced with the default branch's version, or removed when the
+  default branch does not have it. A file that only the default branch has is
+  not added. The match is exact in file name case, so a PR's edit to a
+  differently cased file such as `readme.md` is not restored.
 - **Scratch files stay out of `/tmp`.** The diff, the slices and every raw
   model answer live under `PRREVIEW_GATE_WORKROOT`, not in a shared temp directory
   another process could rewrite between steps.
-- **Nothing sensitive goes out unscanned.** Every comment is checked against
-  your patterns before it is posted. A hit, or a scan that cannot run, means
-  it is not posted.
-- **It cannot merge.** It never calls an approve or merge API, leaves
-  auto-merge alone by default, and posts with whatever `gh` token you give it,
-  or as the GitHub App you set up. With the defaults, give it a token that can
-  read the repos and comment on pull requests, and nothing more; an App needs
-  only the permissions its setup link asks for. `PRREVIEW_GATE_TICKETS=1` and `PRREVIEW_ALERT_REPO`
-  also need permission to open issues, and `PRREVIEW_GATE_DISARM_AUTO_MERGE=1`
-  needs write access to the repo.
+- **Comments with PR text or model output are scanned.** Every comment that
+  carries PR text or model output is checked against your patterns before it
+  is posted. A hit, or a scan that cannot run, means it is not posted. Two
+  fixed notices carry neither and are not scanned: the notice that a title or
+  description matched your patterns, and the title-format reminder.
+- **It cannot merge.** It never approves or merges. Its only merge call is
+  `gh pr merge --disable-auto`, which is off by default. It posts with whatever
+  `gh` token you give it, or as the GitHub App you set up. With the defaults,
+  give it the smallest token scope that can read the repos and comment on pull
+  requests. GitHub's pull-request write permission also allows approvals, which
+  the reviewer's code never uses. An App needs only the permissions its setup
+  link asks for. `PRREVIEW_GATE_TICKETS=1` and `PRREVIEW_ALERT_REPO` also need
+  permission to open issues, and `PRREVIEW_GATE_DISARM_AUTO_MERGE=1` needs
+  write access to the repo.
 
 To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
 ## Cost
 
-Two rounds on the test PR above, as printed by the reviewer:
+Every cost figure in this README is as the reviewer printed it on a test PR. All
+were measured in September and October 2026, before v0.2.0 changed the default
+models. Current costs can differ. Run A is the demo run at the top of this page:
+round 1 cost $0.54, and the three rounds cost $1.14 in all. Run B is the test PR
+in [What a review looks like](#what-a-review-looks-like). Run C is the small
+clean PR in
+[Optional: a red team before an approval](#optional-a-red-team-before-an-approval).
+
+Two rounds of Run B:
 
 | Round | Calls | Cost |
 | --- | --- | --- |
@@ -923,9 +1009,12 @@ What one round can call for one PR, at the defaults:
 - **Red team,** when you turn it on: one call on a round about to approve,
   plus up to 3 refutations.
 
-The largest first round at the defaults is 16 review calls and 6
-refutations, plus at most one repair. Every push starts a new round, and so does an edit to the PR's
-title, description or base branch.
+The largest first round at the defaults can make up to 16 review calls, 6
+refutation calls and 1 repair call. No run measured what that round costs.
+Every push starts a new round, and so does an edit to the PR's title,
+description or base branch. For a stacked PR, so does a push to its parent
+branch. The reviewer does not filter PRs by author, so anyone who can open a
+non-draft PR on a watched repo can start these rounds.
 
 ## Development
 

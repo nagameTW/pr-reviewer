@@ -226,7 +226,7 @@ tree_revert_convention_files() {
 }
 
 # The binary files patch $1 changes, one path per line, for `git apply
-# --exclude`. `gh pr diff` renders a binary file as a "Binary files ... differ"
+# --exclude`. The GitHub diff API renders a binary file as a "Binary files ... differ"
 # stub with no content, and one stub makes `git apply` refuse the whole patch,
 # so a PR that adds an image would lose every text change from the tree too.
 # Excluding the stubs keeps the text changes and still keeps every binary file

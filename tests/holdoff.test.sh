@@ -124,7 +124,13 @@ for _ in 1 2 3; do holdoff_set "$TMP/hold/r-4-k" quota "$NOW"; done
 : > "$TMP/hold/r-1-k.verdict"
 is "stuck: three failures in a row, of the review or the post, count; quota and two do not" \
    "$(holdoff_stuck "$TMP/mark" 3 | sort | tr '\n' ' ')" "r-1-k r-3-k "
-touch "$TMP/mark2"; sleep 1; holdoff_set "$TMP/hold/r-3-k" postfail "$NOW"
+# The file dates are set by hand, not read from the clock. If the clock of the
+# box steps back by a few seconds between two writes, a hold written first
+# looks newer than a mark made after it. The holds are older than mark2, and
+# the one write below is newer than it.
+touch -t 200001020000 "$TMP/hold"/*
+touch -t 200001030000 "$TMP/mark2"
+holdoff_set "$TMP/hold/r-3-k" postfail "$NOW"
 is "stuck: only holds written since the mark" "$(holdoff_stuck "$TMP/mark2" 3)" "r-3-k"
 is "stuck: a missing mark reports nothing" "$(holdoff_stuck "$TMP/nope" 3)" ""
 
@@ -382,7 +388,7 @@ holdoff_prune 2
 # Asked BEFORE the model. A cache consulted after the review has already run
 # saves nothing at all, which is the whole point of this change.
 LOAD_LN="$(grep -n 'holdoff_verdict_load' pr-autoreview.sh | head -1 | cut -d: -f1)"
-CALL_LN="$(grep -n 'timeout "$REVIEW_TIMEOUT" "$CLAUDE_BIN" -p --model "$REVIEW_MODEL"' pr-autoreview.sh | head -1 | cut -d: -f1)"
+CALL_LN="$(grep -n 'claude_call "$REVIEW_TIMEOUT" "$REVIEW_MODEL"' pr-autoreview.sh | head -1 | cut -d: -f1)"
 [ -n "$LOAD_LN" ] && [ -n "$CALL_LN" ] && [ "$LOAD_LN" -lt "$CALL_LN" ] \
   && ok "the parked verdict is looked for before the model is called" \
   || fail "the parked verdict is not looked for before the model is called (load=$LOAD_LN review call=$CALL_LN)"

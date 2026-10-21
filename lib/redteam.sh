@@ -207,11 +207,13 @@ redteam_spec_total_count() {
 
 # The prompt.
 #
-# $1 repo, $2 pr, $3 diff path, $4 whether the diff is applied to the tree,
+# $1 repo, $2 pr, $3 diff path, $4 the text that says what the tree is: the
+# same text the main review gets (TREE_CLAUSE and STACKED_CLAUSE), so the two
+# prompts never describe one tree in two ways,
 # $5 what the first round already reported (rendered lines, may be empty),
 # $6 REVIEW_LANGUAGE_SPEC, $7 SEVERITY_SPEC, $8 tree dir (passed straight through
 # to redteam_spec_index below — the DOCUMENTS IN THIS REPO block in the prompt),
-# $9 an optional sentence appended to the tree description (the binary-file note).
+# $9 an optional note printed after the schema (REVIEW_LINE_SPEC, passed in like the specs).
 #
 # The two specs are PASSED IN rather than sourced, for the reason
 # lib/findings.sh gives for the same choice: this lib has to stay loadable on
@@ -232,25 +234,10 @@ redteam_spec_total_count() {
 # The documents this repo pins its own rules in go in as a list the model is
 # handed rather than a search it is asked to perform.
 redteam_prompt() {
-  local repo="${1-}" pr="${2-}" diff="${3-}" applied="${4-}" prior="${5-}" \
-        lang="${6-}" sev="${7-}" tree="${8-}" note="${9-}" sep tree_para prior_block \
+  local repo="${1-}" pr="${2-}" diff="${3-}" tree_para="${4-}" prior="${5-}" \
+        lang="${6-}" sev="${7-}" tree="${8-}" line_spec="${9-}" sep prior_block \
         spec_list spec_block spec_total spec_shown
   sep="$(findings_fence_nonce)"
-  if [ "$applied" = 1 ]; then
-    tree_para="The working tree around you is the code AS THIS PR HAS IT: the commit the author
-branched from with this diff applied on top, so line numbers line up and a file the PR adds
-reads in full. The default branch may have moved on since, so this is not the post-merge
-state. One exception: for a PR based on another branch, that parent branch's own changes are
-still absent from this tree, so code that looks MISSING may live there — do not report it as
-a defect on that basis alone."
-  else
-    tree_para="The working tree around you is the repo WITHOUT this change, so every file is in
-its BEFORE state. Read the diff for what changed, and the tree for everything around it:
-callers, existing guards, tests, neighbouring code, the repo's own documents.
-One exception: for a PR based on another branch, this tree is not even that branch's own
-base — the parent branch's changes are absent too, so code that looks missing may live there
-rather than being genuinely gone."
-  fi
   # The index is DATA like everything else here: these are file NAMES chosen by
   # whoever wrote the repo, so they go inside the fence and never into an
   # instruction sentence. An empty index is a legitimate state (a repo with no
@@ -293,7 +280,7 @@ already reviewed this diff in full and concluded that NOTHING in it is a blockin
 Your job is to attack that conclusion. Not to re-run the review: to go looking, specifically,
 for the kinds of defect a careful first-pass review of a diff reliably walks past.
 
-The full diff is in $diff — Read it FIRST. $tree_para$note
+The full diff is in $diff — Read it FIRST. $tree_para
 
 $sev
 
@@ -360,7 +347,8 @@ it is switched off.
 $lang
 
 Your ENTIRE reply must be exactly one JSON object, no markdown fence, no prose around it:
-$REDTEAM_SCHEMA
+$REDTEAM_SCHEMA${line_spec:+
+$line_spec}
 
 Return {"candidates":[]} when you have nothing. Severity is CRITICAL or HIGH only: a MEDIUM
 cannot change this verdict, so there is no point returning one. file and line point at

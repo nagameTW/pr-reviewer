@@ -52,6 +52,16 @@ $SEVERITY_CALIBRATION"
 # shellcheck disable=SC2034  # read by the scripts that source this lib
 REVIEW_SCHEMA='{"verdict":"approve"|"request_changes","summary":"<2-4 sentences>","unverified":["<1-3 things this review could NOT check>"],"findings":[{"file":"...","line":0,"issue":"...","area":"correctness|security|contract|data|silent-failure|sibling|test|doc|dependency|constraint|design|convention|wording|process","audience":"<only when area is doc: operator|user|member|maintainer — who reads that text; omit for every other area>","kind":"defect|wording|style|judgment|half_fix","confidence":0.0-1.0,"severity":"CRITICAL|HIGH|MEDIUM|LOW","late_reason":"<round 2+, only for a finding on a file that no prior round cited and the current delta does not touch: one sentence on why it was not visible earlier; omit otherwise>"}]}'
 
+# What `line` means, said once. Every prompt whose schema has a `line` field
+# prints this after the schema: the review, the structural repair and the red
+# team. Without it a model that Read the diff file cites that file's line
+# numbers, and the comment points at the wrong code. The number comes from the
+# hunk header, not from Read: the file on disk is the pre-change one when the
+# diff did not apply, and for a convention file the harness restored.
+# 0 is the value for "no line" (lib/findings.sh).
+# shellcheck disable=SC2034  # read by the scripts that source this lib
+REVIEW_LINE_SPEC='line: the line number on the new (after-change) side of the cited file. For a file in the diff, take it from the hunk header "@@ -a,b +c,d @@". The first line of that hunk is line c. Each context line and each added line adds one. A removed line adds nothing. Never use a line number of the diff file itself. Use the number that Read shows only when the file on disk holds the version after this change. For a deleted line, use the nearest line that still exists on the new side. Use 0 when the new side has no reliable line, for example for a deleted file.'
+
 # The kind definitions, shared by every prompt that hands out REVIEW_SCHEMA:
 # the schema requires the field, so a prompt that ships the schema without
 # the definitions leaves its model guessing what wording/judgment mean. What

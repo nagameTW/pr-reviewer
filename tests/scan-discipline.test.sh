@@ -334,26 +334,25 @@ VERIFY_CALL="$(grep -F 'findings_verify_prompt "$REPO"' pr-autoreview.sh)"
 if [ -z "$VERIFY_CALL" ]; then
   WORDING_MISSING="$WORDING_MISSING
   the second-round verify call is gone from pr-autoreview.sh"
-elif ! grep -qF -- '"$DIFF_APPLIED"' <<<"$VERIFY_CALL"; then
+elif ! grep -qF -- '"$TREE_CLAUSE$STACKED_CLAUSE"' <<<"$VERIFY_CALL"; then
   WORDING_MISSING="$WORDING_MISSING
-  the verify call no longer passes \$DIFF_APPLIED, so the verifier is told the tree is pre-change even when the diff was applied"
+  the verify call no longer passes the review's tree text (\$TREE_CLAUSE\$STACKED_CLAUSE), so the verifier can be told a tree that is not there"
 fi
 
 TITLE_REMINDER='ℹ️ Title format reminder'
 want 'the title reminder still lists the valid types'  "$TITLE_REMINDER" \
      '${TITLE_TYPES}'
 
-# A doubled em dash is banned from posted text. Scoped to lines that are NOT
-# comments: the ban is about text a human reads on GitHub, and a `# ——` in an
-# explanation is not that. Without the exclusion this fails on the first
-# person who writes a dash in a comment, and a check people learn to work
-# around is worse than none.
-EMDASH_HITS="$(grep -ln '——' "${FILES[@]}" 2>/dev/null | while IFS= read -r f; do
-  grep -vE '^[[:space:]]*#' "$f" | grep -q -- '——' && printf '%s\n' "$f"
+# Posted text has no doubled em dash. The check skips comment lines: a person
+# reads a comment in the source, not on GitHub, and a check that fails on a
+# comment gets worked around. DD is the doubled U+2014 as UTF-8 bytes.
+DD=$'\xe2\x80\x94\xe2\x80\x94'
+EMDASH_HITS="$(grep -lF -- "$DD" "${FILES[@]}" 2>/dev/null | while IFS= read -r f; do
+  grep -vE '^[[:space:]]*#' "$f" | grep -qF -- "$DD" && printf '%s\n' "$f"
 done)"
 if [ -n "$EMDASH_HITS" ]; then
   WORDING_MISSING="$WORDING_MISSING
-  a doubled em dash (——) is banned in posted text: $(tr '\n' ' ' <<<"$EMDASH_HITS")"
+  posted text has a doubled em dash in: $(tr '\n' ' ' <<<"$EMDASH_HITS")"
 fi
 
 if [ -n "$WORDING_MISSING" ]; then
@@ -368,7 +367,7 @@ fi
 # apply failed; STACKED_CLAUSE said "the tree IS the parent with this PR's diff
 # applied" unconditionally, so on a stacked PR whose apply failed the prompt
 # carried two contradictory descriptions and neither was true. The apply is
-# something the author can fail on purpose — `gh pr diff` gives a contentless
+# something the author can fail on purpose — the diff API gives a contentless
 # stub for a binary file.
 # The wordings live in lib/prompt.sh's prompt_stacked_clause; what
 # pr-autoreview.sh has to do is pass it the state. Both halves are pinned.
@@ -402,7 +401,7 @@ if [ -z "$CONV_WIN" ]; then
   echo "FAIL: pr-autoreview.sh no longer forces the convention files off a stacked base — a parent branch can supply the review rules"
   exit 1
 fi
-conv_force="$(sed -n "$(( CONV_WIN > 40 ? CONV_WIN - 40 : 1 )),${CONV_WIN}p" pr-autoreview.sh)"
+conv_force="$(sed -n "$(( CONV_WIN > 90 ? CONV_WIN - 90 : 1 )),${CONV_WIN}p" pr-autoreview.sh)"
 grep -qF -- 'checkout "origin/$DEFAULT_BRANCH" --' <<<"$conv_force" || {
   echo "FAIL: the stacked-base convention guard no longer takes the files from origin/\$DEFAULT_BRANCH"; exit 1; }
 grep -qF -- "'*/.claude/*'" <<<"$conv_force" || {

@@ -26,9 +26,9 @@ for h in ok bad pin before is has; do command -v "$h" >/dev/null 2>&1 || { echo 
 # exactly that render. A gate that skipped the startup check would find a
 # broken file only mid-round; one that rendered without PR_FILES would send
 # every language pack to every PR.
-pin    'the job reads its review key from the shared helper' 'KEY="$(prompt_review_key "$INFO")"' pr-autoreview.sh
+pin    'the job reads its review key from the shared helper' 'KEY="$(prompt_review_key "$INFO" "$DEFAULT_BRANCH")" \' pr-autoreview.sh
 pin    'startup refuses a jq that cannot render the comment' '*) echo "this jq ($(jq --version 2>&1)) cannot run the comment renderer — refusing to run"; exit 1 ;;' pr-autoreview.sh
-pin    'the dispatcher skips a handled head without a worktree' 'prompt_head_handled "$PRE" "$MARKER" "$PRIOR_AUTHORS"; then' pr-autoreview.sh
+pin    'the dispatcher skips a handled head without a worktree, keyed like the job' 'prompt_head_handled "$PRE" "$MARKER" "$PRIOR_AUTHORS" "$DEFAULT_BRANCH"; then' pr-autoreview.sh
 DISPATCH="$(awk '/^for PR in /,/^done$/' pr-autoreview.sh)"
 if [ "$(grep -n 'prompt_head_handled' <<<"$DISPATCH" | cut -d: -f1)" -lt "$(grep -n 'worktree add' <<<"$DISPATCH" | cut -d: -f1)" ] \
    && grep -qF 'if PRE="$("$GH" pr view "$PR" --repo "$REPO" --json "$PRE_FIELDS" 2>/dev/null)"; then' <<<"$DISPATCH"; then
@@ -38,8 +38,9 @@ else
 fi
 pin    'binary files are excluded by path so the text changes still apply' 'apply --whitespace=nowarn ${BIN_EXCLUDES[@]+"${BIN_EXCLUDES[@]}"} "$DIFF"' pr-autoreview.sh
 pin    'the model is told which binary files are missing from the tree' 'TREE_CLAUSE="$(prompt_tree_clause "$DIFF_APPLIED" "$TREE_AT")$TREE_CONV_NOTE$TREE_BIN_NOTE"' pr-autoreview.sh
-pin    '...and so are the red team' '"$REVIEW_LANGUAGE_SPEC" "$SEVERITY_SPEC" "$REPO_DIR" "$TREE_BIN_NOTE")"' pr-autoreview.sh
-pin    '...the verifier' '"$V_ISSUE" "$DIFF_APPLIED" "$TREE_BIN_NOTE")"' pr-autoreview.sh
+pin    '...and so are the red team, in the tree text it shares with the review' 'redteam_prompt "$REPO" "$PR" "$DIFF" "$TREE_CLAUSE$STACKED_CLAUSE" "$RT_PRIOR"' pr-autoreview.sh
+pin    '...which also gets the line definition' '"$REVIEW_LANGUAGE_SPEC" "$SEVERITY_SPEC" "$REPO_DIR" "$REVIEW_LINE_SPEC")"' pr-autoreview.sh
+pin    '...and so are the verifier, in the same tree text' '"$V_ISSUE" "$TREE_CLAUSE$STACKED_CLAUSE")"' pr-autoreview.sh
 pin    'job log lines carry the repo key, so two repos with one name stay apart' 'sed -u "s|^|[$REPO_KEY#$PR] |"' pr-autoreview.sh
 pin    'a broken checks directory stops the gate at startup' 'review_checks_render "$CHECKS_DIR" >/dev/null \' pr-autoreview.sh
 pin    'each PR gets the checks that apply to its changed paths' 'REVIEW_CHECKS="$(review_checks_render "$CHECKS_DIR" "$PR_FILES")" \' pr-autoreview.sh
@@ -94,7 +95,7 @@ pin    'the repo list asks gh for more than its default 30 PRs' 'pr list --repo 
 GUARD_AT="$(grep -n 'if ! findings_cleaned_ok "$CLEANED"; then' pr-autoreview.sh | head -1 | cut -d: -f1)"
 TALLY_AT="$(grep -n '^  N_BLOCKING=' pr-autoreview.sh | head -1 | cut -d: -f1)"
 is  'a failed findings jq step fails closed ahead of the tally'         "$([ -n "$GUARD_AT" ] && [ -n "$TALLY_AT" ] && [ "$GUARD_AT" -lt "$TALLY_AT" ] && echo yes)" yes
-is  'the review call reads its prompt from a file, not an argument'    "$(grep -c -- '-p --model "$REVIEW_MODEL".*' pr-autoreview.sh) $(grep -c -- '--output-format json <"$PROMPT_F" >"$SLICE_RAW_F"' pr-autoreview.sh)" '1 1'
+is  'the review call reads its prompt from a file, not an argument'    "$(grep -c -- 'claude_call "$REVIEW_TIMEOUT" "$REVIEW_MODEL"' pr-autoreview.sh) $(grep -c -- '<"$PROMPT_F" >"$SLICE_RAW_F"' pr-autoreview.sh)" '1 1'
 is  'no loop counts down through seq (BSD seq 0 -1 prints two numbers)' "$(grep -hE 'seq 0 \$\(\(' pr-autoreview.sh lib/*.sh | grep -vcE '^[[:space:]]*#')" 0
 near() { # $1 file, $2 definition line pattern, $3 window: the lines right after the definition
   local l; l="$(grep -nE "$2" "$1" | head -1 | cut -d: -f1)"; [ -n "$l" ] && sed -n "${l},$((l + $3))p" "$1"; }
@@ -108,5 +109,57 @@ is  'the post-merge alert last verdict body KEEPS the split request' "$(near lib
 LIB_LN="$(grep -nF '. "$SCRIPT_DIR/lib/split.sh"' pr-autoreview.sh | head -1 | cut -d: -f1)"
 EARLY="$( [ -n "$LIB_LN" ] && sed -n "1,${LIB_LN}p" pr-autoreview.sh | grep -v '^[[:space:]]*#' | grep -c 'SPLIT_EXEMPT_RE_DEFAULT')"
 if [ -n "$LIB_LN" ] && [ "${EARLY:-1}" = 0 ]; then ok 'no code above the lib/split.sh source line reads SPLIT_EXEMPT_RE_DEFAULT'; else bad 'no code above the lib/split.sh source line reads SPLIT_EXEMPT_RE_DEFAULT' "lib sourced at ${LIB_LN:-none}, early reads: ${EARLY:-?}"; fi
+
+# One way to start the model: claude_call (lib/claude-call.sh). A call
+# written outside it gets none of its tool limits, and every other test
+# stays green. Print mode (-p, --print) is how a script runs the model, so
+# no other line may use it, under any name: a literal claude, $CLAUDE_BIN or
+# another variable. The --version, --help, auth status and -x checks do not
+# use print mode. mkdir -p and cp -p are the other commands here that take
+# -p. A single-quoted span is text, such as the hint in a setup message.
+print_mode_lines() { # stdin: shell source. stdout: the lines that use print mode.
+  grep -vE '^[[:space:]]*#' \
+    | sed -E "s/'[^']*'//g; s/(mkdir|cp)[[:space:]]+-p//g" \
+    | grep -E '(^|[[:space:]])(-p|--print)([[:space:]]|=|$)'
+}
+OTHERS=()
+for f in pr-autoreview.sh review-loop.sh owner-alert.sh prreview lib/*.sh; do [ "$f" = lib/claude-call.sh ] || OTHERS+=("$f"); done
+is  'no model call outside lib/claude-call.sh' "$(cat "${OTHERS[@]}" | print_mode_lines | head -3)" ''
+CALL_BODY="$(awk '/^claude_call\(\) \{/{f=1} f{print} f&&/^\}/{exit}' lib/claude-call.sh 2>/dev/null)"
+is  'claude_call is in lib/claude-call.sh and starts the binary in print mode' \
+    "$(print_mode_lines <<<"$CALL_BODY" | grep -c '"$CLAUDE_BIN" -p')" 1
+is  '...and nothing else in that file uses print mode' \
+    "$( (grep -vFx "$CALL_BODY" lib/claude-call.sh 2>/dev/null || cat lib/claude-call.sh 2>/dev/null) | print_mode_lines | head -3)" ''
+is  'no --allowedTools outside lib/claude-call.sh' "$(grep -hE '^[^#]*--allowedTools' "${OTHERS[@]}" | wc -l | tr -d ' ')" 0
+before 'the Claude Code version is checked before the lock' 'claude_version_check || exit 1' 'LOCKFILE=' pr-autoreview.sh
+before 'the gh version is checked before the lock' 'gh_version_check "$GH" || exit 1' 'LOCKFILE=' pr-autoreview.sh
+
+# The diff, the file list and the marker SHA describe ONE commit. A moving
+# `gh pr diff` call (head at the time of the call) would let a force-push
+# between the reads attach a verdict to a head nobody reviewed, and re-reading
+# headRefOid after the fact does not close an A-B-A swap. So: one compare-API
+# fetch pinned to the SHA from the same `gh pr view` read, the file list taken
+# from that file, the count checked against that read's changedFiles.
+is     'no moving gh pr diff call is left in the gate or its libs' "$(grep -n 'pr diff' pr-autoreview.sh lib/*.sh | tr '\n' ' ')" ''
+pin    'the PR info read carries changedFiles and the base commit, from one read with the head' 'headRefOid,isDraft,reviews,comments,title,body,additions,deletions,changedFiles,autoMergeRequest,baseRefName,baseRefOid)"' pr-autoreview.sh
+pin    'the diff is fetched for the SHA the key was made from, with the file count of the same read' 'pr_diff_pinned "$REPO" "$MERGE_BASE" "$SHA" "$DIFF" "$(jq -r '"'"'.changedFiles // ""'"'"' <<<"$INFO")"' pr-autoreview.sh
+before 'the merge base is resolved from the two commit IDs, before the diff is fetched' 'MERGE_BASE="$(merge_base_sha "$REPO" "$PR_BASE_OID" "$SHA")"' 'pr_diff_pinned "$REPO"' pr-autoreview.sh
+before 'the diff is fetched before it is applied to the tree' 'pr_diff_pinned "$REPO"' 'APPLY_ERR="$(git -C "$REPO_DIR" apply' pr-autoreview.sh
+before 'the file list exists before anything reads it' 'pr_diff_pinned "$REPO"' 'REVIEW_CHECKS="$(review_checks_render' pr-autoreview.sh
+is     'the merge base is looked up once' "$(grep -c 'MERGE_BASE="$(merge_base_sha' pr-autoreview.sh)" 1
+
+# `line` in a finding has one meaning, written once (REVIEW_LINE_SPEC in
+# lib/review-spec.sh) and handed to every prompt whose schema has `line`.
+# A prompt that leaves it out lets the model cite a line of the diff file it
+# Read, and the comment then points at the wrong code.
+LINE_SPEC="$(grep -E '^REVIEW_LINE_SPEC=' lib/review-spec.sh)"
+has    'the line definition names the side the number counts on' 'the line number on the new (after-change) side of the cited file' "$LINE_SPEC"
+has    '...says to count it from the hunk header' 'take it from the hunk header "@@ -a,b +c,d @@"' "$LINE_SPEC"
+has    '...rules out a line of the diff file' 'Never use a line number of the diff file itself' "$LINE_SPEC"
+has    '...allows a number from Read only on the after-change file' 'Use the number that Read shows only when the file on disk holds the version after this change' "$LINE_SPEC"
+has    '...says what a deleted line gets' 'use the nearest line that still exists on the new side' "$LINE_SPEC"
+has    '...and when the value is 0' 'Use 0 when the new side has no reliable line, for example for a deleted file' "$LINE_SPEC"
+is     'the review prompt gives the line definition right after the schema' "$(awk '/^\$REVIEW_SCHEMA$/{getline; print; exit}' pr-autoreview.sh)" '$REVIEW_LINE_SPEC'
+pin    'the structural repair gets the same definition' 'findings_repair_prompt "$OUT" "$REVIEW_SCHEMA" "$REVIEW_LINE_SPEC")"' pr-autoreview.sh
 
 if [ "$FAILED" -eq 0 ]; then echo "PASS: gate wiring"; else echo "FAIL: gate wiring"; exit 1; fi

@@ -108,7 +108,7 @@ if [ -n "$OPEN" ]; then
     echo "alert: open issue #$OPEN for $FAILED_UNIT already exists and was updated under ${REPEAT_HOURS}h ago — not commenting"
     exit 0
   fi
-  NOTE="$(printf 'Still failing at %s: `%s`%s' "$(date '+%F %H:%M %Z')" "$FAILED_UNIT" "${DETAIL:+ — $DETAIL}")"
+  NOTE="$(printf 'Still failing at %s: `%s`%s' "$(date -u '+%F %H:%M UTC')" "$FAILED_UNIT" "${DETAIL:+ — $DETAIL}")"
   if scan_hit_or_unknown "$PATS_FILE" "$NOTE"; then
     echo "alert: repeat note matched sensitive patterns (or the scan could not run) — withholding, not posting"
     exit 1
@@ -123,7 +123,7 @@ fi
 DIAG_LOGS='the round logs are under `~/.cache/pr-reviewer/gate-logs/` (`round-*.log`; `ls -t` for the newest, the names do not sort by time).'
 DIAG="Diagnose: $DIAG_LOGS"
 BODY="$(printf '`%s` failed on the reviewer host at %s.%s\n\n%s\n\nOne issue per failure episode. Close this after fixing to re-arm the alert. It fires only when a run on a machine that is up actually fails; a machine that is switched off files nothing.' \
-  "$FAILED_UNIT" "$(date '+%F %H:%M %Z')" "${DETAIL:+ $DETAIL}" "$DIAG")"
+  "$FAILED_UNIT" "$(date -u '+%F %H:%M UTC')" "${DETAIL:+ $DETAIL}" "$DIAG")"
 
 # Materialized, never piped into `grep -q`: an early-quitting grep SIGPIPEs
 # the producer, and under `pipefail` the pipeline then reports non-zero EVEN

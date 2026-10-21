@@ -253,14 +253,14 @@ grep -qF "tree_revert_convention_files needs a directory" <<<"$ERR" \
 # before because nothing forces an edit here when a test is
 # added or removed elsewhere in the file.
 # ── tree_binary_paths ───────────────────────────────────────────────────────
-# A PR diff as `gh pr diff` renders it: a text hunk plus binary stubs with no
+# A PR diff as the GitHub diff API renders it: a text hunk plus binary stubs with no
 # content. The text change must still reach the tree, the binaries must not.
 BR="$TMP/bin"; mkdir -p "$BR"; git -C "$BR" init -q
 printf 'a\n' > "$BR/t.txt"; printf '\000\001' > "$BR/old.bin"
 git -C "$BR" add -A; git -C "$BR" -c user.email=t@t -c user.name=t commit -qm base
 printf 'a\nb\n' > "$BR/t.txt"; printf '\000\002' > "$BR/old.bin"; mkdir -p "$BR/img"; printf '\000\003' > "$BR/img/new.png"
 git -C "$BR" add -A; git -C "$BR" diff --cached > "$TMP/pr.diff"; git -C "$BR" reset -q --hard
-grep -q '^Binary files' "$TMP/pr.diff" || fail "the fixture must render binaries as stubs, the way gh pr diff does"
+grep -q '^Binary files' "$TMP/pr.diff" || fail "the fixture must render binaries as stubs, the way the diff API does"
 git -C "$BR" apply "$TMP/pr.diff" 2>/dev/null && fail "the fixture must reproduce the failure: a stub makes the whole apply refuse"
 BINS="$(tree_binary_paths "$TMP/pr.diff")" || fail "tree_binary_paths refused a patch with plain binary paths"
 [ "$BINS" = "$(printf 'img/new.png\nold.bin')" ] || [ "$BINS" = "$(printf 'old.bin\nimg/new.png')" ] \

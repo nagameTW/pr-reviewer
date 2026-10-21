@@ -486,6 +486,8 @@ REPAIR="$(findings_repair_prompt 'here is my review {"verdict":"approve"' "$SCHE
 # The schema must be the review's own, verbatim: repairing a reply into a
 # shape the harness does not parse is the same round lost, twice as expensive.
 has 'the schema is quoted verbatim' "$SCHEMA" "$REPAIR"
+has 'a field note ($3) is printed with the schema' 'LINE-NOTE' "$(findings_repair_prompt 'x' "$SCHEMA" 'LINE-NOTE')"
+is  'no field note, no extra text' "$(findings_repair_prompt 'x' "$SCHEMA" | grep -c 'LINE-NOTE')" 0
 has 'the unparseable reply is carried into the prompt' \
     'here is my review {"verdict":"approve"' "$REPAIR"
 # The reply quotes a diff the review was told to distrust. Pasting it in
@@ -867,52 +869,28 @@ is 'prose instead of JSON keeps it' "$(ref 'I think this is fine, actually')" 'k
 is 'an empty answer keeps it (timeout, crash, killed)' "$(ref '')" 'keep'
 is 'a JSON array keeps it' "$(ref '[{"refuted":true,"confidence":1,"reason":"x"}]')" 'keep'
 
-has 'verify: the binary-file note follows the tree description' 'Judge the claim, not the line number. BIN-NOTE' "$(findings_verify_prompt 'o/r' 7 /tmp/d.diff HIGH 'a.py' 42 'x' 1 ' BIN-NOTE')"
+# $8 is the text that says what the tree is: the same text the main review
+# gets (TREE_CLAUSE and STACKED_CLAUSE). The verifier used to choose its own
+# text from DIFF_APPLIED alone, which was wrong for a stacked PR in both apply
+# states. tests/redteam.test.sh runs the real call site in each tree state.
+VP_TREE="$(findings_verify_prompt 'o/r' 7 /tmp/d.diff HIGH 'a.py' 42 'x' 'TREE-TEXT. BIN-NOTE.')"
+has 'verify: the tree text ($8) follows the diff path, as it is' 'Read it FIRST. TREE-TEXT. BIN-NOTE.' "$VP_TREE"
+is 'verify: no tree text of its own for the not-applied case' \
+   "$(grep -c 'DEFAULT branch, i.e. the code WITHOUT this change' <<<"$VP_TREE")" '0'
+is 'verify: no tree text of its own for the applied case' \
+   "$(grep -c 'AS THIS PR HAS IT' <<<"$VP_TREE")" '0'
+# The rule that does not depend on the tree stays in the verifier's own text.
+has 'verify: a finding on a file the diff does not touch can still be right' \
+    'If the finding cites a file the diff does not touch at all, it may still be right' "$VP_TREE"
+has 'verify: it judges the claim, not the line number' 'Judge the claim, not the line number.' "$VP_TREE"
 
 VP="$(findings_verify_prompt 'o/r' 7 /tmp/d.diff HIGH 'a.py' 42 'this line does not validate its input')"
 has 'the verify prompt carries the finding text' 'this line does not validate its input' "$VP"
 has 'the verify prompt names the diff to read' '/tmp/d.diff' "$VP"
 has 'the verify prompt is adversarial, not confirmatory' 'try to REFUTE' "$VP"
 has 'the verify prompt states the asymmetry' "$FINDINGS_MERGE_STAKES" "$VP"
-# Without this sentence a verifier refutes a finding because the cited line
-# "said something else": the tree is the BASE, so a line about ADDED code
-# never matches. That refutes real blockers, which is
-# the one direction this whole stage exists to avoid.
-has 'the verify prompt says what the tree actually is' \
-    'DEFAULT branch, i.e. the code WITHOUT this change' "$VP"
 has 'the verify prompt forbids refuting on a line-number mismatch alone' \
     'Never refute on a line-number mismatch alone' "$VP"
-
-# $8 = "the caller applied the diff to the tree". The two halves must make
-# OPPOSITE claims about what the tree is, because a verifier told the wrong
-# one deletes real blockers: told pre-change when the tree is post-change it
-# distrusts what it reads, told post-change when the patch did not apply it
-# treats the base branch showing through as proof.
-VP_APPLIED="$(findings_verify_prompt 'o/r' 7 /tmp/d.diff HIGH 'a.py' 42 'x' 1)"
-# The load-bearing sentence, quoted exactly. An earlier version of this
-# assertion matched 'post-merge state', which appears in the prompt only
-# inside the sentence saying the tree is NOT the post-merge state — so it
-# would have stayed green with the real claim rewritten or deleted, while
-# tests/scan-discipline.test.sh points here as the thing that pins it.
-has 'applied: the verify prompt says the tree carries this PR' \
-    'code AS THIS PR HAS IT' "$VP_APPLIED"
-has 'applied: it still admits the tree is not the post-merge state' \
-    'may have moved since the author branched' "$VP_APPLIED"
-has 'applied: line numbers are usable evidence' \
-    'DOES line up' "$VP_APPLIED"
-has 'applied: the stacked-PR exception survives' \
-    'changes are still absent from this tree' "$VP_APPLIED"
-is 'applied: it does not still claim the tree is the default branch' \
-   "$(grep -c 'DEFAULT branch, i.e. the code WITHOUT this change' <<<"$VP_APPLIED")" '0'
-has 'applied: the asymmetry is unchanged' "$FINDINGS_MERGE_STAKES" "$VP_APPLIED"
-# A caller that has not been taught the argument must get the conservative
-# half, never a wrong claim.
-is 'an unset applied flag reads as not-applied' \
-   "$(findings_verify_prompt 'o/r' 7 /tmp/d.diff HIGH 'a.py' 42 'x' '' \
-      | grep -c 'DEFAULT branch, i.e. the code WITHOUT this change')" '1'
-is 'a non-1 applied flag reads as not-applied' \
-   "$(findings_verify_prompt 'o/r' 7 /tmp/d.diff HIGH 'a.py' 42 'x' 0 \
-      | grep -c 'DEFAULT branch, i.e. the code WITHOUT this change')" '1'
 has 'the finding text is fenced as DATA' 'FINDING BEGINS' "$VP"
 # The reason's language clause is hand-copied here rather than sourced from
 # REVIEW_LANGUAGE_SPEC (this lib has to load without lib/review-spec.sh), so

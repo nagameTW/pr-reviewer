@@ -204,7 +204,7 @@ CHUNK_MERGE_JQ='
 # How many independent review passes a round gets.
 # $1 round, $2 changed lines, $3 first-round samples, $4 later-round samples,
 # $5 the size from which a first round always gets at least two passes.
-# Round 1 hunts, so it is the round worth sampling; later rounds verify and
+# Round 1 searches, so it is the round worth sampling; later rounds verify and
 # stay at $4. A first round on a diff of $5 lines or more gets at least two
 # passes whatever $3 says: on a diff that big a first round with no HIGH is
 # rare.
