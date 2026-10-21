@@ -226,8 +226,10 @@ prompt_review_key() {
   merge_base_allowed "$(jq -r '.baseRefName // ""' <<<"${1-}" 2>/dev/null)" "${2-}" || extra="$oid"
   # A digest stage that dies must not leave `<head>-`: grep -F finds that in
   # every marker posted for the head. No 12 hex digits, no key.
+  # SHA256_BIN is one command or "shasum -a 256". It stays unquoted to split.
+  # shellcheck disable=SC2086
   digest="$(set -o pipefail; jq -r --arg extra "$extra" '(.title // "") + "\n" + (.body // "") + "\n" + (.baseRefName // "")
-      + (if $extra == "" then "" else "\n" + $extra end)' <<<"${1-}" 2>/dev/null | sha256sum | cut -c1-12)" || return 1
+      + (if $extra == "" then "" else "\n" + $extra end)' <<<"${1-}" 2>/dev/null | ${SHA256_BIN:-sha256sum} | cut -c1-12)" || return 1
   [ "${#digest}" = 12 ] || return 1
   case "$digest" in *[!0123456789abcdef]*) return 1 ;; esac
   printf '%s-%s\n' "$sha" "$digest"

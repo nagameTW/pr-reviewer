@@ -16,6 +16,7 @@ PRREVIEW_HOME="$(cd "$(dirname "$_src")" && pwd -P)"
 . "$PRREVIEW_HOME/lib/review-spec.sh" || { echo "lib/review-spec.sh missing" >&2; exit 1; }
 . "$PRREVIEW_HOME/lib/app.sh" || { echo "lib/app.sh missing" >&2; exit 1; }
 . "$PRREVIEW_HOME/lib/claude-call.sh" || { echo "lib/claude-call.sh missing" >&2; exit 1; }
+. "$PRREVIEW_HOME/lib/tools.sh" || { echo "lib/tools.sh missing" >&2; exit 1; }
 
 CONFIG="$(prreview_config_file)"
 STATE_DIR="$(prreview_state_dir)"
@@ -24,7 +25,9 @@ PLATFORM="${PRREVIEW_PLATFORM:-$(prreview_platform)}"
 DEFAULT_PARALLEL="$(prreview_key_default "$PRREVIEW_HOME" PRREVIEW_GATE_PARALLEL)"
 # Only if the script's own default could not be read, and then said.
 [ -n "$DEFAULT_PARALLEL" ] || { DEFAULT_PARALLEL=2; echo "prreview: could not read PRREVIEW_GATE_PARALLEL's default from pr-autoreview.sh; assuming 2" >&2; }
-TOOLS="git jq gh claude flock timeout sha256sum curl openssl"
+# timeout and sha256sum are not here: each has more than one accepted name,
+# so setup_tools asks lib/tools.sh for them.
+TOOLS="git jq gh claude flock curl openssl"
 
 die() { echo "prreview: $*" >&2; exit 1; }
 say() { printf '%s\n' "$*"; }
@@ -211,8 +214,6 @@ install_hint() {
   case "$PLATFORM" in
     macos)
       say "  brew install git jq gh coreutils flock"
-      say "If prreview setup still finds no timeout or sha256sum after that, your Homebrew installed them only as gtimeout and gsha256sum. Put the plain names first on PATH in this terminal and run prreview setup again (it records that PATH for the service):"
-      say "  export PATH=\"\$(brew --prefix)/opt/coreutils/libexec/gnubin:\$PATH\""
       say "Claude Code: https://code.claude.com/docs/en/setup" ;;
     *) say "  sudo apt install git jq curl openssl util-linux coreutils   (Debian/Ubuntu)"
        say "gh: https://github.com/cli/cli/blob/trunk/docs/install_linux.md   Claude Code: https://code.claude.com/docs/en/setup" ;;
@@ -223,6 +224,9 @@ install_hint() {
 setup_tools() {
   local t missing=""
   for t in $TOOLS; do command -v "$t" >/dev/null 2>&1 || missing="$missing $t"; done
+  tools_resolve
+  [ -n "$TIMEOUT_BIN" ] || missing="$missing timeout"
+  [ -n "$SHA256_BIN" ] || missing="$missing sha256sum"
   if [ -n "$missing" ]; then
     say "Missing:$missing"
     install_hint
@@ -240,7 +244,7 @@ setup_claude() {
   claude_version_check || return 1
   # stdin closed and a deadline: a claude that does not know the subcommand
   # must not wait for, or eat, the answers setup reads from stdin.
-  st="$(timeout 20 "${CLAUDE_BIN:-claude}" auth status </dev/null 2>/dev/null)"
+  st="$("${TIMEOUT_BIN:-timeout}" 20 "${CLAUDE_BIN:-claude}" auth status </dev/null 2>/dev/null)"
   case "$(jq -r '.loggedIn | select(type == "boolean")' <<<"$st" 2>/dev/null)" in
     true) ;;
     false) say "Claude Code is not logged in. Run 'claude auth login' in another terminal (over SSH it prints a link to open elsewhere), then try again."

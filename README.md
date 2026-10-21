@@ -258,9 +258,11 @@ chooses one the same way it does for the built-in items.
   need it. `claude update` installs the latest version. The
   default models are `claude-opus-5-5` for reviews and `claude-sonnet-5-5` for a
   cheap output-repair call.
-- `git`, `jq`, `curl`, `openssl`, `flock`, `timeout` and `sha256sum`.
-  `prreview setup` checks for every one of them and prints the install command for
-  your system.
+- `git`, `jq`, `curl`, `openssl` and `flock`.
+- One timeout command (`timeout` or `gtimeout`) and one SHA-256 command
+  (`sha256sum`, `gsha256sum` or `shasum`). The scripts use the first of each
+  that they find on `PATH`. `prreview setup` checks every tool in this list and
+  prints the install command for your system.
 - **On Linux, systemd 240 or newer** for the background service. The service
   writes its log with `StandardOutput=append:`, which systemd added in 240;
   some older distributions ship an older systemd.
@@ -271,19 +273,8 @@ On macOS with Homebrew:
 brew install git jq gh coreutils flock
 ```
 
-Homebrew's coreutils adds a `g` in front of only the commands macOS already
-has (`brew info coreutils` says so), so `timeout` and `sha256sum` are usually
-found under their plain names.
-If `prreview setup` still reports either one missing, put the plain names first on
-`PATH` in the terminal you run `prreview setup` from:
-
-```bash
-export PATH="$(brew --prefix)/opt/coreutils/libexec/gnubin:$PATH"
-```
-
-Setup records that `PATH` for the background service and for `prreview once`, so
-it does not need to go in `~/.zshrc`, where it would also swap in the GNU
-versions of `ls`, `sed` and the like for everything else you run.
+Homebrew's coreutils installs `gtimeout` and `gsha256sum`. The scripts find
+both, so you do not change `PATH`.
 
 On Debian or Ubuntu:
 
