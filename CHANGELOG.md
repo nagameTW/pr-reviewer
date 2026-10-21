@@ -6,6 +6,8 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-21
+
 ### Security
 
 - A failed or partial `cat` while the reviewer built a slice could drop the
@@ -217,6 +219,7 @@ All notable changes to this project are recorded here. The format follows
   maintainers. A doc finding on any other file keeps the reader the model
   gave it.
 
-[Unreleased]: https://github.com/nagameTW/pr-reviewer/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/nagameTW/pr-reviewer/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/nagameTW/pr-reviewer/releases/tag/v0.2.2
 [0.2.1]: https://github.com/nagameTW/pr-reviewer/releases/tag/v0.2.1
 [0.2.0]: https://github.com/nagameTW/pr-reviewer/releases/tag/v0.2.0
