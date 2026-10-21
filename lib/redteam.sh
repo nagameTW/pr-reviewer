@@ -211,7 +211,8 @@ redteam_spec_total_count() {
 # $5 what the first round already reported (rendered lines, may be empty),
 # $6 REVIEW_LANGUAGE_SPEC, $7 SEVERITY_SPEC, $8 tree dir (passed straight through
 # to redteam_spec_index below — the DOCUMENTS IN THIS REPO block in the prompt),
-# $9 an optional sentence appended to the tree description (the binary-file note).
+# $9 an optional sentence appended to the tree description (the binary-file note),
+# $10 an optional note printed after the schema (REVIEW_LINE_SPEC, passed in like the specs).
 #
 # The two specs are PASSED IN rather than sourced, for the reason
 # lib/findings.sh gives for the same choice: this lib has to stay loadable on
@@ -233,7 +234,7 @@ redteam_spec_total_count() {
 # handed rather than a search it is asked to perform.
 redteam_prompt() {
   local repo="${1-}" pr="${2-}" diff="${3-}" applied="${4-}" prior="${5-}" \
-        lang="${6-}" sev="${7-}" tree="${8-}" note="${9-}" sep tree_para prior_block \
+        lang="${6-}" sev="${7-}" tree="${8-}" note="${9-}" line_spec="${10-}" sep tree_para prior_block \
         spec_list spec_block spec_total spec_shown
   sep="$(findings_fence_nonce)"
   if [ "$applied" = 1 ]; then
@@ -360,7 +361,8 @@ it is switched off.
 $lang
 
 Your ENTIRE reply must be exactly one JSON object, no markdown fence, no prose around it:
-$REDTEAM_SCHEMA
+$REDTEAM_SCHEMA${line_spec:+
+$line_spec}
 
 Return {"candidates":[]} when you have nothing. Severity is CRITICAL or HIGH only: a MEDIUM
 cannot change this verdict, so there is no point returning one. file and line point at

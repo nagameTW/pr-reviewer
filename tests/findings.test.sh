@@ -486,6 +486,8 @@ REPAIR="$(findings_repair_prompt 'here is my review {"verdict":"approve"' "$SCHE
 # The schema must be the review's own, verbatim: repairing a reply into a
 # shape the harness does not parse is the same round lost, twice as expensive.
 has 'the schema is quoted verbatim' "$SCHEMA" "$REPAIR"
+has 'a field note ($3) is printed with the schema' 'LINE-NOTE' "$(findings_repair_prompt 'x' "$SCHEMA" 'LINE-NOTE')"
+is  'no field note, no extra text' "$(findings_repair_prompt 'x' "$SCHEMA" | grep -c 'LINE-NOTE')" 0
 has 'the unparseable reply is carried into the prompt' \
     'here is my review {"verdict":"approve"' "$REPAIR"
 # The reply quotes a diff the review was told to distrust. Pasting it in

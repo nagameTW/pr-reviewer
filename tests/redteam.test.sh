@@ -266,6 +266,11 @@ grep -qF '(nothing at all)' <<<"$PE" \
   || fail "an empty round-1 list should say so explicitly inside the fence"
 grep -qF 'a defect on that basis alone. BIN-NOTE' <<<"$(redteam_prompt "o/r" 42 "/tmp/d.diff" 1 "" "$REVIEW_LANGUAGE_SPEC" "$SEVERITY_SPEC" "" " BIN-NOTE")" \
   || fail "the binary-file note (\$9) should follow the tree description"
+[ -n "${REVIEW_LINE_SPEC-}" ] || fail "REVIEW_LINE_SPEC is empty: lib/review-spec.sh must define it"
+grep -qF -- "$REVIEW_LINE_SPEC" <<<"$(redteam_prompt "o/r" 42 "/tmp/d.diff" 1 "" "$REVIEW_LANGUAGE_SPEC" "$SEVERITY_SPEC" "" "" "$REVIEW_LINE_SPEC")" \
+  || fail "the line definition (\$10) should be in the red-team prompt"
+! grep -qF -- "$REVIEW_LINE_SPEC" <<<"$P2" \
+  || fail "a caller that passes no line definition should get none"
 # $4=0 means the diff is NOT applied to the tree, and the verifier prompt has
 # to say so: told the tree is post-change when it is pre-change, a model
 # treats the default branch showing through as evidence.

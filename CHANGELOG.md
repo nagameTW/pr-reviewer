@@ -6,6 +6,16 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Findings now cite the line in the changed file, not a line of the diff. The
+  review, red-team and output-repair prompts never said which line number the
+  `line` field means. In an end-to-end check, a model that had Read the diff
+  file cited that file's line numbers, for example `db.py:35` where the code
+  was at line 43. The prompts now say it: the number Read shows for the cited
+  file after the change, and for a deleted line the nearest line that still
+  exists.
+
 ### Security
 
 - The reviewer now sets the model's tools explicitly. Every review,

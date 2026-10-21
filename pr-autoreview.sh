@@ -1849,6 +1849,7 @@ $MAIN_PRIOR_SECTION
 
 Your ENTIRE reply must be exactly one JSON object — no markdown fence, no prose before or after (any surrounding text is discarded and wastes the review; reasoning belongs in the summary field):
 $REVIEW_SCHEMA
+$REVIEW_LINE_SPEC
 
 unverified: 1-3 short items naming what a read-only review could not establish — $REVIEW_UNVERIFIED_EXAMPLES. Residual risk must be explicit; never present a dimension as verified when it was only read. Nothing meaningful to declare: empty array.
 
@@ -2075,7 +2076,7 @@ $SLICE_CLEAN"
       # No tool: a repair only reshapes text it was given. The rule that
       # matches no file stays, so --allowedTools always has a value.
       # printf is a builtin, so the prompt is in no process's argv.
-      REPAIR_OUT="$(printf '%s' "$(findings_repair_prompt "$OUT" "$REVIEW_SCHEMA")" \
+      REPAIR_OUT="$(printf '%s' "$(findings_repair_prompt "$OUT" "$REVIEW_SCHEMA" "$REVIEW_LINE_SPEC")" \
              | claude_call "$REPAIR_TIMEOUT" "$CHEAP_MODEL" "" -- "Read(/nonexistent-repair-scope/**)" 2>"$REPAIR_ERR" \
              | tee "$REPAIR_RAW" | jq -r "$CLAUDE_RESULT_JQ")"
       # Counted like every other model call, so ROUND USAGE covers it too.
@@ -2390,7 +2391,7 @@ $SLICE_CLEAN"
       # a MEDIUM at HIGH. Fenced and labelled DATA inside the prompt.
       RT_PRIOR="$(jq -r "$FINDINGS_RENDER_PLAIN_JQ" <<<"$CLEANED" 2>/dev/null)" || RT_PRIOR=""
       printf '%s' "$(redteam_prompt "$REPO" "$PR" "$DIFF" "$DIFF_APPLIED" "$RT_PRIOR" \
-              "$REVIEW_LANGUAGE_SPEC" "$SEVERITY_SPEC" "$REPO_DIR" "$TREE_BIN_NOTE")" \
+              "$REVIEW_LANGUAGE_SPEC" "$SEVERITY_SPEC" "$REPO_DIR" "$TREE_BIN_NOTE" "$REVIEW_LINE_SPEC")" \
         | claude_call "$VERIFY_TIMEOUT" "$REVIEW_MODEL" "$CLAUDE_READ_TOOLS" "$DIFF_DIR" -- "Read(/$REPO_DIR/**)" "Grep(/$REPO_DIR/**)" "Glob(/$REPO_DIR/**)" "Read(/$DIFF)" \
         >"$RT_OUT" 2>"$RT_ERR"
       # has("candidates"), not `.candidates | length > 0`: an empty list is the

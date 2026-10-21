@@ -38,7 +38,7 @@ else
 fi
 pin    'binary files are excluded by path so the text changes still apply' 'apply --whitespace=nowarn ${BIN_EXCLUDES[@]+"${BIN_EXCLUDES[@]}"} "$DIFF"' pr-autoreview.sh
 pin    'the model is told which binary files are missing from the tree' 'TREE_CLAUSE="$(prompt_tree_clause "$DIFF_APPLIED" "$TREE_AT")$TREE_CONV_NOTE$TREE_BIN_NOTE"' pr-autoreview.sh
-pin    '...and so are the red team' '"$REVIEW_LANGUAGE_SPEC" "$SEVERITY_SPEC" "$REPO_DIR" "$TREE_BIN_NOTE")"' pr-autoreview.sh
+pin    '...and so are the red team' '"$REVIEW_LANGUAGE_SPEC" "$SEVERITY_SPEC" "$REPO_DIR" "$TREE_BIN_NOTE" "$REVIEW_LINE_SPEC")"' pr-autoreview.sh
 pin    '...the verifier' '"$V_ISSUE" "$DIFF_APPLIED" "$TREE_BIN_NOTE")"' pr-autoreview.sh
 pin    'job log lines carry the repo key, so two repos with one name stay apart' 'sed -u "s|^|[$REPO_KEY#$PR] |"' pr-autoreview.sh
 pin    'a broken checks directory stops the gate at startup' 'review_checks_render "$CHECKS_DIR" >/dev/null \' pr-autoreview.sh
@@ -145,5 +145,17 @@ before 'the merge base is resolved before the diff is fetched' 'MERGE_BASE="$(me
 before 'the diff is fetched before it is applied to the tree' 'pr_diff_pinned "$REPO"' 'APPLY_ERR="$(git -C "$REPO_DIR" apply' pr-autoreview.sh
 before 'the file list exists before anything reads it' 'pr_diff_pinned "$REPO"' 'REVIEW_CHECKS="$(review_checks_render' pr-autoreview.sh
 is     'the merge base is looked up once' "$(grep -c 'MERGE_BASE="$(merge_base_sha' pr-autoreview.sh)" 1
+
+# `line` in a finding has one meaning, written once (REVIEW_LINE_SPEC in
+# lib/review-spec.sh) and handed to every prompt whose schema has `line`.
+# A prompt that leaves it out lets the model cite a line of the diff file it
+# Read, and the comment then points at the wrong code.
+LINE_SPEC="$(grep -E '^REVIEW_LINE_SPEC=' lib/review-spec.sh)"
+has    'the line definition names the file the number counts in' 'the line number in the cited file' "$LINE_SPEC"
+has    '...says to use the number Read shows for that file' 'Use the number that Read shows for that file' "$LINE_SPEC"
+has    '...rules out a line of the diff file' 'Never use a line number of a diff file' "$LINE_SPEC"
+has    '...and says what a deleted line gets' 'use the nearest line that still exists' "$LINE_SPEC"
+is     'the review prompt gives the line definition right after the schema' "$(awk '/^\$REVIEW_SCHEMA$/{getline; print; exit}' pr-autoreview.sh)" '$REVIEW_LINE_SPEC'
+pin    'the structural repair gets the same definition' 'findings_repair_prompt "$OUT" "$REVIEW_SCHEMA" "$REVIEW_LINE_SPEC")"' pr-autoreview.sh
 
 if [ "$FAILED" -eq 0 ]; then echo "PASS: gate wiring"; else echo "FAIL: gate wiring"; exit 1; fi

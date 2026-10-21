@@ -319,8 +319,10 @@ findings_repair_actionable() {
   local verdict="${1-}" total="${2:-0}"
   [ "$verdict" != "approve" ] && [ "${total:-0}" -gt 0 ]
 }
+# $1 the unparseable reply, $2 the schema, $3 an optional note printed after the
+# schema (REVIEW_LINE_SPEC, passed in because this lib loads without review-spec.sh).
 findings_repair_prompt() {
-  local raw="${1-}" schema="${2-}" head sep keep_text empty_summary
+  local raw="${1-}" schema="${2-}" field_note="${3-}" head sep keep_text empty_summary
   head="$(head -c "$FINDINGS_REPAIR_MAX_BYTES" <<<"$raw")"
   # Two fixed sentences: findings are copied, never reworded, and the
   # placeholder summary is what a reader would see if the caller ever acted
@@ -334,7 +336,8 @@ findings_repair_prompt() {
   sep="$(findings_fence_nonce)"
   cat <<EOF
 Your previous reply to a code-review task had to be exactly one JSON object and could not be parsed. Return that SAME review as one valid JSON object matching this schema — no markdown fence, no prose before or after it:
-$schema
+$schema${field_note:+
+$field_note}
 
 Fix ONLY the structure: unterminated strings, missing commas or braces, unescaped quotes, surrounding narration, a fenced block, several objects where there must be one. Do NOT re-review anything, and do NOT add, drop, reword, merge, or re-rate a single finding — the substance must come out identical. $keep_text
 

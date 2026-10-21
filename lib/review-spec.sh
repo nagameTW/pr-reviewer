@@ -52,6 +52,14 @@ $SEVERITY_CALIBRATION"
 # shellcheck disable=SC2034  # read by the scripts that source this lib
 REVIEW_SCHEMA='{"verdict":"approve"|"request_changes","summary":"<2-4 sentences>","unverified":["<1-3 things this review could NOT check>"],"findings":[{"file":"...","line":0,"issue":"...","area":"correctness|security|contract|data|silent-failure|sibling|test|doc|dependency|constraint|design|convention|wording|process","audience":"<only when area is doc: operator|user|member|maintainer — who reads that text; omit for every other area>","kind":"defect|wording|style|judgment|half_fix","confidence":0.0-1.0,"severity":"CRITICAL|HIGH|MEDIUM|LOW","late_reason":"<round 2+, only for a finding on a file that no prior round cited and the current delta does not touch: one sentence on why it was not visible earlier; omit otherwise>"}]}'
 
+# What `line` means, said once. Every prompt whose schema has a `line` field
+# prints this after the schema: the review, the structural repair and the red
+# team. Without it a model that Read the diff file cites that file's line
+# numbers, and the comment points at the wrong code. 0 stays the value for
+# "no line" (lib/findings.sh); this sentence is about every other value.
+# shellcheck disable=SC2034  # read by the scripts that source this lib
+REVIEW_LINE_SPEC='line: the line number in the cited file, as that file is in your working tree after this change. Use the number that Read shows for that file. Never use a line number of a diff file. For a deleted line, use the nearest line that still exists.'
+
 # The kind definitions, shared by every prompt that hands out REVIEW_SCHEMA:
 # the schema requires the field, so a prompt that ships the schema without
 # the definitions leaves its model guessing what wording/judgment mean. What
