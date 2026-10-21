@@ -862,15 +862,19 @@ review_one_pr() { # $1 = PR number, $2 = the worktree the dispatcher made
   # marker above treats every nonzero exit as an unexpected death.
   cd "$REPO_DIR" || { note_skip "review worktree missing — skipping (fail closed)"; return 0; }
   INFO="$("$GH" pr view "$PR" --repo "$REPO" \
-        --json headRefOid,isDraft,reviews,comments,title,body,additions,deletions,changedFiles,autoMergeRequest,baseRefName)"
+        --json headRefOid,isDraft,reviews,comments,title,body,additions,deletions,changedFiles,autoMergeRequest,baseRefName,baseRefOid)"
   [ -n "$INFO" ] || { note_skip "could not fetch PR info — skipping (fail closed)"; return 0; }
   [ "$(jq -r '.isDraft' <<<"$INFO")" = "true" ] && return 0
   SHA="$(jq -r '.headRefOid' <<<"$INFO")"
-  # Where this PR wants to land. Read once here because it is needed to
-  # resolve the merge base the diff is applied onto.
+  # Where this PR wants to land. Read once here because the stacked-base
+  # convention guard below needs it.
   # The other call sites still ask INFO directly; they predate this
   # and re-reading the same field is harmless, unlike a SECOND source of truth.
   PR_BASE="$(jq -r '.baseRefName // ""' <<<"$INFO")"
+  # The commit the base branch pointed to in this same read. The merge base
+  # is resolved from it and from $SHA, never from the branch name: a branch
+  # can move between two calls, and a commit ID cannot.
+  PR_BASE_OID="$(jq -r '.baseRefOid // ""' <<<"$INFO")"
   # Review key = head SHA + title/body digest: fixing the title/description
   # re-triggers the review even though the head SHA is unchanged.
   #
@@ -878,7 +882,13 @@ review_one_pr() { # $1 = PR number, $2 = the worktree the dispatcher made
   # it and the review that was made no longer answers the question being
   # asked. Retargeting a PR from a feature branch onto main is exactly the
   # case — the old verdict was reached against a different base.
-  KEY="$(prompt_review_key "$INFO")"
+  #
+  # For a stacked PR the base commit is in the hash too: a push to the parent
+  # branch changes this PR's diff, so it asks for a new review. A PR into the
+  # default branch keeps the v0.2.0 key (SECURITY.md, Known limits). No key
+  # means no base commit that is a full SHA, and then there is no merge base.
+  KEY="$(prompt_review_key "$INFO" "$DEFAULT_BRANCH")" \
+    || { note_skip "the base commit is missing or is not a full commit SHA, skipping (fail closed)"; return 0; }
 
   HOLD_F="$(holdoff_path "$REPO" "$PR" "$KEY")" || HOLD_F=""
 
@@ -1065,8 +1075,10 @@ the default branch. Edit the title and it is checked again automatically."
   #
   # The merge base is looked up first because the URL needs it, and the tree
   # below is built on it. It is the PR's own base (the parent branch for a
-  # stacked PR), not the default branch. A merge base that is not a full SHA
-  # skips the round: the tree and the diff would not line up, and the old
+  # stacked PR), not the default branch. It comes from the base commit and the
+  # head commit of the read at the top, so it belongs to the comparison the
+  # key names, even when the base branch moves. A merge base that is not a
+  # full SHA skips the round: the tree and the diff would not line up, and the old
   # fallback (review the diff without its changes in the tree) quietly
   # weakened the review.
   #
@@ -1082,7 +1094,7 @@ the default branch. Edit the title and it is checked again automatically."
   # Not silent: a diff too large to render, a rate limit and a dropped
   # connection all land here, and this used to be the one skip in the file that
   # left no line at all.
-  MERGE_BASE="$(merge_base_sha "$REPO" "$PR_BASE" "$SHA")"
+  MERGE_BASE="$(merge_base_sha "$REPO" "$PR_BASE_OID" "$SHA")"
   PR_FILES_RC=0
   PR_FILES="$(pr_diff_pinned "$REPO" "$MERGE_BASE" "$SHA" "$DIFF" "$(jq -r '.changedFiles // ""' <<<"$INFO")")" \
     || PR_FILES_RC=$?
@@ -3064,8 +3076,11 @@ $(findings_threshold_note "$TICKET_MIN_SEV" "${N_BELOW:-0}" "$REPO" "$PR")"
 
 # --limit: gh lists 30 by default, so a repo with more open PRs than that
 # would never reach its oldest ones.
-# What the dispatcher's one pre-check call below reads.
-PRE_FIELDS=headRefOid,isDraft,reviews,comments,title,body,baseRefName
+# What the dispatcher's one pre-check call below reads. baseRefOid is there
+# because a stacked PR's key holds it. DEFAULT_BRANCH, read once for this repo
+# above, says which PR is stacked, so this check and the job compute the same
+# key with no extra call.
+PRE_FIELDS=headRefOid,isDraft,reviews,comments,title,body,baseRefName,baseRefOid
 # A list that fails is not an empty repo: read as "no open PRs", a token
 # without pull-request access left every round clean and nothing reviewed.
 OPEN_PRS="$("$GH" pr list --repo "$REPO" --state open --limit 1000 --json number -q '.[].number')" \
@@ -3077,7 +3092,7 @@ for PR in $OPEN_PRS; do
   # full job, which makes the same checks and fails closed on its own.
   if PRE="$("$GH" pr view "$PR" --repo "$REPO" --json "$PRE_FIELDS" 2>/dev/null)"; then
     [ "$(jq -r '.isDraft' <<<"$PRE" 2>/dev/null)" = true ] && continue
-    if prompt_head_handled "$PRE" "$MARKER" "$PRIOR_AUTHORS"; then
+    if prompt_head_handled "$PRE" "$MARKER" "$PRIOR_AUTHORS" "$DEFAULT_BRANCH"; then
       echo "[$REPO_KEY#$PR] PR #$PR: this head was already handled — nothing to do until it changes (review-only: this gate never merges)"
       continue
     fi

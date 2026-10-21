@@ -145,19 +145,29 @@ EOF
 chmod +x "$TMP/gh"
 GH="$TMP/gh"
 
+# Both ends are commit IDs from ONE `gh pr view` read: the base commit and
+# the head commit. A branch name can move between that read and this call.
+BOID=6666666666666666666666666666666666666666
+HOID=7777777777777777777777777777777777777777
 : > "$LOG"; export SHA_OUT="abc123def456" SHA_RC=0
-OUT="$(merge_base_sha "owner/repo" "main" "deadbeef")"
+OUT="$(merge_base_sha "owner/repo" "$BOID" "$HOID")"
 [ "$OUT" = "abc123def456" ] || fail "merge_base_sha must echo what gh api returns"
-grep -qF "api repos/owner/repo/compare/main...deadbeef -q .merge_base_commit.sha" "$LOG" \
+grep -qF "api repos/owner/repo/compare/$BOID...$HOID -q .merge_base_commit.sha" "$LOG" \
   || fail "merge_base_sha must call gh api on the compare endpoint with -q .merge_base_commit.sha"
 
 : > "$LOG"; export SHA_OUT="" SHA_RC=1
-OUT="$(merge_base_sha "owner/repo" "main" "deadbeef")"
+OUT="$(merge_base_sha "owner/repo" "$BOID" "$HOID")"
 [ -z "$OUT" ] || fail "a failed gh api call must yield empty output, not stale data"
+# A branch name, a short SHA or any other revision is refused before gh runs.
 : > "$LOG"; export SHA_OUT="abc123def456" SHA_RC=0
-OUT="$(merge_base_sha "owner/repo" "feat#x%y{branch}" "deadbeef")"
-grep -qF "api repos/owner/repo/compare/feat%23x%25y%7Bbranch}...deadbeef " "$LOG" \
-  || fail "a #, % or { in the base ref must be percent-encoded, not change the URL"
+for bad in '' main feat/parent 'feat#x%y{branch}' deadbeef "${BOID%?}" "${BOID}6" HEAD~1 \
+           AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA; do
+  OUT="$(merge_base_sha "owner/repo" "$bad" "$HOID")"
+  [ -z "$OUT" ] || fail "base '$bad' is not a full commit SHA: merge_base_sha must print nothing"
+  OUT="$(merge_base_sha "owner/repo" "$BOID" "$bad")"
+  [ -z "$OUT" ] || fail "head '$bad' is not a full commit SHA: merge_base_sha must print nothing"
+done
+[ -s "$LOG" ] && fail "a base or head that is not a full commit SHA must never reach gh"
 unset SHA_OUT SHA_RC
 
 # ── pr_diff_pinned ─────────────────────────────────────────────────────────
@@ -174,7 +184,11 @@ cat > "$TMP/gh" <<'EOF3'
 echo "$*" >> "$GH_LOG"
 [ "${GH_RC:-0}" = 0 ] || exit "$GH_RC"
 [ "$1" = api ] || exit 99
-case "$*" in *"Accept: application/vnd.github.diff"*) ;; *) echo '{"merge_base_commit":{}}'; exit 0 ;; esac
+case "$*" in
+  *"Accept: application/vnd.github.diff"*) ;;
+  *"-q .merge_base_commit.sha"*) printf '%s\n' "${MB_ANSWER-}"; exit 0 ;;
+  *) echo '{"merge_base_commit":{}}'; exit 0 ;;
+esac
 cat "$GH_FIXTURES/diff-${2##*...}" 2>/dev/null || exit 1
 EOF3
 chmod +x "$TMP/gh"
@@ -285,7 +299,7 @@ note_skip() { echo "skip $PR: $1"; }
 gh_post() { echo POSTED; }
 merge_base_sha() { printf '%s' "${MB_OUT-}"; }
 # shellcheck disable=SC2034  # read by the eval'd block
-REPO=example/repo PR=5 PR_BASE=main
+REPO=example/repo PR=5 PR_BASE=main PR_BASE_OID="$BOID"
 run_block() { # $1 = head SHA, $2 = changedFiles in INFO (or "none")
   # shellcheck disable=SC2034  # SHA and INFO are read by the eval'd block
   SHA="$1"; DIFF="$TMP/round.diff"; : > "$DIFF"; PR_FILES=""
@@ -322,4 +336,20 @@ case "$BOUT" in *reached*|*POSTED*) fail "a PR with no changed files must end th
 [ ! -e "$DIFF" ] || fail "the empty diff must not be left on disk for the next step"
 unset GH_RC MB_OUT
 
-echo "PASS: lib/merge.sh (merge_base_allowed x6, merge_size_allowed x11, merge_base_sha x3, pr_diff_pinned, diff_changed_files + the round block, disarm_unreviewed_auto_merge x3 + caller block x3 + 1 call site)"
+# The merge base comes from the PR's base commit and head commit, never from
+# the base branch name. The real merge_base_sha runs here, on a stacked PR,
+# and the stub records the URL each call asks for.
+. lib/merge.sh || fail "could not source lib/merge.sh again"
+export MB_ANSWER="$MB"
+# shellcheck disable=SC2034  # read by the eval'd block
+PR_BASE=feat/parent PR_BASE_OID="$BOID"
+run_block "$SHA_A" 2
+[ "$BOUT" = reached ] || fail "a stacked PR with a base commit must pass the block (got: $BOUT)"
+grep -qF "api repos/example/repo/compare/$BOID...$SHA_A -q .merge_base_commit.sha" "$LOG" \
+  || fail "the merge base must be asked for between the base commit and the head commit (log: $(tr '\n' '|' < "$LOG"))"
+grep -qF "feat/parent" "$LOG" && fail "the merge base call must not name the base branch"
+grep -qF "api repos/example/repo/compare/$MB...$SHA_A -H Accept: application/vnd.github.diff" "$LOG" \
+  || fail "the diff must be fetched from the merge base that call returned"
+unset MB_ANSWER
+
+echo "PASS: lib/merge.sh (merge_base_allowed x6, merge_size_allowed x11, merge_base_sha x4, pr_diff_pinned, diff_changed_files + the round block, disarm_unreviewed_auto_merge x3 + caller block x3 + 1 call site)"

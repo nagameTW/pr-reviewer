@@ -4,6 +4,8 @@
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 . lib/prompt.sh || { echo "FAIL: cannot source lib/prompt.sh"; exit 1; }
+# The review key needs the stacked-PR predicate and the SHA check.
+. lib/merge.sh || { echo "FAIL: cannot source lib/merge.sh"; exit 1; }
 
 M="pr-reviewer"
 GATE_AUTHORS="review-bot owner"
@@ -467,14 +469,103 @@ is 'banner: the C locale does not match a non-banner emoji' \
 # prompt_review_key and prompt_head_handled: the dispatcher skips a handled
 # head before checking out a worktree, and the job computes the same key, so
 # both have to agree with the formula every marker already posted carries.
-PRJ='{"headRefOid":"abc123","title":"fix: x","body":"why\nmore","baseRefName":"main"}'
-OLD_KEY="abc123-$(jq -r '(.title // "") + "\n" + (.body // "") + "\n" + (.baseRefName // "")' <<<"$PRJ" | sha256sum | cut -c1-12)"
-is 'prompt_review_key is the key already-posted markers carry' "$(prompt_review_key "$PRJ")" "$OLD_KEY"
-HANDLED="$(jq -c --arg b "<!-- $M $OLD_KEY -->" '. + {comments: [{author: {login: "review-bot"}, body: $b}], reviews: []}' <<<"$PRJ")"
-is 'a head the gate commented on is handled' "$(prompt_head_handled "$HANDLED" "$M" "$GATE_AUTHORS" && echo yes || echo no)" yes
-is '...not when someone else posted the marker' "$(prompt_head_handled "$HANDLED" "$M" "owner" && echo yes || echo no)" no
-is '...not once the title changed' "$(prompt_head_handled "$(jq -c '.title = "fix: y"' <<<"$HANDLED")" "$M" "$GATE_AUTHORS" && echo yes || echo no)" no
-is '...not once the base changed' "$(prompt_head_handled "$(jq -c '.baseRefName = "dev"' <<<"$HANDLED")" "$M" "$GATE_AUTHORS" && echo yes || echo no)" no
-is '...not on output that does not parse' "$(prompt_head_handled 'not json' "$M" "$GATE_AUTHORS" && echo yes || echo no)" no
+# $2 is the default branch: a stacked PR's key also holds its base commit.
+H40=0123456789abcdef0123456789abcdef01234567
+B40=89abcdef0123456789abcdef0123456789abcdef
+B40N=fedcba9876543210fedcba9876543210fedcba98
+PRJ="{\"headRefOid\":\"$H40\",\"title\":\"fix: keep the key\",\"body\":\"Line one.\\nLine two, ünïcode.\",\"baseRefName\":\"main\",\"baseRefOid\":\"$B40\"}"
+# What v0.2.0's prompt_review_key printed for PRJ (run on main, cc3a7fe). A
+# PR into the default branch must keep this key byte for byte, or the upgrade
+# reviews every open PR again.
+V020_KEY="$H40-7df6371f5f84"
+is 'an ordinary PR keeps the v0.2.0 key' "$(prompt_review_key "$PRJ" main)" "$V020_KEY"
+is '...also when its base commit moves' \
+   "$(prompt_review_key "$(jq -c --arg o "$B40N" '.baseRefOid = $o' <<<"$PRJ")" main)" "$V020_KEY"
+# A stacked PR: the base is not the default branch.
+STK="$(jq -c '.baseRefName = "feat/parent"' <<<"$PRJ")"
+STK_KEY="$(prompt_review_key "$STK" main)"
+STK_V020="$H40-$(jq -r '(.title // "") + "\n" + (.body // "") + "\n" + (.baseRefName // "")' <<<"$STK" | sha256sum | cut -c1-12)"
+is 'a stacked PR key keeps the <head>-<12 hex> shape' \
+   "$(grep -cE "^$H40-[0-9a-f]{12}\$" <<<"$STK_KEY")" '1'
+is 'a stacked PR key is the same for the same inputs' "$(prompt_review_key "$STK" main)" "$STK_KEY"
+is 'a stacked PR key is not the v0.2.0 key (one more review after the upgrade)' \
+   "$([ "$STK_KEY" != "$STK_V020" ] && echo differs)" 'differs'
+STK_MOVED_KEY="$(prompt_review_key "$(jq -c --arg o "$B40N" '.baseRefOid = $o' <<<"$STK")" main)"
+is 'a stacked PR key changes when only its base commit moves' \
+   "$([ -n "$STK_MOVED_KEY" ] && [ "$STK_MOVED_KEY" != "$STK_KEY" ] && echo changed)" 'changed'
+is '...and the head part stays the head SHA' "${STK_MOVED_KEY%%-*}" "$H40"
+# The same PR read with another default branch is the other kind of PR.
+is 'the default branch decides which PR is stacked' "$(prompt_review_key "$STK" feat/parent)" \
+   "$H40-$(jq -r '(.title // "") + "\n" + (.body // "") + "\n" + (.baseRefName // "")' <<<"$STK" | sha256sum | cut -c1-12)"
+is 'an unknown default branch counts as stacked (fail closed)' "$(prompt_review_key "$PRJ" '')" \
+   "$(prompt_review_key "$(jq -c '.baseRefName = "main"' <<<"$PRJ")" '' )"
+is '...so its key is not the ordinary one' "$([ "$(prompt_review_key "$PRJ" '')" != "$V020_KEY" ] && echo differs)" 'differs'
+# No base commit, or one that is not a full SHA: no key, for both kinds of PR.
+# The merge base is resolved from it, so the PR cannot be reviewed anyway.
+for kind in main feat/parent; do
+  for bad in '' null "${B40%?}" "${B40}0" "$(tr 'a-f' 'A-F' <<<"$B40")" "${B40%?}g" HEAD main; do
+    J="$(jq -c --arg o "$bad" --arg b "$kind" '.baseRefOid = $o | .baseRefName = $b' <<<"$PRJ")"
+    OUT="$(prompt_review_key "$J" main)"; RC=$?
+    is "base '$kind', base commit '$bad': no key (fail closed)" "$RC:$OUT" '1:'
+  done
+  for drop in 'del(.baseRefOid)' '.baseRefOid = null' '.baseRefOid = 42'; do
+    J="$(jq -c --arg b "$kind" ".baseRefName = \$b | $drop" <<<"$PRJ")"
+    OUT="$(prompt_review_key "$J" main)"; RC=$?
+    is "base '$kind', $drop: no key (fail closed)" "$RC:$OUT" '1:'
+  done
+done
+OUT="$(prompt_review_key 'not json' main)"; RC=$?
+is 'output that does not parse gives no key' "$RC:$OUT" '1:'
+
+HANDLED="$(jq -c --arg b "<!-- $M $V020_KEY -->" '. + {comments: [{author: {login: "review-bot"}, body: $b}], reviews: []}' <<<"$PRJ")"
+is 'a head the gate commented on is handled' "$(prompt_head_handled "$HANDLED" "$M" "$GATE_AUTHORS" main && echo yes || echo no)" yes
+is '...not when someone else posted the marker' "$(prompt_head_handled "$HANDLED" "$M" "owner" main && echo yes || echo no)" no
+is '...not once the title changed' "$(prompt_head_handled "$(jq -c '.title = "fix: y"' <<<"$HANDLED")" "$M" "$GATE_AUTHORS" main && echo yes || echo no)" no
+is '...not once the base changed' "$(prompt_head_handled "$(jq -c '.baseRefName = "dev"' <<<"$HANDLED")" "$M" "$GATE_AUTHORS" main && echo yes || echo no)" no
+is '...not on output that does not parse' "$(prompt_head_handled 'not json' "$M" "$GATE_AUTHORS" main && echo yes || echo no)" no
+# No key must never match: an empty key turns the test into "$M " and
+# every marker the gate ever posted on the PR would match it.
+is '...not when the base commit is missing' "$(prompt_head_handled "$(jq -c 'del(.baseRefOid)' <<<"$HANDLED")" "$M" "$GATE_AUTHORS" main && echo yes || echo no)" no
+STK_HANDLED="$(jq -c --arg b "<!-- $M $STK_KEY -->" '. + {comments: [{author: {login: "review-bot"}, body: $b}], reviews: []}' <<<"$STK")"
+is 'a stacked head the gate commented on is handled' "$(prompt_head_handled "$STK_HANDLED" "$M" "$GATE_AUTHORS" main && echo yes || echo no)" yes
+is '...not once its parent branch moved' "$(prompt_head_handled "$(jq -c --arg o "$B40N" '.baseRefOid = $o' <<<"$STK_HANDLED")" "$M" "$GATE_AUTHORS" main && echo yes || echo no)" no
+
+# The two handled checks read two `gh pr view` field lists: the dispatcher's
+# PRE_FIELDS and the job's own read. Both lists are lifted from
+# pr-autoreview.sh, a PR is cut down to each one, and both must give the key
+# of the whole PR. A field the key reads but one list leaves out fails here.
+PRE_LIST="$(sed -n 's/^PRE_FIELDS=//p' pr-autoreview.sh)"
+JOB_LIST="$(grep -oE -- '--json headRefOid,isDraft,[A-Za-z,]+' pr-autoreview.sh | head -1 | sed 's/^--json //')"
+is 'the dispatcher field list was found' "$([ -n "$PRE_LIST" ] && echo yes)" yes
+is 'the job field list was found' "$([ -n "$JOB_LIST" ] && echo yes)" yes
+cut_to() { # $1 = comma-separated field list, $2 = JSON. Keeps only those fields.
+  jq -c --arg f "$1" '. as $o | reduce ($f | split(",")[]) as $k ({}; if ($o | has($k)) then . + {($k): $o[$k]} else . end)' <<<"$2"
+}
+for J in "$PRJ" "$STK"; do
+  FULL="$(jq -c '. + {isDraft: false, reviews: [], comments: [], additions: 1, deletions: 0, changedFiles: 1, autoMergeRequest: null}' <<<"$J")"
+  WANT="$(prompt_review_key "$FULL" main)"
+  is "the dispatcher computes the job's key (base $(jq -r .baseRefName <<<"$J"))" \
+     "$(prompt_review_key "$(cut_to "$PRE_LIST" "$FULL")" main)" "$WANT"
+  is "the job computes the key of the whole PR (base $(jq -r .baseRefName <<<"$J"))" \
+     "$(prompt_review_key "$(cut_to "$JOB_LIST" "$FULL")" main)" "$WANT"
+done
+
+# The job's KEY line, lifted from pr-autoreview.sh and run: a PR with no key
+# is skipped with a fail-closed note before anything reads the key.
+KEY_SRC="$(awk '{ if (sub(/\\$/, "")) printf "%s ", $0; else print }' pr-autoreview.sh | grep -E '^  KEY="\$\(prompt_review_key ')"
+is 'the job KEY line was found' "$([ -n "$KEY_SRC" ] && echo yes)" yes
+note_skip() { echo "skip: $1"; }
+eval "key_block() { $KEY_SRC
+echo \"reached \$KEY\"; }"
+# shellcheck disable=SC2034  # read by the eval'd line
+DEFAULT_BRANCH=main
+# shellcheck disable=SC2034
+INFO="$(jq -c 'del(.baseRefOid)' <<<"$STK")"
+OUT="$(key_block)"
+has 'a job with no base commit skips with a fail-closed note' '(fail closed)' "$OUT"
+is '...and never reaches the code after the key' "$(grep -c reached <<<"$OUT")" '0'
+# shellcheck disable=SC2034
+INFO="$STK"
+is 'a job with a base commit gets the stacked key' "$(key_block)" "reached $STK_KEY"
 
 if [ "$FAILED" -eq 0 ]; then echo "PASS: lib/prompt.sh"; else echo "FAIL: lib/prompt.sh"; exit 1; fi

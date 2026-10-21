@@ -58,6 +58,13 @@ All notable changes to this project are recorded here. The format follows
   during a round, the verdict and its marker could name a head the model never
   reviewed. The file list now comes from the same diff, and a diff with a
   different number of files than GitHub reports for the PR is not reviewed.
+- The merge base now comes from the two commit IDs in one read of the PR: its
+  base commit and its head commit. Before, it came from the base branch name
+  in a later call, so a push to the base branch between the two calls could
+  change the comparison. A PR based on another branch is now reviewed again
+  when its parent branch moves, because its review key now holds the base
+  commit. SECURITY.md lists the limit that stays for a PR into the default
+  branch.
 
 ### Changed
 
@@ -73,6 +80,9 @@ All notable changes to this project are recorded here. The format follows
   cannot be found, when its diff cannot be fetched, or when the diff is
   incomplete. v0.2.0 reviewed the PR without applying the diff to the tree
   when the merge base was missing.
+- After the upgrade, each open PR based on another branch gets one more
+  review, because its review key now holds the base commit. A PR into the
+  default branch keeps its key and is not reviewed again.
 
 ## [0.2.0] - 2026-10-12
 

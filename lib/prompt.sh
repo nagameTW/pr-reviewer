@@ -203,19 +203,34 @@ prompt_gate_bodies() {
 
 # The review key: the head SHA plus a digest of the title, description and
 # base branch, so editing any of them asks for a new review of the same head.
-# $1 = `gh pr view --json headRefOid,title,body,baseRefName` output.
+# For a stacked PR (lib/merge.sh merge_base_allowed says no), the digest also
+# holds the base commit: a push to the parent branch changes the PR's diff,
+# so it asks for a new review too. For a PR into the default branch the key
+# is the v0.2.0 key byte for byte, so an upgrade does not review every open
+# PR again. SECURITY.md (Known limits) says what that key does not cover.
+# $1 = `gh pr view --json headRefOid,title,body,baseRefName,baseRefOid`
+# output, $2 = the repo's default branch. Needs lib/merge.sh.
+# Prints nothing and returns 1 when baseRefOid is missing or is not a full
+# SHA, for every PR: the merge base comes from it, so no review can run.
 prompt_review_key() {
+  local oid extra=""
+  oid="$(jq -r '.baseRefOid // ""' <<<"${1-}" 2>/dev/null)"
+  sha_is_full_hex "$oid" || return 1
+  merge_base_allowed "$(jq -r '.baseRefName // ""' <<<"${1-}" 2>/dev/null)" "${2-}" || extra="$oid"
   printf '%s-%s\n' "$(jq -r '.headRefOid' <<<"${1-}" 2>/dev/null)" \
-    "$(jq -r '(.title // "") + "\n" + (.body // "") + "\n" + (.baseRefName // "")' <<<"${1-}" 2>/dev/null | sha256sum | cut -c1-12)"
+    "$(jq -r --arg extra "$extra" '(.title // "") + "\n" + (.body // "") + "\n" + (.baseRefName // "")
+      + (if $extra == "" then "" else "\n" + $extra end)' <<<"${1-}" 2>/dev/null | sha256sum | cut -c1-12)"
 }
 
 # 0 when $1 (the same output plus comments and reviews) holds a body from one
 # of the logins in $3 that carries marker $2 for the PR's current key: the
 # same test the job applies to HANDLED_BODIES, so the dispatcher never skips a
-# head the job would pick up again.
+# head the job would pick up again. $4 = the default branch, as for
+# prompt_review_key. No key is never handled: an empty key would match every
+# marker. The job then makes the same check and fails closed.
 prompt_head_handled() {
   local key bodies
-  key="$(prompt_review_key "${1-}")"
+  key="$(prompt_review_key "${1-}" "${4-}")" && [ -n "$key" ] || return 1
   bodies="$(prompt_gate_bodies "${1-}" "${3-}")"
   grep -qF "${2-} $key" <<<"$bodies"
 }

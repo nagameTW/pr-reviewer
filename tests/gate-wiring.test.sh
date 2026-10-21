@@ -26,9 +26,9 @@ for h in ok bad pin before is has; do command -v "$h" >/dev/null 2>&1 || { echo 
 # exactly that render. A gate that skipped the startup check would find a
 # broken file only mid-round; one that rendered without PR_FILES would send
 # every language pack to every PR.
-pin    'the job reads its review key from the shared helper' 'KEY="$(prompt_review_key "$INFO")"' pr-autoreview.sh
+pin    'the job reads its review key from the shared helper' 'KEY="$(prompt_review_key "$INFO" "$DEFAULT_BRANCH")" \' pr-autoreview.sh
 pin    'startup refuses a jq that cannot render the comment' '*) echo "this jq ($(jq --version 2>&1)) cannot run the comment renderer — refusing to run"; exit 1 ;;' pr-autoreview.sh
-pin    'the dispatcher skips a handled head without a worktree' 'prompt_head_handled "$PRE" "$MARKER" "$PRIOR_AUTHORS"; then' pr-autoreview.sh
+pin    'the dispatcher skips a handled head without a worktree, keyed like the job' 'prompt_head_handled "$PRE" "$MARKER" "$PRIOR_AUTHORS" "$DEFAULT_BRANCH"; then' pr-autoreview.sh
 DISPATCH="$(awk '/^for PR in /,/^done$/' pr-autoreview.sh)"
 if [ "$(grep -n 'prompt_head_handled' <<<"$DISPATCH" | cut -d: -f1)" -lt "$(grep -n 'worktree add' <<<"$DISPATCH" | cut -d: -f1)" ] \
    && grep -qF 'if PRE="$("$GH" pr view "$PR" --repo "$REPO" --json "$PRE_FIELDS" 2>/dev/null)"; then' <<<"$DISPATCH"; then
@@ -140,9 +140,9 @@ before 'the Claude Code version is checked before the lock' 'claude_version_chec
 # fetch pinned to the SHA from the same `gh pr view` read, the file list taken
 # from that file, the count checked against that read's changedFiles.
 is     'no moving gh pr diff call is left in the gate or its libs' "$(grep -n 'pr diff' pr-autoreview.sh lib/*.sh | tr '\n' ' ')" ''
-pin    'the PR info read carries changedFiles, the count the diff is checked against' 'headRefOid,isDraft,reviews,comments,title,body,additions,deletions,changedFiles,autoMergeRequest,baseRefName' pr-autoreview.sh
+pin    'the PR info read carries changedFiles and the base commit, from one read with the head' 'headRefOid,isDraft,reviews,comments,title,body,additions,deletions,changedFiles,autoMergeRequest,baseRefName,baseRefOid)"' pr-autoreview.sh
 pin    'the diff is fetched for the SHA the key was made from, with the file count of the same read' 'pr_diff_pinned "$REPO" "$MERGE_BASE" "$SHA" "$DIFF" "$(jq -r '"'"'.changedFiles // ""'"'"' <<<"$INFO")"' pr-autoreview.sh
-before 'the merge base is resolved before the diff is fetched' 'MERGE_BASE="$(merge_base_sha "$REPO" "$PR_BASE" "$SHA")"' 'pr_diff_pinned "$REPO"' pr-autoreview.sh
+before 'the merge base is resolved from the two commit IDs, before the diff is fetched' 'MERGE_BASE="$(merge_base_sha "$REPO" "$PR_BASE_OID" "$SHA")"' 'pr_diff_pinned "$REPO"' pr-autoreview.sh
 before 'the diff is fetched before it is applied to the tree' 'pr_diff_pinned "$REPO"' 'APPLY_ERR="$(git -C "$REPO_DIR" apply' pr-autoreview.sh
 before 'the file list exists before anything reads it' 'pr_diff_pinned "$REPO"' 'REVIEW_CHECKS="$(review_checks_render' pr-autoreview.sh
 is     'the merge base is looked up once' "$(grep -c 'MERGE_BASE="$(merge_base_sha' pr-autoreview.sh)" 1

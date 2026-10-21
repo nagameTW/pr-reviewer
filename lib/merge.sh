@@ -43,6 +43,9 @@ disarm_unreviewed_auto_merge() {
 # (prompt_stacked_clause in lib/prompt.sh). The prompts were made to say what
 # the tree actually is; this keeps that answer honest for a stacked PR.
 #
+# prompt_review_key (lib/prompt.sh) asks it too: a stacked PR's review key
+# holds its base commit, so a push to the parent branch asks for a new review.
+#
 # Fail closed on a missing value: not knowing where a PR lands is not a reason
 # to treat it as landing on the default branch.
 merge_base_allowed() {
@@ -59,15 +62,14 @@ merge_base_allowed() {
 # able to tell them apart.
 # Echoes the SHA (or an empty/malformed string on failure — validating the
 # shape is the caller's job) and does not itself fail closed.
-# $1 = owner/name, $2 = base ref, $3 = head sha. The base ref is the PR's
-# own and goes into a URL path, where a `%` or `#` in it would change what the
-# URL asks for, and `gh api` fills in `{owner}`, `{repo}` and `{branch}`
-# itself, so those three characters are percent-encoded. Git's ref-name rules
-# already keep out `?`, spaces and `..`.
+# $1 = owner/name, $2 = the PR's base commit, $3 = its head commit, both from
+# ONE `gh pr view` read (baseRefOid, headRefOid). Not the base branch name:
+# the branch can move between that read and this call, and the merge base
+# then belongs to a comparison the review key does not name. A value that is
+# not a full SHA prints nothing, and gh is not called.
 merge_base_sha() {
-  local base="${2-}"
-  base="${base//%/%25}"; base="${base//#/%23}"; base="${base//\{/%7B}"
-  "$GH" api "repos/${1-}/compare/${base}...${3-}" -q '.merge_base_commit.sha' 2>/dev/null
+  sha_is_full_hex "${2-}" && sha_is_full_hex "${3-}" || return 1
+  "$GH" api "repos/${1-}/compare/${2}...${3}" -q '.merge_base_commit.sha' 2>/dev/null
 }
 
 # 0 when $1 is a full SHA: 40 lowercase hex digits and nothing else. The

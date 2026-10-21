@@ -104,6 +104,21 @@ an auto-merge armed on a head it has not reviewed yet.
 **Scratch files stay private.** Diffs, slices and raw model output are written
 under the reviewer's own work directory, not a shared `/tmp`.
 
+## Known limits
+
+**The review key of a PR into the default branch does not include the base
+commit.** The reviewer does not review a PR again while its review key stays
+the same. The key holds the head commit, the title, the description and the
+base branch name. For a PR based on another branch, it also holds the base
+commit, so a push to the parent branch starts a new review. For a PR into the
+default branch, it does not. If commits from the PR's own history reach the
+default branch through another PR, the PR's net change can differ from the
+reviewed one, and no new review runs. For example, the PR adds a change in
+one commit and reverts it in a later commit, so its net diff is empty. When
+the first commit reaches the default branch another way, the PR's effect
+becomes the revert. A fix that keys every PR on its merge base is planned for
+0.3.0.
+
 ## In scope
 
 - Text in a pull request that makes the reviewer post something it should not:
