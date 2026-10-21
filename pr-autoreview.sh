@@ -1160,104 +1160,94 @@ the default branch. Edit the title and it is checked again automatically."
   # convention files come from the default branch, the ones the patch wrote
   # are reverted, and a symlink that could lead the model elsewhere
   # (tree_has_symlinks says which) refuses the whole review.
-  # A second check: pr_diff_pinned already refused anything but a full SHA.
-  # A full 40-hex SHA or nothing. `git checkout` accepts refs, short SHAs and
-  # `HEAD@{...}`, so a partial or error-shaped answer from the API must not
-  # reach it as a revision to resolve — the value comes off the network and
-  # the tree it selects decides what the model reads.
-  case "$MERGE_BASE" in
-    ????????????????????????????????????????)
-      case "$MERGE_BASE" in
-        *[!0-9a-f]*) APPLY_ERR="merge base is not a SHA" ;;
-        *)
-          # A checkout that fails leaves the tree where it was — still a
-          # commit of the default branch, still a truthful "the code without
-          # this change" — so the fallback needs no repair, only the honest
-          # wording below.
-          if git -C "$REPO_DIR" checkout -q --detach "$MERGE_BASE" 2>/dev/null; then
-            TREE_AT=base
-            # A merge base OFF the default branch sits on an unprotected ref,
-            # so its convention files are author-written even though this
-            # patch never touched them — and the revert further down cannot
-            # see them: it walks `ls-files --others` (what the patch created)
-            # and `diff --name-only` (what the patch modified), and a file the
-            # PARENT committed is in neither. `git checkout -- <path>` would
-            # not help either; it restores the parent's version, which is the
-            # author's. So the attack is: push a CLAUDE.md saying whatever you
-            # like to feat/parent (feature branches are unprotected), open a
-            # PR based on feat/parent, and the gate reads your rules as the
-            # project's from its own cwd. The comment this replaces claimed
-            # the tree was "author-controlled either way, the diff is the
-            # author's" — that was wrong, because the diff's half IS reverted
-            # and the parent's half was not.
-            #
-            # Taken from the default branch, not merely deleted: the review
-            # needs the real conventions present, not absent. Deleting is only
-            # for a path the default branch does not have at all.
-            if ! merge_base_allowed "$PR_BASE" "$DEFAULT_BRANCH"; then
-              # `*/.claude/*`, NOT `*/.claude`. A pathspec wildcard only
-              # tail-matches, so `*/.claude` matches nothing at all — measured,
-              # and it is the same trap three versions of the revert below fell
-              # into. `.claude` bare does work (git treats it as a prefix), and
-              # is kept alongside so a root-level one is never missed.
-              # The ref has to resolve before anything is removed. Measured
-              # while writing this: against an unresolvable origin/<default>,
-              # every `cat-file -e` fails, every path takes the `rm` arm, and
-              # the tree ends up with NO conventions at all — the model then
-              # reviews against nothing and says nothing about why. Refusing
-              # is the honest answer; a review without the project's rules is
-              # not a cheaper review, it is a different one.
-              if ! git -C "$REPO_DIR" rev-parse --verify -q "origin/$DEFAULT_BRANCH^{commit}" >/dev/null; then
-                note_skip "cannot resolve origin/$DEFAULT_BRANCH to force the convention files off a stacked base — refusing to review (fail closed)"
-                return 0
-              fi
-              CONV_FORCED=0
-              # `if`, not `[ -n ... ] || continue`: a bare continue inside
-              # review_one_pr is banned (tests/parallel-discipline.test.sh) —
-              # the function is a background job and the word would act on
-              # whichever loop happens to enclose it.
-              while IFS= read -r -d '' conv; do
-                if [ -n "$conv" ]; then
-                  if git -C "$REPO_DIR" cat-file -e "origin/$DEFAULT_BRANCH:$conv" 2>/dev/null; then
-                    git -C "$REPO_DIR" checkout "origin/$DEFAULT_BRANCH" -- "$conv" 2>/dev/null || true
-                  else
-                    # The INDEX too, not just the working tree. `rm -f` alone
-                    # leaves the parent's blob staged, the path then shows up
-                    # in the `git diff --name-only` list the revert loop below
-                    # walks, and that loop's `git checkout -- <path>` writes
-                    # the parent's version straight back out. Measured: the
-                    # file was deleted, listed, and resurrected in the same
-                    # round. It is the easiest arrangement of this attack too,
-                    # because a path the default branch does not track at all
-                    # (.claude/skills/<name>/SKILL.md, a subdirectory
-                    # CLAUDE.md) always takes this arm. Clearing the index
-                    # also keeps the path out of that list, so CONV_HIT is not
-                    # set and the prompt does not tell the model this diff
-                    # wrote a convention file when it did not.
-                    git -C "$REPO_DIR" rm -q --cached -- "$conv" 2>/dev/null || true
-                    rm -f "${REPO_DIR:?}/$conv"
-                  fi
-                  CONV_FORCED=1
-                fi
-              done < <(git -C "$REPO_DIR" ls-files -z \
-                         'CLAUDE.md' '*/CLAUDE.md' 'AGENTS.md' '*/AGENTS.md' \
-                         '.claude/*' '*/.claude/*' \
-                         ${TREE_CONV_EXTRA_PATHSPECS[@]+"${TREE_CONV_EXTRA_PATHSPECS[@]}"} 2>/dev/null)
-              [ "$CONV_FORCED" = 1 ] && echo "PR #$PR: stacked base — convention files forced back to origin/$DEFAULT_BRANCH so the parent branch cannot supply the review rules either"
-            fi
-            if BIN_PATHS="$(tree_binary_paths "$DIFF")"; then
-              while IFS= read -r bp; do
-                [ -z "$bp" ] || BIN_EXCLUDES+=("--exclude=$bp")
-              done <<<"$BIN_PATHS"
-            fi
-            APPLY_ERR="$(git -C "$REPO_DIR" apply --whitespace=nowarn ${BIN_EXCLUDES[@]+"${BIN_EXCLUDES[@]}"} "$DIFF" 2>&1)" \
-              && DIFF_APPLIED=1
+  # $MERGE_BASE is a full 40-hex SHA by now: pr_diff_pinned refused anything
+  # else. That check must stay, because the value comes off the network and
+  # `git checkout` accepts refs, short SHAs and `HEAD@{...}`.
+  # A checkout that fails leaves the tree where it was — still a
+  # commit of the default branch, still a truthful "the code without
+  # this change" — so the fallback needs no repair, only the honest
+  # wording below.
+  if git -C "$REPO_DIR" checkout -q --detach "$MERGE_BASE" 2>/dev/null; then
+    TREE_AT=base
+    # A merge base OFF the default branch sits on an unprotected ref,
+    # so its convention files are author-written even though this
+    # patch never touched them — and the revert further down cannot
+    # see them: it walks `ls-files --others` (what the patch created)
+    # and `diff --name-only` (what the patch modified), and a file the
+    # PARENT committed is in neither. `git checkout -- <path>` would
+    # not help either; it restores the parent's version, which is the
+    # author's. So the attack is: push a CLAUDE.md saying whatever you
+    # like to feat/parent (feature branches are unprotected), open a
+    # PR based on feat/parent, and the gate reads your rules as the
+    # project's from its own cwd. The comment this replaces claimed
+    # the tree was "author-controlled either way, the diff is the
+    # author's" — that was wrong, because the diff's half IS reverted
+    # and the parent's half was not.
+    #
+    # Taken from the default branch, not merely deleted: the review
+    # needs the real conventions present, not absent. Deleting is only
+    # for a path the default branch does not have at all.
+    if ! merge_base_allowed "$PR_BASE" "$DEFAULT_BRANCH"; then
+      # `*/.claude/*`, NOT `*/.claude`. A pathspec wildcard only
+      # tail-matches, so `*/.claude` matches nothing at all — measured,
+      # and it is the same trap three versions of the revert below fell
+      # into. `.claude` bare does work (git treats it as a prefix), and
+      # is kept alongside so a root-level one is never missed.
+      # The ref has to resolve before anything is removed. Measured
+      # while writing this: against an unresolvable origin/<default>,
+      # every `cat-file -e` fails, every path takes the `rm` arm, and
+      # the tree ends up with NO conventions at all — the model then
+      # reviews against nothing and says nothing about why. Refusing
+      # is the honest answer; a review without the project's rules is
+      # not a cheaper review, it is a different one.
+      if ! git -C "$REPO_DIR" rev-parse --verify -q "origin/$DEFAULT_BRANCH^{commit}" >/dev/null; then
+        note_skip "cannot resolve origin/$DEFAULT_BRANCH to force the convention files off a stacked base — refusing to review (fail closed)"
+        return 0
+      fi
+      CONV_FORCED=0
+      # `if`, not `[ -n ... ] || continue`: a bare continue inside
+      # review_one_pr is banned (tests/parallel-discipline.test.sh) —
+      # the function is a background job and the word would act on
+      # whichever loop happens to enclose it.
+      while IFS= read -r -d '' conv; do
+        if [ -n "$conv" ]; then
+          if git -C "$REPO_DIR" cat-file -e "origin/$DEFAULT_BRANCH:$conv" 2>/dev/null; then
+            git -C "$REPO_DIR" checkout "origin/$DEFAULT_BRANCH" -- "$conv" 2>/dev/null || true
           else
-            APPLY_ERR="could not check out merge base ${MERGE_BASE:0:8}"
-          fi ;;
-      esac ;;
-    *) APPLY_ERR="could not resolve the merge base for $PR_BASE...${SHA:0:8}" ;;
-  esac
+            # The INDEX too, not just the working tree. `rm -f` alone
+            # leaves the parent's blob staged, the path then shows up
+            # in the `git diff --name-only` list the revert loop below
+            # walks, and that loop's `git checkout -- <path>` writes
+            # the parent's version straight back out. Measured: the
+            # file was deleted, listed, and resurrected in the same
+            # round. It is the easiest arrangement of this attack too,
+            # because a path the default branch does not track at all
+            # (.claude/skills/<name>/SKILL.md, a subdirectory
+            # CLAUDE.md) always takes this arm. Clearing the index
+            # also keeps the path out of that list, so CONV_HIT is not
+            # set and the prompt does not tell the model this diff
+            # wrote a convention file when it did not.
+            git -C "$REPO_DIR" rm -q --cached -- "$conv" 2>/dev/null || true
+            rm -f "${REPO_DIR:?}/$conv"
+          fi
+          CONV_FORCED=1
+        fi
+      done < <(git -C "$REPO_DIR" ls-files -z \
+                 'CLAUDE.md' '*/CLAUDE.md' 'AGENTS.md' '*/AGENTS.md' \
+                 '.claude/*' '*/.claude/*' \
+                 ${TREE_CONV_EXTRA_PATHSPECS[@]+"${TREE_CONV_EXTRA_PATHSPECS[@]}"} 2>/dev/null)
+      [ "$CONV_FORCED" = 1 ] && echo "PR #$PR: stacked base — convention files forced back to origin/$DEFAULT_BRANCH so the parent branch cannot supply the review rules either"
+    fi
+    if BIN_PATHS="$(tree_binary_paths "$DIFF")"; then
+      while IFS= read -r bp; do
+        [ -z "$bp" ] || BIN_EXCLUDES+=("--exclude=$bp")
+      done <<<"$BIN_PATHS"
+    fi
+    APPLY_ERR="$(git -C "$REPO_DIR" apply --whitespace=nowarn ${BIN_EXCLUDES[@]+"${BIN_EXCLUDES[@]}"} "$DIFF" 2>&1)" \
+      && DIFF_APPLIED=1
+  else
+    APPLY_ERR="could not check out merge base ${MERGE_BASE:0:8}"
+  fi
   if [ "$DIFF_APPLIED" = 1 ]; then
     # Convention files the PATCH wrote are removed before anything reads
     # them, for EVERY repo, so a PR adding a root CLAUDE.md or
