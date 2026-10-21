@@ -343,17 +343,16 @@ TITLE_REMINDER='ℹ️ Title format reminder'
 want 'the title reminder still lists the valid types'  "$TITLE_REMINDER" \
      '${TITLE_TYPES}'
 
-# A doubled em dash is banned from posted text. Scoped to lines that are NOT
-# comments: the ban is about text a human reads on GitHub, and a `# ——` in an
-# explanation is not that. Without the exclusion this fails on the first
-# person who writes a dash in a comment, and a check people learn to work
-# around is worse than none.
-EMDASH_HITS="$(grep -ln '——' "${FILES[@]}" 2>/dev/null | while IFS= read -r f; do
-  grep -vE '^[[:space:]]*#' "$f" | grep -q -- '——' && printf '%s\n' "$f"
+# Posted text has no doubled em dash. The check skips comment lines: a person
+# reads a comment in the source, not on GitHub, and a check that fails on a
+# comment gets worked around. DD is the doubled U+2014 as UTF-8 bytes.
+DD=$'\xe2\x80\x94\xe2\x80\x94'
+EMDASH_HITS="$(grep -lF -- "$DD" "${FILES[@]}" 2>/dev/null | while IFS= read -r f; do
+  grep -vE '^[[:space:]]*#' "$f" | grep -qF -- "$DD" && printf '%s\n' "$f"
 done)"
 if [ -n "$EMDASH_HITS" ]; then
   WORDING_MISSING="$WORDING_MISSING
-  a doubled em dash (——) is banned in posted text: $(tr '\n' ' ' <<<"$EMDASH_HITS")"
+  posted text has a doubled em dash in: $(tr '\n' ' ' <<<"$EMDASH_HITS")"
 fi
 
 if [ -n "$WORDING_MISSING" ]; then
