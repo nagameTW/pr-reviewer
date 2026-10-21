@@ -256,7 +256,7 @@ for d in $ALL_DRIVERS; do
   # Runs the COPY, not the tree. A driver that pays for the snapshot and then
   # still hands the tree path to bash has kept the whole defect. `has` on the
   # function name alone could not tell those two apart.
-  has "$d hands the copy to bash, not the tree" 'timeout -k "$ROUND_KILL_AFTER" "$ROUND_TIMEOUT" "$BASH_BIN" "$RUN_SH"' "$SRC_D"
+  has "$d hands the copy to bash, not the tree" '"$TIMEOUT_BIN" -k "$ROUND_KILL_AFTER" "$ROUND_TIMEOUT" "$BASH_BIN" "$RUN_SH"' "$SRC_D"
   has "$d removes its snapshot afterwards"      'rm -f "$RUN_SH"'      "$SRC_D"
   # The round timeout has to be able to END the round. Plain `timeout` sends
   # SIGTERM and then waits, and bash does not act on a signal until its
@@ -264,7 +264,7 @@ for d in $ALL_DRIVERS; do
   # connection keeps running with the TERM still pending, and no later round
   # starts. --kill-after is what makes ROUND_TIMEOUT a deadline rather than a
   # request.
-  has "$d gives its round timeout a kill-after" 'timeout -k "$ROUND_KILL_AFTER"' "$SRC_D"
+  has "$d gives its round timeout a kill-after" '"$TIMEOUT_BIN" -k "$ROUND_KILL_AFTER"' "$SRC_D"
 done
 
 # ── timeout knobs are whole seconds, at least 1 ──────────────────────────
@@ -467,7 +467,7 @@ KEEP_VERDICT="$KEEP_VERDICT"$'\n'"$JOB$(src_echo pr-autoreview.sh 'split request
 KEEP_VERDICT="$KEEP_VERDICT"$'\n'"$JOB$(src_echo pr-autoreview.sh 're-posting the verdict an earlier round')"
 KEEP_REFUSAL="$JOB$(src_echo pr-autoreview.sh 'refusing to review — a symlink is in the tree the failed apply left behind')
 $(src_echo pr-autoreview.sh 'could not create the review worktree — skipping')
-$(src_echo pr-autoreview.sh 'timeout(1) missing — refusing to run')
+$(src_echo pr-autoreview.sh 'timeout(1) missing')
 $(src_echo pr-autoreview.sh 'item(s) — repo(s), review job(s)')
 $(src_echo pr-autoreview.sh 'could not read the default branch')
 $(src_echo pr-autoreview.sh 'model call(s) hit rate/usage limits')
@@ -519,7 +519,7 @@ PR_REFUSAL="$JOB$(src_echo pr-autoreview.sh 'refusing to review — a symlink is
 ROUND_NOTICES="$(src_echo pr-autoreview.sh 'model call(s) hit rate/usage limits')
 $(src_echo pr-autoreview.sh 'review job(s) died outside')
 $(src_echo pr-autoreview.sh 'item(s) — repo(s), review job(s)')
-$(src_echo pr-autoreview.sh 'timeout(1) missing — refusing to run')
+$(src_echo pr-autoreview.sh 'timeout(1) missing')
 $(src_echo pr-autoreview.sh 'could not read the default branch')"
 printf '%s\n%s\n' "$PR_REFUSAL" "$ROUND_NOTICES" > "$GL"
 has 'five round-level refusals do not push out the PR that was skipped' "$PR_REFUSAL" "$(loop_gate_summary "$GL")"
