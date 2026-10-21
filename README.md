@@ -910,6 +910,9 @@ Who controls each input, and how the reviewer treats it:
   plus `Read` on the round's scratch copies of the diff and of the PR's title
   and description, which include the title and body of the issue the PR
   links. The repair call, which only reshapes an answer, gets no tool.
+  With `--restricted`, Claude Code itself confines the file tools to the
+  review clone and the call's private directories. Each of those holds only
+  the call's diff or slice, or the PR's title and description.
   `--strict-mcp-config` and `--disallowedTools "mcp__*"` keep MCP servers out,
   and `--disable-slash-commands` keeps the reviewed repo's skills and commands
   out. `--setting-sources` is empty, so a rule in your own

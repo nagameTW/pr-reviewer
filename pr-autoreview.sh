@@ -837,9 +837,13 @@ review_one_pr() { # $1 = PR number, $2 = the worktree the dispatcher made
     cleanup_tmpfiles
     # The slice parts live in a DIRECTORY, and cleanup_tmpfiles is `rm -f`,
     # which leaves one behind per PR per round. Removed here rather than by
-    # listing every part in TMPFILES: the parts are created inside it and
-    # nothing else ever is.
+    # listing every part in TMPFILES: the parts and each slice's own dir are
+    # created inside it, and nothing else is.
     [ -n "${SLICE_DIR:-}" ] && rm -rf "$SLICE_DIR"
+    # The same for the dirs that hold the diff and the intent file. The
+    # happy paths rm the files, and this removes the dirs.
+    [ -n "${DIFF_DIR:-}" ] && rm -rf "$DIFF_DIR"
+    [ -n "${INTENT_DIR:-}" ] && rm -rf "$INTENT_DIR"
     # cd out first: worktree remove refuses while a process sits inside.
     cd / 2>/dev/null || true
     git -C "$CLONE_DIR" worktree remove --force "$WT_DIR" 2>/dev/null || true
@@ -1054,8 +1058,11 @@ the default branch. Edit the title and it is checked again automatically."
   # The X's LAST: BSD mktemp only replaces a trailing run, so `XXXX.diff` was
   # one fixed name on macOS, and the second of two parallel jobs failed to
   # create it and reported the diff as unfetchable.
-  DIFF="$(mktemp "$GATE_SCRATCH/prreview-pr-diff-XXXXXX")" \
+  # The diff is alone in its own dir. The verify and red-team calls get that
+  # dir with --add-dir, and they must not see any other file.
+  DIFF_DIR="$(mktemp -d "$GATE_SCRATCH/prreview-pr-diff-XXXXXX")" \
     || { note_skip "could not create a scratch file for the diff — skipping (fail closed)"; return 0; }
+  DIFF="$DIFF_DIR/pr.diff"
   TMPFILES+=("$DIFF")
   # Not silent: a 406 on a >20k-line diff, a rate limit and a
   # dropped connection all land here, and this used to be the one skip in the
@@ -1431,7 +1438,12 @@ $SPLIT_TEXT"
       N_SLICES="$(cut -f1 <<<"$PLAN" | sort -u | grep -c .)"
       if [ "${N_SLICES:-1}" -gt 1 ]; then
         for s in $(cut -f1 <<<"$PLAN" | sort -un); do
-          SD="$SLICE_DIR/slice-$s.diff"
+          # Its own subdir, because the review call of this slice gets the
+          # dir with --add-dir. $SLICE_DIR holds the parts of every slice.
+          # If mkdir fails, the diff is not written and the check below
+          # falls back to one pass.
+          mkdir "$SLICE_DIR/slice-$s" 2>/dev/null
+          SD="$SLICE_DIR/slice-$s/diff"
           # `while read` over the plan's part paths, not `xargs cat`: a part
           # path is built by this script from mktemp -d, but the FILE paths in
           # the same table come from the diff and are author-chosen text, and
@@ -1486,8 +1498,11 @@ $SPLIT_TEXT"
   #
   # It also unlocks a finding class the gate could not produce at all: the
   # description claims X and the diff does not do X.
-  INTENT_FILE="$(mktemp "$GATE_SCRATCH/prreview-pr-intent-XXXXXX")" \
+  # Alone in its own dir, which every review call of this PR gets with
+  # --add-dir.
+  INTENT_DIR="$(mktemp -d "$GATE_SCRATCH/prreview-pr-intent-XXXXXX")" \
     || { note_skip "could not create a scratch file for the title and description — skipping (fail closed)"; rm -f "$DIFF"; return 0; }
+  INTENT_FILE="$INTENT_DIR/intent.txt"
   TMPFILES+=("$INTENT_FILE")
   jq -r '"PR TITLE: " + (.title // "") + "\n\nPR DESCRIPTION:\n" + (.body // "(empty)")' \
      <<<"$INFO" > "$INTENT_FILE" 2>/dev/null || : > "$INTENT_FILE"
@@ -1836,6 +1851,10 @@ Rules: any finding that remains blocking after the harness caps — every CRITIC
   # again with extra steps.
   ALLOWED=("Read(/$REPO_DIR/**)" "Grep(/$REPO_DIR/**)" "Glob(/$REPO_DIR/**)" "Read(/$SLICE_DIFF)")
   [ -n "$INTENT_FILE" ] && ALLOWED+=("Read(/$INTENT_FILE)")
+  # The dirs for --restricted. Each holds only this slice's diff or only
+  # this PR's intent file. With one slice, the slice diff is $DIFF.
+  READ_DIRS=("${SLICE_DIFF%/*}")
+  [ -n "$INTENT_FILE" ] && READ_DIRS+=("$INTENT_DIR")
   # SAMPLES independent passes over the SAME prompt (see the knob's comment for
   # why, and why they are unioned rather than voted on). Nothing in the prompt
   # tells a pass that it is one of several: a pass told "another copy of you is
@@ -1862,7 +1881,7 @@ Rules: any finding that remains blocking after the harness caps — every CRITIC
     # --output-format json is EITHER an event array or the bare result object,
     # depending on the CLI version (see lib/findings.sh); CLAUDE_RESULT_JQ
     # normalises both and prefixes whether the call completed at all.
-    claude_call "$REVIEW_TIMEOUT" "$REVIEW_MODEL" "$CLAUDE_READ_TOOLS" "${ALLOWED[@]}" \
+    claude_call "$REVIEW_TIMEOUT" "$REVIEW_MODEL" "$CLAUDE_READ_TOOLS" "${READ_DIRS[@]}" -- "${ALLOWED[@]}" \
       <"$PROMPT_F" >"$SLICE_RAW_F" 2>"$REVIEW_ERR" &
     SLICE_PIDS+=("$!"); SLICE_RAWF+=("$SLICE_RAW_F"); SLICE_ERRF+=("$REVIEW_ERR")
     SLICE_OF+=("$SI")
@@ -2044,7 +2063,7 @@ $SLICE_CLEAN"
       # matches no file stays, so --allowedTools always has a value.
       # printf is a builtin, so the prompt is in no process's argv.
       REPAIR_OUT="$(printf '%s' "$(findings_repair_prompt "$OUT" "$REVIEW_SCHEMA")" \
-             | claude_call "$REPAIR_TIMEOUT" "$CHEAP_MODEL" "" "Read(/nonexistent-repair-scope/**)" 2>"$REPAIR_ERR" \
+             | claude_call "$REPAIR_TIMEOUT" "$CHEAP_MODEL" "" -- "Read(/nonexistent-repair-scope/**)" 2>"$REPAIR_ERR" \
              | tee "$REPAIR_RAW" | jq -r "$CLAUDE_RESULT_JQ")"
       # Counted like every other model call, so ROUND USAGE covers it too.
       usage_record "$REPAIR_RAW" "repair-pr$PR"
@@ -2359,7 +2378,7 @@ $SLICE_CLEAN"
       RT_PRIOR="$(jq -r "$FINDINGS_RENDER_PLAIN_JQ" <<<"$CLEANED" 2>/dev/null)" || RT_PRIOR=""
       printf '%s' "$(redteam_prompt "$REPO" "$PR" "$DIFF" "$DIFF_APPLIED" "$RT_PRIOR" \
               "$REVIEW_LANGUAGE_SPEC" "$SEVERITY_SPEC" "$REPO_DIR" "$TREE_BIN_NOTE")" \
-        | claude_call "$VERIFY_TIMEOUT" "$REVIEW_MODEL" "$CLAUDE_READ_TOOLS" "Read(/$REPO_DIR/**)" "Grep(/$REPO_DIR/**)" "Glob(/$REPO_DIR/**)" "Read(/$DIFF)" \
+        | claude_call "$VERIFY_TIMEOUT" "$REVIEW_MODEL" "$CLAUDE_READ_TOOLS" "$DIFF_DIR" -- "Read(/$REPO_DIR/**)" "Grep(/$REPO_DIR/**)" "Glob(/$REPO_DIR/**)" "Read(/$DIFF)" \
         >"$RT_OUT" 2>"$RT_ERR"
       # has("candidates"), not `.candidates | length > 0`: an empty list is the
       # answer this stage expects most, and asking for a non-empty one would
@@ -2475,7 +2494,7 @@ $SLICE_CLEAN"
       # Same path-scoped tools as the review: repo + this diff, nothing else.
       # $! is the PID of the last command in this pipeline, the model call.
       printf '%s' "$(findings_verify_prompt "$REPO" "$PR" "$DIFF" "$V_SEV" "$V_FILE" "$V_LINE" "$V_ISSUE" "$DIFF_APPLIED" "$TREE_BIN_NOTE")" \
-        | claude_call "$VERIFY_TIMEOUT" "$REVIEW_MODEL" "$CLAUDE_READ_TOOLS" "Read(/$REPO_DIR/**)" "Grep(/$REPO_DIR/**)" "Glob(/$REPO_DIR/**)" "Read(/$DIFF)" \
+        | claude_call "$VERIFY_TIMEOUT" "$REVIEW_MODEL" "$CLAUDE_READ_TOOLS" "$DIFF_DIR" -- "Read(/$REPO_DIR/**)" "Grep(/$REPO_DIR/**)" "Glob(/$REPO_DIR/**)" "Read(/$DIFF)" \
         >"$V_FILE_OUT" 2>"$V_FILE_ERR" &
       VERIFY_PIDS+=("$!"); VERIFY_FILES+=("$V_FILE_OUT"); VERIFY_ERRS+=("$V_FILE_ERR")
       VERIFY_IDX+=("$V_IDX"); VERIFY_ISSUE+=("$V_ISSUE")

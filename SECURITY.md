@@ -40,12 +40,16 @@ and web tools included, exists in the session. Each of the three is limited
 to the review clone, plus `Read` on the round's own scratch copies of the diff
 and of the PR's title and description (with the title and body of the issue
 the PR links, when it links one). The output-repair call gets no tool
-(`--tools ""`). Every call also gets `--strict-mcp-config` and
-`--disallowedTools "mcp__*"`, so no MCP server starts, and
-`--disable-slash-commands`, so no skill or command from the reviewed repo
-loads. `--setting-sources` is empty, so the operator's own Claude settings
-cannot widen any of that. These flags need Claude Code 2.1.305 or later. The
-reviewer checks `claude --version` at startup and refuses an older version.
+(`--tools ""`). With `--restricted`, Claude Code itself confines the file
+tools to the review clone and the call's private directories. Each of those
+holds only the call's diff or slice, or the PR's title and description, so a
+call cannot read another PR's or another slice's files. Every call also gets
+`--strict-mcp-config` and `--disallowedTools "mcp__*"`, so no MCP server
+starts, and `--disable-slash-commands`, so no skill or command from the
+reviewed repo loads. `--setting-sources` is empty, so the operator's own
+Claude settings cannot widen any of that. These flags need Claude Code 2.1.305
+or later. The reviewer checks `claude --version` at startup and refuses an
+older version.
 
 Every prompt goes to Claude Code on stdin, never on the command line, so
 other users of the machine cannot read it in the process list. The `claude`

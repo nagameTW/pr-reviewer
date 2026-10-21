@@ -37,8 +37,8 @@ STUB_EOF
 chmod +x "$STUB/claude"
 
 PROMPT_MARK="prompt-marker-4f1c review this diff"
-# $1 = tools, the rest = allowed rules. The prompt goes on stdin, as at
-# every call site.
+# $1 = tools, then the read dirs, then --, then the allowed rules. The
+# prompt goes on stdin, as at every call site.
 run_call() {
   : > "$STUB/argv"; : > "$STUB/env"; : > "$STUB/stdin"
   printf '%s\n' "$PROMPT_MARK" \
@@ -62,6 +62,9 @@ common_flags() { # $1 = label, $2 = argv
   has "$1: the model is pinned"                 '[--model][test-model]' "$2"
   has "$1: JSON output"                         '[--output-format][json]' "$2"
   has "$1: -p is followed by a flag, not by a prompt" '[-p][--model]' "$2"
+  # --restricted confines the file tools to the cwd and the --add-dir dirs.
+  # The path rules alone do not stop a rule that is wider than it looks.
+  has "$1: --restricted"                        '[--restricted]' "$2"
   lacks "$1: no prompt text in argv"            'prompt-marker-4f1c' "$2"
 }
 common_env() { # $1 = label, $2 = env dump
@@ -78,26 +81,49 @@ common_env() { # $1 = label, $2 = env dump
 }
 
 # ── a call that reads: review, verify, red team ──────────────────────────
+# The review shape: two private read dirs, one for the slice diff and one for
+# the intent file.
 REPO_DIR=/srv/example/work/repo
-DIFF=/srv/example/work/scratch/prreview-diff
-run_call "$CLAUDE_READ_TOOLS" "Read(/$REPO_DIR/**)" "Grep(/$REPO_DIR/**)" "Glob(/$REPO_DIR/**)" "Read(/$DIFF)"
+SLICE_READ=/srv/example/work/scratch/prreview-slice-ab12/slice-1
+INTENT_DIR=/srv/example/work/scratch/prreview-pr-intent-cd34ef
+SLICE_DIFF="$SLICE_READ/diff"
+run_call "$CLAUDE_READ_TOOLS" "$SLICE_READ" "$INTENT_DIR" -- "Read(/$REPO_DIR/**)" "Grep(/$REPO_DIR/**)" "Glob(/$REPO_DIR/**)" "Read(/$SLICE_DIFF)"
 ARGV="$(cat "$STUB/argv")"; ENVD="$(cat "$STUB/env")"
 is  'the read tool set is Read, Grep and Glob' "$CLAUDE_READ_TOOLS" 'Read,Grep,Glob'
 has 'read call: --tools names only Read, Grep and Glob' '[--tools][Read,Grep,Glob]' "$ARGV"
+has 'read call: --add-dir carries exactly the given dirs, in order' \
+    "[--add-dir][$SLICE_READ][$INTENT_DIR][--allowedTools]" "$ARGV"
+is  'read call: one --add-dir flag' "$(grep -o '\[--add-dir\]' <<<"$ARGV" | grep -c .)" 1
+lacks 'read call: the -- separator does not reach the CLI' '[--]' "$ARGV"
 has 'read call: the path-scoped rules reach --allowedTools, in order' \
-    "[--allowedTools][Read(//srv/example/work/repo/**)][Grep(//srv/example/work/repo/**)][Glob(//srv/example/work/repo/**)][Read(//srv/example/work/scratch/prreview-diff)][--output-format]" "$ARGV"
+    "[--allowedTools][Read(//srv/example/work/repo/**)][Grep(//srv/example/work/repo/**)][Glob(//srv/example/work/repo/**)][Read(/$SLICE_DIFF)][--output-format]" "$ARGV"
 common_flags 'read call' "$ARGV"
 common_env 'read call' "$ENVD"
 is  'read call: the prompt arrives on stdin' "$(cat "$STUB/stdin")" "$PROMPT_MARK"
 is  'read call: the answer goes to stdout' "$(cat "$STUB/out")" '{"type":"result","result":"stub answer"}'
 
+# The verify and red-team shape: one read dir that holds the PR's diff.
+DIFF_DIR=/srv/example/work/scratch/prreview-pr-diff-gh56ij
+run_call "$CLAUDE_READ_TOOLS" "$DIFF_DIR" -- "Read(/$REPO_DIR/**)" "Grep(/$REPO_DIR/**)" "Glob(/$REPO_DIR/**)" "Read(/$DIFF_DIR/pr.diff)"
+ARGV="$(cat "$STUB/argv")"
+has 'one-dir call: --add-dir carries exactly the diff dir' "[--add-dir][$DIFF_DIR][--allowedTools]" "$ARGV"
+common_flags 'one-dir call' "$ARGV"
+
+# A call site without the -- separator is refused before claude starts.
+# Without the check, its rules would become read dirs and the reverse.
+run_call "$CLAUDE_READ_TOOLS" "Read(/$REPO_DIR/**)" 2>"$STUB/err"; RC=$?
+is  'no --: the call fails' "$([ "$RC" -ne 0 ] && echo failed || echo ran)" failed
+has 'no --: the error names the missing --' 'no -- before' "$(cat "$STUB/err")"
+is  'no --: claude does not start' "$(cat "$STUB/argv")" ''
+
 # ── the repair call: no tool at all ──────────────────────────────────────
 # `claude --help` (2.1.305): Use "" to disable all tools. The rule that
 # matches no file stays, so --allowedTools is never left without a value.
-run_call "" "Read(/nonexistent-repair-scope/**)"
+run_call "" -- "Read(/nonexistent-repair-scope/**)"
 ARGV="$(cat "$STUB/argv")"; ENVD="$(cat "$STUB/env")"
 has 'repair call: --tools is empty' '[--tools][]' "$ARGV"
 lacks 'repair call: no Read, Grep or Glob tool' '[--tools][Read' "$ARGV"
+lacks 'repair call: no --add-dir' '[--add-dir]' "$ARGV"
 common_flags 'repair call' "$ARGV"
 common_env 'repair call' "$ENVD"
 is  'repair call: the prompt arrives on stdin' "$(cat "$STUB/stdin")" "$PROMPT_MARK"
@@ -107,14 +133,27 @@ is  'repair call: the prompt arrives on stdin' "$(cat "$STUB/stdin")" "$PROMPT_M
 # not count.
 SITES="$(grep -E '^[^#]*claude_call ' pr-autoreview.sh)"
 is  'pr-autoreview.sh has four model calls, all through claude_call' "$(printf '%s\n' "$SITES" | grep -c 'claude_call ')" 4
-is  'review: reads with the read tool set' \
-    "$(printf '%s\n' "$SITES" | grep -cF 'claude_call "$REVIEW_TIMEOUT" "$REVIEW_MODEL" "$CLAUDE_READ_TOOLS" "${ALLOWED[@]}"')" 1
-is  'verify and red team: read with the read tool set, scoped to the clone and the diff' \
-    "$(printf '%s\n' "$SITES" | grep -cF 'claude_call "$VERIFY_TIMEOUT" "$REVIEW_MODEL" "$CLAUDE_READ_TOOLS" "Read(/$REPO_DIR/**)" "Grep(/$REPO_DIR/**)" "Glob(/$REPO_DIR/**)" "Read(/$DIFF)"')" 2
-is  'repair: no tool, and a rule that matches no file' \
-    "$(printf '%s\n' "$SITES" | grep -cF 'claude_call "$REPAIR_TIMEOUT" "$CHEAP_MODEL" "" "Read(/nonexistent-repair-scope/**)"')" 1
+is  'review: reads with the read tool set, in the slice dir and the intent dir' \
+    "$(printf '%s\n' "$SITES" | grep -cF 'claude_call "$REVIEW_TIMEOUT" "$REVIEW_MODEL" "$CLAUDE_READ_TOOLS" "${READ_DIRS[@]}" -- "${ALLOWED[@]}"')" 1
+is  'verify and red team: read with the read tool set, scoped to the clone and the diff dir' \
+    "$(printf '%s\n' "$SITES" | grep -cF 'claude_call "$VERIFY_TIMEOUT" "$REVIEW_MODEL" "$CLAUDE_READ_TOOLS" "$DIFF_DIR" -- "Read(/$REPO_DIR/**)" "Grep(/$REPO_DIR/**)" "Glob(/$REPO_DIR/**)" "Read(/$DIFF)"')" 2
+is  'repair: no tool, no read dir, and a rule that matches no file' \
+    "$(printf '%s\n' "$SITES" | grep -cF 'claude_call "$REPAIR_TIMEOUT" "$CHEAP_MODEL" "" -- "Read(/nonexistent-repair-scope/**)"')" 1
 is  'the review rules are the clone, the slice diff and the intent file' \
     "$(grep -cF 'ALLOWED=("Read(/$REPO_DIR/**)" "Grep(/$REPO_DIR/**)" "Glob(/$REPO_DIR/**)" "Read(/$SLICE_DIFF)")' pr-autoreview.sh)" 1
+# A read dir must hold only the files of one call. $GATE_SCRATCH holds every
+# PR's files, and $SLICE_DIR holds the parts of every slice.
+is  'review: the slice read dir is the dir of this slice diff' \
+    "$(grep -cF 'READ_DIRS=("${SLICE_DIFF%/*}")' pr-autoreview.sh)" 1
+is  'review: the intent dir is the other read dir' \
+    "$(grep -cF '[ -n "$INTENT_FILE" ] && READ_DIRS+=("$INTENT_DIR")' pr-autoreview.sh)" 1
+is  'each slice diff is alone in its own dir under SLICE_DIR' \
+    "$(grep -cF 'SD="$SLICE_DIR/slice-$s/diff"' pr-autoreview.sh)" 1
+is  'the PR diff is alone in its own dir' "$(grep -cF 'DIFF="$DIFF_DIR/pr.diff"' pr-autoreview.sh)" 1
+is  'the intent file is alone in its own dir' "$(grep -cF 'INTENT_FILE="$INTENT_DIR/intent.txt"' pr-autoreview.sh)" 1
+DIR_LINES="$(printf '%s\n' "$SITES"; grep -E '^[^#]*READ_DIRS(\+)?=' pr-autoreview.sh)"
+lacks 'no read dir is $GATE_SCRATCH' '$GATE_SCRATCH' "$DIR_LINES"
+lacks 'no read dir is $SLICE_DIR' '"$SLICE_DIR"' "$DIR_LINES"
 is  'no model prompt goes in argv (-p "$(...)")' "$(grep -cE '^[[:space:]]*-p "\$\(' pr-autoreview.sh)" 0
 
 if [ "$FAILED" -eq 0 ]; then echo "PASS: claude call"; else echo "FAIL: claude call"; exit 1; fi

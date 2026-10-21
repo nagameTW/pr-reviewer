@@ -19,6 +19,11 @@ All notable changes to this project are recorded here. The format follows
   `--disallowedTools "mcp__*"`, `ENABLE_CLAUDEAI_MCP_SERVERS=false`), skills
   and slash commands (`--disable-slash-commands`) and auto memory
   (`CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`).
+- Every call also gets `--restricted`, so Claude Code itself confines the
+  file tools to the review clone and to private directories for that call.
+  Each directory holds only the call's diff or slice, or the PR's title and
+  description, so no call can read another pull request's or another slice's
+  files.
 - Every prompt now goes to Claude Code on stdin. Before, the refutation,
   red-team and repair prompts were on the command line, where other users of
   the same machine could read them in the process list. Those prompts quote
