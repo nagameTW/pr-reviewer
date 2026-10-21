@@ -1238,6 +1238,17 @@ the default branch. Edit the title and it is checked again automatically."
         || { note_skip "could not create a scratch file for the file list of origin/$DEFAULT_BRANCH, skipping (fail closed)"; return 0; }
       git -C "$REPO_DIR" ls-tree -r --name-only -z "origin/$DEFAULT_BRANCH" > "$CONV_TREE" 2>/dev/null \
         || { note_skip "could not list the files of origin/$DEFAULT_BRANCH on a stacked base, skipping (fail closed)"; return 0; }
+      # The listing goes into an array once, so a look-up below is a plain
+      # string comparison. grep -z is GNU only, and macOS has no GNU grep.
+      # `read -d ''` keeps a newline inside a name. git ends every name with a
+      # NUL, so a last name without one means the listing is cut off.
+      # Trade-off: one comparison per file for each convention file. A repo with
+      # 50000 files and 100 convention files takes about 15 s per stacked PR.
+      CONV_TREE_NAMES=(); CONV_TREE_LAST=""
+      { while IFS= read -r -d '' CONV_TREE_LAST; do
+          CONV_TREE_NAMES[${#CONV_TREE_NAMES[@]}]="$CONV_TREE_LAST"
+        done < "$CONV_TREE" && [ -z "$CONV_TREE_LAST" ]; } \
+        || { note_skip "the file list of origin/$DEFAULT_BRANCH ends in the middle of a name on a stacked base, skipping (fail closed)"; return 0; }
       # Each step must work. A failed step skips the PR: a tree where one
       # convention file still comes from the parent branch does not hold the
       # default branch's rules. CONV_FORCED is set after the last file is done.
@@ -1248,17 +1259,11 @@ the default branch. Edit the title and it is checked again automatically."
       CONV_DONE=0
       while IFS= read -r -d '' conv; do
         if [ -n "$conv" ]; then
-          # CONV_HAVE: 0 = the default tree has the path, 1 = it has not,
-          # 2 = no answer. grep splits a pattern at a newline, so a name with
-          # one gets no answer instead of a wrong one.
-          case "$conv" in
-            *$'\n'*) CONV_HAVE=2 ;;
-            *) LC_ALL=C grep -qzxF -- "$conv" "$CONV_TREE" 2>/dev/null; CONV_HAVE=$? ;;
-          esac
-          if [ "$CONV_HAVE" -ge 2 ]; then
-            note_skip "could not look up a convention file in the file list of origin/$DEFAULT_BRANCH on a stacked base, skipping (fail closed)"
-            return 0
-          fi
+          # CONV_HAVE: 0 = the default tree has the path, 1 = it has not.
+          CONV_HAVE=1
+          for CONV_TREE_NAME in ${CONV_TREE_NAMES[@]+"${CONV_TREE_NAMES[@]}"}; do
+            if [ "$CONV_TREE_NAME" = "$conv" ]; then CONV_HAVE=0; break; fi
+          done
           if [ "$CONV_HAVE" = 0 ]; then
             git -C "$REPO_DIR" checkout "origin/$DEFAULT_BRANCH" -- "$conv" 2>/dev/null \
               || { note_skip "could not check out a convention file from origin/$DEFAULT_BRANCH on a stacked base, skipping (fail closed)"; return 0; }

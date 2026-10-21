@@ -10,6 +10,10 @@
 # the block removes that file and the review goes on. The failures are
 # injected with shell functions that shadow git and rm inside a subshell.
 #
+# The look-up of a path in the default branch's file list must not need a
+# GNU tool. The README lists macOS and its Bash 3.2 as supported, and GNU grep
+# is not on that list. A grep stub that rejects -z stands in for such a host.
+#
 # Run: bash tests/stacked-conv.test.sh
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
@@ -27,6 +31,12 @@ for h in ok bad is has lacks; do command -v "$h" >/dev/null 2>&1 || { echo "  FA
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
+STUBS="$TMP/stubs"; mkdir -p "$STUBS"
+{ printf '#!/bin/bash\n'
+  printf 'for a in "$@"; do case "$a" in --) break ;; -*z*) exit 2 ;; esac; done\n'
+  printf 'exec %q "$@"\n' "$(command -v grep)"; } > "$STUBS/grep"
+chmod +x "$STUBS/grep"
+
 # From the stacked-base test to the `fi` that closes it.
 BLOCK="$(awk '/^    if ! merge_base_allowed "\$PR_BASE" "\$DEFAULT_BRANCH"; then$/ { p = 1 } p { print } p && /^    fi$/ { exit }' pr-autoreview.sh)"
 [ "$(grep -c '' <<<"$BLOCK")" -gt 20 ] || { echo "FAIL: could not lift the stacked-base block out of pr-autoreview.sh"; exit 1; }
@@ -43,6 +53,8 @@ DEFAULT_BRANCH=main PR=5
 #   .claude/skills/a/SKILL.md  AGENTS.md  CLAUDE.md  docs/CLAUDE.md
 # CLAUDE.md is the 3rd and docs/CLAUDE.md is the last. A failure on them
 # comes after steps that worked, so a flag set per file would be set by then.
+# DEFAULT_EXTRA and PARENT_EXTRA, when set, name one more file (the name may
+# hold a newline) that the default commit or the parent commit adds.
 build() { # $1 = directory
   local d="$1"
   mkdir -p "$d/.claude/skills/a"; git -C "$d" init -q
@@ -50,6 +62,7 @@ build() { # $1 = directory
   printf 'main agents\n' > "$d/AGENTS.md"
   printf 'main skill\n' > "$d/.claude/skills/a/SKILL.md"
   printf 'main code\n' > "$d/src.py"
+  [ -z "${DEFAULT_EXTRA-}" ] || printf 'main odd\n' > "$d/$DEFAULT_EXTRA"
   git -C "$d" add -A
   git -C "$d" -c user.email=t@example.com -c user.name=t -c commit.gpgsign=false commit -qm default
   git -C "$d" update-ref refs/remotes/origin/main HEAD
@@ -58,6 +71,7 @@ build() { # $1 = directory
   printf 'parent skill\n' > "$d/.claude/skills/p/SKILL.md"
   printf 'parent nested rules\n' > "$d/docs/CLAUDE.md"
   printf 'parent code\n' > "$d/src.py"
+  [ -z "${PARENT_EXTRA-}" ] || printf 'parent odd\n' > "$d/$PARENT_EXTRA"
   git -C "$d" add -A
   git -C "$d" -c user.email=t@example.com -c user.name=t -c commit.gpgsign=false commit -qm parent
 }
@@ -68,10 +82,12 @@ fail_ls_files() { git() { if [ "$3" = ls-files ]; then return 128; fi; command g
 # The default branch's tree cannot be read: the listing fails, and so does a
 # read of a single object.
 fail_tree_read() { git() { case "$3" in ls-tree|cat-file) return 128 ;; esac; command git "$@"; }; }
-# The look-up of a path in that listing gives no answer.
-fail_lookup()   { grep() { return 2; }; }
-# A convention file with a newline in its name cannot be matched safely.
-newline_name()  { printf 'x\n' > "$REPO_DIR/.claude/skills/a/odd"$'\n'"name.md"; git -C "$REPO_DIR" add -A; }
+# The listing of the default branch ends in the middle of a name: the last
+# name has no NUL after it. The list cannot be trusted to be complete.
+fail_lookup()   { git() { if [ "$3" = ls-tree ]; then printf 'AGENTS.md'; return 0; fi; command git "$@"; }; }
+# A host where grep rejects -z (BSD grep, the macOS default). The stub exits 2
+# on any option word with a z in it, and runs the real grep otherwise.
+no_gnu_grep()   { PATH="$STUBS:$PATH"; }
 fail_checkout() { git() { if [ "$3" = checkout ] && [ "${!#}" = CLAUDE.md ]; then return 1; fi; command git "$@"; }; }
 fail_index_rm() { git() { if [ "$3" = rm ] && [ "${!#}" = docs/CLAUDE.md ]; then return 1; fi; command git "$@"; }; }
 fail_file_rm()  { rm() { case "${!#}" in */docs/CLAUDE.md) return 1 ;; esac; command rm "$@"; }; }
@@ -158,10 +174,8 @@ is  "tree read fails: the file keeps the parent's version" "$(cat "$CASE_DIR/CLA
 is  "tree read fails: the index keeps the parent's files" "$(git -C "$CASE_DIR" ls-files 'docs/CLAUDE.md' '.claude/skills/p/SKILL.md' | wc -l | tr -d ' ')" 2
 
 run_case fail_lookup
-skipped "look-up fails" "look up a convention file"
-
-run_case newline_name
-skipped "newline in a name" "look up a convention file"
+skipped "truncated list" "ends in the middle of a name"
+is  "truncated list: the file keeps the parent's version" "$(cat "$CASE_DIR/CLAUDE.md")" "parent rules"
 
 run_case fail_checkout
 skipped "checkout fails" "check out a convention file"
@@ -175,5 +189,37 @@ skipped "file removal fails" "from the review tree"
 
 run_case fail_mktemp
 skipped "no temp file for the list" "scratch file"
+
+# ── a host without GNU grep ─────────────────────────────────────────────────
+# The stub must reject -z, or this case proves nothing.
+"$STUBS/grep" -qz x /dev/null; is "stub: grep -z gives status 2" "$?" 2
+printf 'a\n' | "$STUBS/grep" -q a; is "stub: grep without -z is the real grep" "$?" 0
+run_case no_gnu_grep
+is  "no GNU grep: CONV_FORCED is 1"                     "$CF" 1
+has "no GNU grep: the review goes on"                   "reached" "$OUT"
+lacks "no GNU grep: the PR is not skipped"              "skip 5:" "$OUT"
+is  "no GNU grep: a file the default has takes its version" "$(cat "$CASE_DIR/CLAUDE.md")" "main rules"
+[ ! -e "$CASE_DIR/docs/CLAUDE.md" ] && ok "no GNU grep: a file the default lacks is removed from the disk" \
+  || bad "no GNU grep: a file the default lacks is removed from the disk" "still on disk"
+is  "no GNU grep: ...and from the index"                "$(git -C "$CASE_DIR" ls-files 'docs/CLAUDE.md' '.claude/skills/p/SKILL.md')" ""
+
+# ── a name with a newline is compared as a whole ───────────────────────────
+ODD=".claude/skills/a/odd"$'\n'"name.md"
+# The parent has the name. The default branch does not, but it has a file
+# named like the first line of it. A look-up that splits the name at the
+# newline would find that file and then fail to check out the name.
+DEFAULT_EXTRA=".claude/skills/a/odd" PARENT_EXTRA="$ODD" run_case :
+is  "newline name, absent: CONV_FORCED is 1"            "$CF" 1
+has "newline name, absent: the review goes on"          "reached" "$OUT"
+lacks "newline name, absent: nothing is skipped"        "skip 5:" "$OUT"
+[ ! -e "$CASE_DIR/$ODD" ] && ok "newline name, absent: the file is removed from the disk" \
+  || bad "newline name, absent: the file is removed from the disk" "still on disk"
+is  "newline name, absent: ...and from the index"       "$(git -C "$CASE_DIR" ls-files -z -- "$ODD" | wc -c | tr -d ' ')" 0
+is  "newline name, absent: the file named like its first line takes the default version" "$(cat "$CASE_DIR/.claude/skills/a/odd")" "main odd"
+# Both branches have the name: it takes the default version.
+DEFAULT_EXTRA="$ODD" PARENT_EXTRA="$ODD" run_case :
+is  "newline name, present: CONV_FORCED is 1"           "$CF" 1
+lacks "newline name, present: nothing is skipped"       "skip 5:" "$OUT"
+is  "newline name, present: the file takes the default version" "$(cat "$CASE_DIR/$ODD")" "main odd"
 
 if [ "$FAILED" -eq 0 ]; then echo "PASS: stacked-PR convention files"; else echo "FAIL: stacked-PR convention files"; exit 1; fi

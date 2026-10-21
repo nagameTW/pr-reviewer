@@ -67,6 +67,12 @@ All notable changes to this project are recorded here. The format follows
   limit. A file with a prior line "N more finding(s) on this file" is
   searched in full, also when the delta does not touch it. The task said both
   that such a file is not searched and that it is searched in full.
+- The reviewer no longer skips every stacked PR on a host without GNU grep,
+  such as macOS with its default tools. The step that replaces convention
+  files looked a path up with `grep -z`, which only GNU grep has. It now
+  compares the paths in Bash 3.2 itself. A file name with a newline is now
+  compared as a whole, and a file list that ends in the middle of a name
+  skips the PR.
 
 ### Security
 
