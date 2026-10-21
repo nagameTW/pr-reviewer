@@ -61,10 +61,9 @@ no shell to read its environment with.
 Checked on Claude Code 2.1.305 with these flags: the session's tool list was
 exactly `Glob`, `Grep` and `Read`, with no MCP server, skill or slash command.
 A `Bash` call got "No such tool available", and a `Read` outside the clone
-was refused. Before these flags, `Bash` was in the tool set, and read-only
-shell commands inside the clone ran without an allow rule. An earlier manual
-check on a Claude Code 2.1 release, with no recorded patch version, found
-that an `.mcp.json` or `CLAUDE.local.md` a pull request adds was not loaded.
+was refused. Before these flags, `Bash` was in the tool set. In the same
+check, the shell commands `ls`, `cat`, `git log` and `git show` ran inside the
+clone without an allow rule.
 
 **The merge base sets the rules.** The review tree is the PR's merge base with
 the diff applied, and convention files such as `CLAUDE.md` are read as they are
@@ -113,11 +112,13 @@ base branch name. For a PR based on another branch, it also holds the base
 commit, so a push to the parent branch starts a new review. For a PR into the
 default branch, it does not. If commits from the PR's own history reach the
 default branch through another PR, the PR's net change can differ from the
-reviewed one, and no new review runs. For example, the PR adds a change in
-one commit and reverts it in a later commit, so its net diff is empty. When
-the first commit reaches the default branch another way, the PR's effect
-becomes the revert. A fix that keys every PR on its merge base is planned for
-0.3.0.
+reviewed one, and no new review runs. For example, the head history of the
+PR is M, C, H. M is the merge base, C adds a change, and H reverts C, so the
+net diff of the PR is empty. When C reaches the default branch through
+another PR, the merge base moves to C and the net diff becomes the revert of
+C. The head commit H, the title, the description and the base branch name
+have not changed, so the key stays the same and no new review runs. Version
+0.3.0 will add the merge base commit ID to the key of every PR.
 
 ## In scope
 

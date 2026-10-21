@@ -42,10 +42,10 @@ All notable changes to this project are recorded here. The format follows
 - The reviewer now sets the model's tools explicitly. Every review,
   refutation and red-team call gets `--tools "Read,Grep,Glob"`, and the
   output-repair call gets no tool. v0.2.0 set only path rules on top of
-  Claude Code's defaults, so `Bash` was in the tool set, and read-only shell
-  commands inside the review clone could run without a rule. In a check on
-  Claude Code 2.1.305, shell commands that named a path outside the clone
-  were refused.
+  Claude Code's defaults, so `Bash` was in the tool set. In a check on
+  Claude Code 2.1.305, the shell commands `ls`, `cat`, `git log` and
+  `git show` ran inside the review clone without a rule, and shell commands
+  that named a path outside the clone were refused.
 - Every call also turns off MCP servers (`--strict-mcp-config`,
   `--disallowedTools "mcp__*"`, `ENABLE_CLAUDEAI_MCP_SERVERS=false`), skills
   and slash commands (`--disable-slash-commands`) and auto memory
