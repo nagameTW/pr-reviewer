@@ -43,10 +43,11 @@ the PR links, when it links one). The output-repair call gets no tool
 (`--tools ""`). With `--restricted`, Claude Code itself confines the file
 tools to the review clone and the call's private directories. Each of those
 holds only the call's diff or slice, or the PR's title and description, so a
-call cannot read another PR's or another slice's files. Every call also gets
-`--strict-mcp-config` and `--disallowedTools "mcp__*"`, so no MCP server
-starts, and `--disable-slash-commands`, so no skill or command from the
-reviewed repo loads. `--setting-sources` is empty, so the operator's own
+call cannot read another PR's scratch files or another slice's scratch diff.
+A slice review can still read every source file in the review clone. Every
+call also gets `--strict-mcp-config` and `--disallowedTools "mcp__*"`, so no
+MCP server starts, and `--disable-slash-commands`, so no skill or command from
+the reviewed repo loads. `--setting-sources` is empty, so the operator's own
 Claude settings cannot widen any of that. These flags need Claude Code 2.1.305
 or later. The reviewer checks `claude --version` at startup and refuses an
 older version.
