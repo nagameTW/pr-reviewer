@@ -212,9 +212,9 @@ install_hint() {
       say "  brew install git jq gh coreutils flock"
       say "If prreview setup still finds no timeout or sha256sum after that, your Homebrew installed them only as gtimeout and gsha256sum. Put the plain names first on PATH in this terminal and run prreview setup again (it records that PATH for the service):"
       say "  export PATH=\"\$(brew --prefix)/opt/coreutils/libexec/gnubin:\$PATH\""
-      say "Claude Code: https://docs.claude.com/en/docs/claude-code/setup" ;;
+      say "Claude Code: https://code.claude.com/docs/en/setup" ;;
     *) say "  sudo apt install git jq curl openssl util-linux coreutils   (Debian/Ubuntu)"
-       say "gh: https://github.com/cli/cli/blob/trunk/docs/install_linux.md   Claude Code: https://docs.claude.com/en/docs/claude-code/setup" ;;
+       say "gh: https://github.com/cli/cli/blob/trunk/docs/install_linux.md   Claude Code: https://code.claude.com/docs/en/setup" ;;
   esac
 }
 

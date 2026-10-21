@@ -16,9 +16,10 @@ with a verdict and the findings.
   button decides what to do with the verdict.
 - **The model can only read.** Claude Code gets `Read`, `Grep` and `Glob` in a
   per-PR worktree: no shell, no network, and your code is never run.
-- **A PR cannot change the rules it is judged by.** `CLAUDE.md`, `AGENTS.md`
+- **A PR's edits to convention files are reverted.** `CLAUDE.md`, `AGENTS.md`
   and the repo's other convention files are read as they are at the PR's
-  merge base.
+  merge base. The match is exact in file name case, so an edit to a file such
+  as `readme.md` is not reverted.
 - **It tries to prove itself wrong.** Each blocking finding, up to six a
   round, gets a second call that argues against it, and a finding that call
   refutes is dropped.
@@ -31,7 +32,9 @@ with a verdict and the findings.
 One real run on a test PR (Run A), with the waits cut out. Three pushes, three
 rounds: round 1 finds an SQL injection and a paging bug, round 2 sees the
 injection fixed and carries the paging finding over, round 3 approves. Round 1
-cost $0.54 and the three rounds cost $1.14 in all, measured on v0.2.0.
+cost $0.54 and the three rounds cost $1.14 in all. These figures were measured
+on a test PR in September and October 2026, before v0.2.0 changed the default
+models. Current costs can differ.
 
 <p align="center">
   <img src="docs/images/demo.gif" alt="A terminal runs prreview once on a test PR. The log shows three blocking findings, a CRITICAL SQL injection and two HIGH findings, each upheld by a refutation call with its reason, and a comment posted with verdict request_changes for $0.54. The PR comment shows Changes requested, 3 blocking, with the CRITICAL finding opened to its trace and its citation A05:2025 Injection, CWE-89. After a commit that binds the search term as a parameter, round 2 posts Changes requested, 1 blocking: two of the three findings are fixed and the paging finding is marked Carried over. After a commit that makes pages 1-based, round 3 posts Approved." width="100%">
@@ -76,7 +79,9 @@ the loop as a background service.
 This is the comment one round posted on a test PR (Run B). The PR added a query
 function with two planted bugs: SQL built with an f-string, which the repo's
 README forbids, and paging that is off by one page. The round made three model
-calls and cost $0.75, measured on v0.2.0.
+calls and cost $0.75. This figure was measured on a test PR in September and
+October 2026, before v0.2.0 changed the default models. Current costs can
+differ.
 
 <p align="center">
   <img src="docs/images/example-comment.png" alt="A review comment: a Changes requested banner counting 2 blocking and 1 not blocking findings, a one-line summary, a CRITICAL SQL injection finding opened to show its trace from input to sink and its citation A05:2025 Injection, CWE-89, and a HIGH paging finding. The rest of the summary, the MEDIUM finding and what the review could not verify are folded." width="820">
@@ -205,7 +210,8 @@ Two more places add rules for a single repo:
   with the same severities.
 
 Files in the repo are read as they are at the PR's merge base, so a PR cannot
-loosen a check in the same diff it is reviewed against.
+loosen a check in the same diff it is reviewed against. This holds only when
+the file name matches in exact case.
 
 A `.github/review-checks.md` can be as short as this:
 
@@ -386,8 +392,9 @@ next check, within a minute, starts a round for it.
 `prreview logs` shows the service's own log, a few lines per round. Each round's
 full output is in `~/.cache/pr-reviewer/gate-logs/round-*.log`.
 
-A round that reviews one PR prints something like this. This is Run B, round 1,
-measured on v0.2.0:
+A round that reviews one PR prints something like this. This is a sample log.
+Its cost was measured on a test PR in September and October 2026, before v0.2.0
+changed the default models. Current costs can differ.
 
 ```text
 [your-name__your-repo#3] PR #3: refutation upheld CRITICAL app/store.py:30 (refuted=false, confidence 0.97)
@@ -628,8 +635,8 @@ works in place of the loop, and a lock stops two rounds from overlapping.
    sensitive-patterns file. A hit stops the review of that PR.
 3. **Build.** Update the local clone of the repo, add a per-PR worktree, check
    out the merge base of the PR in it, and apply the PR's diff on top. The
-   author's branch is never checked out, so a PR cannot change the conventions
-   it is judged by.
+   author's branch is never checked out, and the convention files are restored
+   from the merge base, matched by exact file name case.
    A symlink to a regular file inside the clone, such as
    `AGENTS.md -> CLAUDE.md`, is fine. Any other symlink stops the review: one
    that points outside the clone, into `.git` or nowhere; one to a folder,
@@ -687,11 +694,12 @@ round that is about to post ✅ Approved.
 
 It is off by default because it adds cost and time to every approval. In
 Run C, a small clean PR in the test repo, the review cost $0.34 and the
-red-team call $0.23, measured on v0.2.0. Each candidate it raises adds one
-refutation call, so at most three more. The red-team call runs after the
-review, and the refutation calls run together after it, so an approval can
-take up to twice `PRREVIEW_GATE_VERIFY_TIMEOUT` (1200 seconds) longer to
-appear.
+red-team call $0.23. These figures were measured on a test PR in September and
+October 2026, before v0.2.0 changed the default models. Current costs can
+differ. Each candidate it raises adds one refutation call, so at most three
+more. The red-team call runs after the review, and the refutation calls run
+together after it, so an approval can take up to twice
+`PRREVIEW_GATE_VERIFY_TIMEOUT` (1200 seconds) longer to appear.
 
 ## Across rounds
 
@@ -776,7 +784,7 @@ even when you run `prreview once` from a terminal. After moving a tool, run
 | `PRREVIEW_REVIEW_APP_ID` | empty | A GitHub App's ID; when set, comments are posted as the App (see [Posting as a GitHub App](#posting-as-a-github-app)) |
 | `PRREVIEW_REVIEW_APP_KEY` | empty | The App's private key file |
 | `PRREVIEW_REVIEW_APP_SLUG` | read from GitHub every round | The App's URL name; its comments are authored by `<slug>[bot]`. Leave it unset, so renaming the App cannot leave a stale one |
-| `PRREVIEW_SENSITIVE_PATTERNS_FILE` | `~/.config/pr-reviewer/sensitive-patterns` | The regex list every outgoing comment and every PR title and description is checked against |
+| `PRREVIEW_SENSITIVE_PATTERNS_FILE` | `~/.config/pr-reviewer/sensitive-patterns` | The regex list that every comment carrying PR text or model output, and every PR title and description, is checked against |
 | `PRREVIEW_GATE_REPO_CONTEXT` | a sentence pointing at `CLAUDE.md`/`AGENTS.md`, `README`, `CONTRIBUTING` | Replaces the sentence that tells the model where a repo's conventions live |
 | `PRREVIEW_REVIEW_MODEL` | `claude-opus-5-5` | Model for the review, the refutation pass and the red team |
 | `PRREVIEW_GATE_CHEAP_MODEL` | `claude-sonnet-5-5` | Model for repairing unparseable output |
@@ -874,7 +882,7 @@ Who controls each input, and how the reviewer treats it:
 | --- | --- | --- |
 | PR title and description, the title and body of the issue the PR links | The PR author, or whoever wrote the issue | Data. A match with your sensitive patterns stops the review |
 | The diff and every file the PR adds or changes | The PR author | Data, read with read-only tools and never run. Symlinks are checked first |
-| Convention files: `CLAUDE.md`, `AGENTS.md`, `.claude/`, README, CONTRIBUTING, `.github/review-checks.md` | The PR's merge base | Rules the review follows. A PR's edits to them are reverted before the review |
+| Convention files: `CLAUDE.md`, `AGENTS.md`, `.claude/`, README, CONTRIBUTING, `.github/review-checks.md` | The PR's merge base | Rules the review follows. A PR's edits to them are reverted before the review, when the file name matches in exact case |
 | The checklist, the settings, the sensitive-data patterns | You | Rules. They live outside the reviewed repo |
 | The model's answer | The model, after reading all of the above | Untrusted. Shape-checked, blocking findings argued against, scanned before it is posted |
 | Who can make it spend model budget | Anyone who can open a non-draft PR on a watched repo | The reviewer does not filter by author. Each push, and each edit of the PR's title, description or base branch, starts a new round that costs model usage |
@@ -895,8 +903,8 @@ Who controls each input, and how the reviewer treats it:
   `~/.claude/settings.json` cannot widen that.
 - **The merge base sets the rules.** The tree is the merge base plus the diff,
   and convention files, `.github/review-checks.md` included, are read as they
-  are at the PR's merge base. A PR cannot edit `CLAUDE.md` to tell the reviewer
-  what to accept.
+  are at the PR's merge base. The match is exact in file name case, so a PR's
+  edit to a differently cased file such as `readme.md` is not restored.
 - **Scratch files stay out of `/tmp`.** The diff, the slices and every raw
   model answer live under `PRREVIEW_GATE_WORKROOT`, not in a shared temp directory
   another process could rewrite between steps.
@@ -907,21 +915,24 @@ Who controls each input, and how the reviewer treats it:
   description matched your patterns, and the title-format reminder.
 - **It cannot merge.** It never approves or merges. Its only merge call is
   `gh pr merge --disable-auto`, which is off by default. It posts with whatever
-  `gh` token you give it, or as the GitHub App you set up. With the defaults, give it a token that can
-  read the repos and comment on pull requests, and nothing more; an App needs
-  only the permissions its setup link asks for. `PRREVIEW_GATE_TICKETS=1` and `PRREVIEW_ALERT_REPO`
-  also need permission to open issues, and `PRREVIEW_GATE_DISARM_AUTO_MERGE=1`
-  needs write access to the repo.
+  `gh` token you give it, or as the GitHub App you set up. With the defaults,
+  give it the smallest token scope that can read the repos and comment on pull
+  requests. GitHub's pull-request write permission also allows approvals, which
+  the reviewer's code never uses. An App needs only the permissions its setup
+  link asks for. `PRREVIEW_GATE_TICKETS=1` and `PRREVIEW_ALERT_REPO` also need
+  permission to open issues, and `PRREVIEW_GATE_DISARM_AUTO_MERGE=1` needs
+  write access to the repo.
 
 To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
 ## Cost
 
-Every cost figure in this README comes from a run on a test PR, as printed by
-the reviewer, and was measured on v0.2.0. Run A is the demo run at the top of
-this page: round 1 cost $0.54, and the three rounds cost $1.14 in all. Run B is
-the test PR in [What a review looks like](#what-a-review-looks-like). Run C is
-the small clean PR in
+Every cost figure in this README is as the reviewer printed it on a test PR. All
+were measured in September and October 2026, before v0.2.0 changed the default
+models. Current costs can differ. Run A is the demo run at the top of this page:
+round 1 cost $0.54, and the three rounds cost $1.14 in all. Run B is the test PR
+in [What a review looks like](#what-a-review-looks-like). Run C is the small
+clean PR in
 [Optional: a red team before an approval](#optional-a-red-team-before-an-approval).
 
 Two rounds of Run B:
