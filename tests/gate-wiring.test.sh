@@ -111,16 +111,24 @@ if [ -n "$LIB_LN" ] && [ "${EARLY:-1}" = 0 ]; then ok 'no code above the lib/spl
 
 # One way to start the model: claude_call (lib/claude-call.sh). A call
 # written outside it gets none of its tool limits, and every other test
-# stays green. An invocation is the binary followed by a flag or by a line
-# continuation. The `-x` check and the `--version` probe are not model calls.
-CALL_RE='\$\{?CLAUDE_BIN[^"]*"?[[:space:]]+(-p|--print|\\$)'
+# stays green. Print mode (-p, --print) is how a script runs the model, so
+# no other line may use it, under any name: a literal claude, $CLAUDE_BIN or
+# another variable. The --version, --help, auth status and -x checks do not
+# use print mode. mkdir -p and cp -p are the other commands here that take
+# -p. A single-quoted span is text, such as the hint in a setup message.
+print_mode_lines() { # stdin: shell source. stdout: the lines that use print mode.
+  grep -vE '^[[:space:]]*#' \
+    | sed -E "s/'[^']*'//g; s/(mkdir|cp)[[:space:]]+-p//g" \
+    | grep -E '(^|[[:space:]])(-p|--print)([[:space:]]|=|$)'
+}
 OTHERS=()
 for f in pr-autoreview.sh review-loop.sh owner-alert.sh prreview lib/*.sh; do [ "$f" = lib/claude-call.sh ] || OTHERS+=("$f"); done
-is  'no model call outside lib/claude-call.sh' "$(grep -hE "$CALL_RE" "${OTHERS[@]}" | grep -vE '^[[:space:]]*#' | wc -l | tr -d ' ')" 0
+is  'no model call outside lib/claude-call.sh' "$(cat "${OTHERS[@]}" | print_mode_lines | head -3)" ''
 CALL_BODY="$(awk '/^claude_call\(\) \{/{f=1} f{print} f&&/^\}/{exit}' lib/claude-call.sh 2>/dev/null)"
-is  'claude_call is in lib/claude-call.sh and starts the binary' "$(grep -cE "$CALL_RE" <<<"$CALL_BODY")" 1
-is  '...and nothing else in that file starts a model call' \
-    "$( (grep -vFx "$CALL_BODY" lib/claude-call.sh 2>/dev/null || cat lib/claude-call.sh 2>/dev/null) | grep -E "$CALL_RE" | grep -vcE '^[[:space:]]*#')" 0
+is  'claude_call is in lib/claude-call.sh and starts the binary in print mode' \
+    "$(print_mode_lines <<<"$CALL_BODY" | grep -c '"$CLAUDE_BIN" -p')" 1
+is  '...and nothing else in that file uses print mode' \
+    "$( (grep -vFx "$CALL_BODY" lib/claude-call.sh 2>/dev/null || cat lib/claude-call.sh 2>/dev/null) | print_mode_lines | head -3)" ''
 is  'no --allowedTools outside lib/claude-call.sh' "$(grep -hE '^[^#]*--allowedTools' "${OTHERS[@]}" | wc -l | tr -d ' ')" 0
 before 'the Claude Code version is checked before the lock' 'claude_version_check || exit 1' 'LOCKFILE=' pr-autoreview.sh
 
