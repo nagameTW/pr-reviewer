@@ -68,9 +68,11 @@ that an `.mcp.json` or `CLAUDE.local.md` a pull request adds was not loaded.
 
 **The merge base sets the rules.** The review tree is the PR's merge base with
 the diff applied, and convention files such as `CLAUDE.md` are read as they are
-at the PR's merge base. The match is exact in file name case, so a PR's edit
-to a differently cased file such as `readme.md` is not restored. The author's
-branch is never checked out.
+at the PR's merge base. For a PR based on another branch, the merge base is on
+that branch, so convention files are read as they are on the default branch
+instead, and one the default branch does not have is removed. The match is
+exact in file name case, so a PR's edit to a differently cased file such as
+`readme.md` is not restored. The author's branch is never checked out.
 
 **Comments with PR text or model output are scanned.** Every comment that
 carries PR text or model output is checked against the operator's

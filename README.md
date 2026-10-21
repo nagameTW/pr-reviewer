@@ -20,8 +20,10 @@ with a verdict and the findings.
   Claude Code 2.1.305 or later.
 - **A PR's edits to convention files are reverted.** `CLAUDE.md`, `AGENTS.md`
   and the repo's other convention files are read as they are at the PR's
-  merge base. The match is exact in file name case, so an edit to a file such
-  as `readme.md` is not reverted.
+  merge base. For a PR based on another branch, they are read as they are on
+  the default branch, and one the default branch does not have is removed.
+  The match is exact in file name case, so an edit to a file such as
+  `readme.md` is not reverted.
 - **It tries to prove itself wrong.** Each blocking finding, up to six a
   round, gets a second call that argues against it, and a finding that call
   refutes is dropped.
@@ -213,8 +215,10 @@ Two more places add rules for a single repo:
   with the same severities.
 
 Files in the repo are read as they are at the PR's merge base, so a PR cannot
-loosen a check in the same diff it is reviewed against. This holds only when
-the file name matches in exact case.
+loosen a check in the same diff it is reviewed against. For a PR based on
+another branch, they are read as they are on the default branch, so the
+parent branch cannot loosen a check either. This holds only when the file
+name matches in exact case.
 
 A `.github/review-checks.md` can be as short as this:
 
@@ -647,7 +651,9 @@ works in place of the loop, and a lock stops two rounds from overlapping.
 3. **Build.** Update the local clone of the repo, add a per-PR worktree, check
    out the merge base of the PR in it, and apply the PR's diff on top. The
    author's branch is never checked out, and the convention files are restored
-   from the merge base, matched by exact file name case.
+   from the merge base, matched by exact file name case. For a PR based on
+   another branch, they come from the default branch instead, and one the
+   default branch does not have is removed.
    The diff is fetched once, for the exact head commit the verdict will name,
    and the list of changed files is read from that same diff. A push that
    lands during the round cannot swap in another head. If the merge base
@@ -900,7 +906,7 @@ Who controls each input, and how the reviewer treats it:
 | --- | --- | --- |
 | PR title and description, the title and body of the issue the PR links | The PR author, or whoever wrote the issue | Data. A match with your sensitive patterns stops the review |
 | The diff and every file the PR adds or changes | The PR author | Data, read with read-only tools and never run. Symlinks are checked first |
-| Convention files: `CLAUDE.md`, `AGENTS.md`, `.claude/`, README, CONTRIBUTING, `.github/review-checks.md` | The PR's merge base | Rules the review follows. A PR's edits to them are reverted before the review, when the file name matches in exact case |
+| Convention files: `CLAUDE.md`, `AGENTS.md`, `.claude/`, README, CONTRIBUTING, `.github/review-checks.md` | The PR's merge base. For a PR based on another branch, the default branch | Rules the review follows. A PR's edits to them are reverted before the review, when the file name matches in exact case |
 | The checklist, the settings, the sensitive-data patterns | You | Rules. They live outside the reviewed repo |
 | The model's answer | The model, after reading all of the above | Untrusted. Shape-checked, blocking findings argued against, scanned before it is posted |
 | Who can make it spend model budget | Anyone who can open a non-draft PR on a watched repo | The reviewer does not filter by author. Each push, and each edit of the PR's title, description or base branch, starts a new round that costs model usage |
@@ -935,8 +941,10 @@ Who controls each input, and how the reviewer treats it:
   so this is an extra layer only.
 - **The merge base sets the rules.** The tree is the merge base plus the diff,
   and convention files, `.github/review-checks.md` included, are read as they
-  are at the PR's merge base. The match is exact in file name case, so a PR's
-  edit to a differently cased file such as `readme.md` is not restored.
+  are at the PR's merge base. For a PR based on another branch, they are read
+  as they are on the default branch, and one the default branch does not have
+  is removed. The match is exact in file name case, so a PR's edit to a
+  differently cased file such as `readme.md` is not restored.
 - **Scratch files stay out of `/tmp`.** The diff, the slices and every raw
   model answer live under `PRREVIEW_GATE_WORKROOT`, not in a shared temp directory
   another process could rewrite between steps.
