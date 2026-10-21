@@ -6,6 +6,35 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Security
+
+- A failed or partial `cat` while the reviewer built a slice could drop the
+  hunks of one file. A large diff is split into slices, and each slice is
+  built by joining part files. If `cat` failed to read or write one part,
+  for example because the disk was full, the slice was shorter but not
+  empty. The reviewer then reviewed a slice that lacked a file and gave a
+  verdict on the whole diff. This needs a failed read or write of a scratch
+  file. Now the reviewer keeps a slice only when every part is joined. If
+  one slice is lost, it reviews the whole diff in one pass.
+- A failed `jq` call could turn `request_changes` into `approve`. The
+  reviewer counts blocking findings with `jq` before the citation check,
+  before the line check and before the verdict rule. If one of those calls
+  failed, the count was empty, and the shell reads an empty count as 0. A
+  blocker that was dropped or not counted was then not seen, and a review
+  with a blocker could be approved. This needs a `jq` failure at one of
+  those steps. Now an empty count before the citation check counts as a
+  dropped blocker. An empty count before the line check skips that check.
+  An empty count in the final tally skips the PR and posts no review.
+- A failed digest step could give a review key that matched earlier
+  markers. The key is the head SHA, a dash and a 12-digit digest of the
+  title, description and base branch. If `jq`, `sha256sum` or `cut` failed
+  in the digest step, the key was the head SHA and a dash with no digest.
+  The handled check matches the key as a fixed string, so it matched every
+  marker posted for that head. The reviewer could then skip a PR whose
+  title or description had changed. This needs a tool failure in the digest
+  step. Now the reviewer prints no key unless the digest is 12 hex digits,
+  and it skips the PR when there is no key.
+
 ## [0.2.1] - 2026-10-21
 
 ### Changed
