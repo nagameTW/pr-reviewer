@@ -531,7 +531,7 @@ rm -rf "$TE"
 # reflow (moving "$REPO_DIR") to its own line) even though the argument
 # still reaches redteam_prompt exactly as before.
 JOINED="$(awk '{ if (sub(/\\$/, "")) printf "%s ", $0; else print }' pr-autoreview.sh)"
-CALL_LINE="$(grep -F 'redteam_prompt "$REPO" "$PR" "$DIFF" "$TREE_CLAUSE$STACKED_CLAUSE" "$RT_PRIOR"' <<<"$JOINED")"
+CALL_LINE="$(grep -F 'redteam_prompt "$REPO" "$PR" "$DIFF_VIEW" "$TREE_CLAUSE$STACKED_CLAUSE" "$RT_PRIOR"' <<<"$JOINED")"
 [ -n "$CALL_LINE" ] || fail "pr-autoreview.sh's redteam_prompt call site was not found — this assertion proves nothing"
 [ -n "$CALL_LINE" ] && grep -qF '"$SEVERITY_SPEC" "$REPO_DIR" ' <<<"$CALL_LINE" \
   || fail "pr-autoreview.sh does not pass the review tree to redteam_prompt"
@@ -544,14 +544,14 @@ CALL_LINE="$(grep -F 'redteam_prompt "$REPO" "$PR" "$DIFF" "$TREE_CLAUSE$STACKED
 # stacked PR.
 TC_SRC="$(grep -E '^  TREE_CLAUSE="\$\(prompt_tree_clause ' pr-autoreview.sh)"
 SC_SRC="$(grep -E '^    STACKED_CLAUSE="\$\(prompt_stacked_clause ' pr-autoreview.sh)"
-RV_SRC="$(grep -F 'The diff you are reviewing is in $SLICE_DIFF' pr-autoreview.sh)"
+RV_SRC="$(grep -F 'The diff you are reviewing is in $SLICE_VIEW' pr-autoreview.sh)"
 RT_ARGS="$(sed -n 's/.*"\$(redteam_prompt \([^)]*\))".*/\1/p' <<<"$JOINED")"
 VF_ARGS="$(sed -n 's/.*"\$(findings_verify_prompt \([^)]*\))".*/\1/p' <<<"$JOINED")"
 [ -n "$TC_SRC" ] && [ -n "$SC_SRC" ] && [ -n "$RV_SRC" ] && [ -n "$RT_ARGS" ] && [ -n "$VF_ARGS" ] \
   || fail "could not lift the tree clause, the stacked clause, the review prompt line, the red-team call or the verify call out of pr-autoreview.sh"
 # shellcheck disable=SC2034  # read by the eval'd lines
-{ REPO=o/r PR=42 DIFF=/tmp/d.diff RT_PRIOR="" REPO_DIR="$TE" DEFAULT_BRANCH=main
-  SLICE_DIFF=/tmp/d.diff REPO_CONTEXT=CTX INTENT_CLAUSE="" SLICE_CLAUSE=""
+{ REPO=o/r PR=42 DIFF_VIEW=/tmp/d.view RT_PRIOR="" REPO_DIR="$TE" DEFAULT_BRANCH=main
+  SLICE_VIEW=/tmp/d.view REPO_CONTEXT=CTX INTENT_CLAUSE="" SLICE_CLAUSE=""
   TREE_CONV_NOTE="" TREE_BIN_NOTE=" BIN-NOTE."
   V_SEV=HIGH V_FILE=a.py V_LINE=1 V_ISSUE=x; }
 for st in "1 base" "0 base" "0 default"; do

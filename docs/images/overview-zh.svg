@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 960 512" xmlns="http://www.w3.org/2000/svg" xml:lang="zh-TW" role="img" aria-labelledby="overview-github-zh-title overview-github-zh-desc" id="overview-github-zh-root">
+<title id="overview-github-zh-title">pr-reviewer 的執行位置</title>
+<desc id="overview-github-zh-desc">pr-reviewer 在使用者的機器上執行，並透過 gh 讀取開啟中的 PR。Claude Code 以唯讀工具審查每個 PR 專屬的 worktree。工具以 sensitive-patterns 檔掃描文字，並為每個新的 head 貼出一則留言。</desc>
+<defs>
+      <style>#overview-github-zh-root { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", Helvetica, Arial, sans-serif; color: #1F2328; }
+      #overview-github-zh-root .page { max-width: 1000px; width: 100%; }
+      #overview-github-zh-root .diagram-container { width: 100%; overflow-x: auto; }
+      #overview-github-zh-root .diagram-container { overflow-x: visible; }
+      #overview-github-zh-root .bg { fill: #FFFFFF; }
+      #overview-github-zh-root .edge-frame { fill: none; stroke: #818B98; stroke-width: 2; }
+      #overview-github-zh-root text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", Helvetica, Arial, sans-serif; fill: #1F2328; font-size: 12px; }
+      #overview-github-zh-root .t-name { font-size: 14px; font-weight: 600; }
+      #overview-github-zh-root .t-name-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; font-weight: 700; }
+      #overview-github-zh-root .t-sub { fill: #59636E; }
+      #overview-github-zh-root .t-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+      #overview-github-zh-root .t-eye { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", Helvetica, Arial, sans-serif; font-size: 11px; letter-spacing: .08em; fill: #59636E; }
+      #overview-github-zh-root .t-arrow { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", Helvetica, Arial, sans-serif; font-size: 11px; letter-spacing: .04em; fill: #59636E; }
+      #overview-github-zh-root .t-alert { fill: #D1242F; font-weight: 700; }
+      #overview-github-zh-root .t-chip { fill: #FFFFFF; font-weight: 700; }
+      #overview-github-zh-root .t-title { font-size: 14px; font-weight: 700; }
+      #overview-github-zh-root .mask { fill: #FFFFFF; }
+      #overview-github-zh-root .node { fill: #F6F8FA; stroke: #818B98; stroke-width: 1.2; }
+      #overview-github-zh-root .raised { fill: #FFFFFF; stroke: #818B98; stroke-width: 1; }
+      #overview-github-zh-root .hero { fill: #DDF4FF; stroke: #0969DA; stroke-width: 2.4; }
+      #overview-github-zh-root .optional { fill: none; stroke: #818B98; stroke-width: 1.2; stroke-dasharray: 5 4; }
+      #overview-github-zh-root .zone { fill: none; stroke: #818B98; stroke-width: 1; stroke-dasharray: 4 4; }
+      #overview-github-zh-root .strip { fill: #F6F8FA; stroke: #818B98; stroke-width: 1.2; }
+      #overview-github-zh-root .bar { fill: #CF222E; }
+      #overview-github-zh-root .alert-node { fill: #FFFFFF; stroke: #CF222E; stroke-width: 2; stroke-dasharray: 6 4; }
+      #overview-github-zh-root .edge { fill: none; stroke: #0969DA; stroke-width: 1.6; }
+      #overview-github-zh-root .edge-dash { fill: none; stroke: #0969DA; stroke-width: 1.4; stroke-dasharray: 5 4; }
+      #overview-github-zh-root .edge-alert { fill: none; stroke: #CF222E; stroke-width: 1.6; }
+      #overview-github-zh-root .mk { fill: #0969DA; }
+      #overview-github-zh-root .mk-alert { fill: #CF222E; }
+      #overview-github-zh-root .chip { fill: #25292E; }
+      #overview-github-zh-root .dot { fill: #1F2328; }
+      #overview-github-zh-root .bullet { fill: #59636E; }
+      #overview-github-zh-root .diamond { fill: #FFFFFF; stroke: #818B98; stroke-width: 1.4; }</style>
+<marker id="overview-github-zh-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon class="mk" points="0 0, 8 3, 0 6"/></marker>
+<marker id="overview-github-zh-arrow-alert" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon class="mk-alert" points="0 0, 8 3, 0 6"/></marker>
+</defs>
+<rect class="bg" width="960" height="512"/>
+<rect class="edge-frame" x="1" y="1" width="958" height="510" rx="8"/>
+<g transform="translate(0,-28)">
+<rect class="hero" x="270" y="56" width="420" height="352" rx="8"/>
+<text class="t-eye" x="286" y="78">使用者的機器</text>
+<text class="t-eye" x="24" y="142">GITHUB</text>
+<text class="t-eye" x="750" y="142">模型</text>
+<path class="edge" d="M210,204 H286" marker-end="url(#overview-github-zh-arrow)"/>
+<path class="edge" d="M286,236 H210" marker-end="url(#overview-github-zh-arrow)"/>
+<path class="edge" d="M674,204 H750" marker-end="url(#overview-github-zh-arrow)"/>
+<path class="edge" d="M750,236 H674" marker-end="url(#overview-github-zh-arrow)"/>
+<path class="edge" d="M480,148 V172" marker-end="url(#overview-github-zh-arrow)"/>
+<path class="edge" d="M379,252 V276" marker-end="url(#overview-github-zh-arrow)"/>
+<path class="edge" d="M581,276 V252" marker-end="url(#overview-github-zh-arrow)"/>
+<rect class="mask" x="222" y="182" width="36" height="16" rx="2"/><text class="t-arrow" x="240" y="194" text-anchor="middle">讀取</text>
+<rect class="mask" x="222" y="242" width="36" height="16" rx="2"/><text class="t-arrow" x="240" y="254" text-anchor="middle">貼出</text>
+<rect class="mask" x="693" y="182" width="54" height="16" rx="2"/><text class="t-arrow" x="720" y="194" text-anchor="middle">prompt</text>
+<rect class="mask" x="702" y="242" width="36" height="16" rx="2"/><text class="t-arrow" x="720" y="254" text-anchor="middle">回覆</text>
+<rect class="mask" x="500" y="152" width="36" height="16" rx="2"/><text class="t-arrow" x="518" y="164" text-anchor="middle">啟動</text>
+<rect class="mask" x="397" y="256" width="36" height="16" rx="2"/><text class="t-arrow" x="415" y="268" text-anchor="middle">建立</text>
+<rect class="mask" x="591" y="256" width="36" height="16" rx="2"/><text class="t-arrow" x="609" y="268" text-anchor="middle">掃描</text>
+<g data-box="24 156 186 112">
+<rect class="node" x="24" y="156" width="186" height="112" rx="6"/>
+<text class="t-name" x="36" y="178" textLength="80.1" lengthAdjust="spacing">Pull request</text>
+<text class="t-sub" y="198" data-r="198"><tspan x="36 48.2 60.3 72.3 84.5 96.7 108.8 120.8 133 145.2 157.3">開啟中、非草稿，且所在</tspan><tspan x="174" textLength="24.0" lengthAdjust="spacing">repo</tspan></text>
+<text class="t-sub" y="214"><tspan x="36 48 60 72 84">列於設定的</tspan><tspan x="99.3" textLength="24.0" lengthAdjust="spacing">repo</tspan><tspan x="126.7 138.7 150.7">清單。</tspan></text>
+</g>
+<g data-box="286 92 388 56">
+<rect class="raised" x="286" y="92" width="388" height="56" rx="6"/>
+<text class="t-name-code" x="298" y="114">review-loop.sh</text>
+<text class="t-sub" y="134"><tspan x="298">有</tspan><tspan x="313.3" textLength="16.7" lengthAdjust="spacing">PR</tspan><tspan x="333.3 345.3 357.3 369.3 381.3 393.3 405.3 417.3 429.3 441.3 453.3 465.3 477.3 489.3 501.3">處於開啟狀態時，每分鐘檢查一次</tspan><tspan x="516.7" textLength="37.3" lengthAdjust="spacing">GitHub</tspan><tspan x="554">。</tspan></text>
+</g>
+<g data-box="286 172 388 80">
+<rect class="raised" x="286" y="172" width="388" height="80" rx="6"/>
+<text class="t-name-code" x="298" y="194">pr-autoreview.sh</text>
+<text class="t-sub" y="214"><tspan x="298 310 322 334 346 358 370 382 394 406 418">執行一輪審查，每個新的</tspan><tspan x="433.3" textLength="26.7" lengthAdjust="spacing">head</tspan><tspan x="463.3 475.3 487.3 499.3 511.3 523.3 535.3 547.3 559.3 571.3 583.3">審查一次。最多同時處理</tspan><tspan x="598.7">2</tspan><tspan x="608.7">個</tspan><tspan x="624" textLength="16.7" lengthAdjust="spacing">PR</tspan><tspan x="640.7">。</tspan></text>
+</g>
+<g data-box="286 276 186 104">
+<rect class="raised" x="286" y="276" width="186" height="104" rx="6"/>
+<text class="t-name" x="298" y="298">PR 專屬 worktree</text>
+<text class="t-sub" y="318" data-r="460"><tspan x="298 310.5">放入</tspan><tspan x="330" textLength="34.0" lengthAdjust="spacing">merge</tspan><tspan x="371.4" textLength="26.0" lengthAdjust="spacing">base</tspan><tspan x="398.5 410.5 423 435.5 448">（兩個分支</tspan></text>
+<text class="t-sub" y="334" data-r="460"><tspan x="298 310.8 323.5 336.3 349">最近的共同</tspan><tspan x="370.5" textLength="38.7" lengthAdjust="spacing">commit</tspan><tspan x="409.1 421.9">）與</tspan><tspan x="443.3" textLength="16.7" lengthAdjust="spacing">PR</tspan></text>
+<text class="t-sub" y="350" data-r="460"><tspan x="298" textLength="16.0" lengthAdjust="spacing">diff</tspan><tspan x="314 326.2 338.4 350.5 362.7 374.9 387.1 399.3 411.5 423.6 435.8 448">，另有取自預設分支的審查</tspan></text>
+<text class="t-sub" y="366"><tspan x="298 310 322 334 346 358 370 382 394 406">規則檔，供審查參照。</tspan></text>
+</g>
+<g data-box="488 276 186 104">
+<rect class="raised" x="488" y="276" width="186" height="104" rx="6"/>
+<text class="t-name" x="500" y="298" textLength="120.6" lengthAdjust="spacing">Sensitive patterns</text>
+<text class="t-sub" y="318" data-r="662"><tspan x="500 512.2 524.4 536.7 548.9 561.1">使用者自訂的</tspan><tspan x="578.2" textLength="30.0" lengthAdjust="spacing">regex</tspan><tspan x="613.3 625.6 637.8 650">比對規則</tspan></text>
+<text class="t-sub" y="334" data-r="662"><tspan x="500 512.6 524.6 537.2 549.8 562.4 574.9 587.5 600.1 612.7 625.3">清單。工具用此清單掃描</tspan><tspan x="645.3" textLength="16.7" lengthAdjust="spacing">PR</tspan></text>
+<text class="t-sub" y="350"><tspan x="500 512 524 536 548 560 572 584">文字與每則留言。</tspan></text>
+</g>
+<g data-box="750 156 186 112">
+<rect class="node" x="750" y="156" width="186" height="112" rx="6"/>
+<text class="t-name" x="762" y="178" textLength="85.6" lengthAdjust="spacing">Claude Code</text>
+<text class="t-sub" y="198" data-r="924"><tspan x="762 774.5 787.1 799.6 812.2 824.7 837.3 849.3 861.8 874.4 886.9 899.5 912">以無介面模式（不開啟互動介</tspan></text>
+<text class="t-sub" y="214" data-r="924"><tspan x="762 774 786.1 798.1 810.1 822.2 834.3 846.3">面）執行。只能在</tspan><tspan x="862.2" textLength="46.0" lengthAdjust="spacing">worktree</tspan><tspan x="912">內</tspan></text>
+<text class="t-sub" y="230" data-r="924"><tspan x="762 774.6">使用</tspan><tspan x="795.1" textLength="28.7" lengthAdjust="spacing">Read</tspan><tspan x="823.8">、</tspan><tspan x="837.1" textLength="26.7" lengthAdjust="spacing">Grep</tspan><tspan x="872.2">與</tspan><tspan x="892.7" textLength="25.3" lengthAdjust="spacing">Glob</tspan><tspan x="918">，</tspan></text>
+<text class="t-sub" y="246"><tspan x="762 774 786 798 810 822 834 846 858 870 882 894 906">不能執行指令，也不能連網。</tspan></text>
+</g>
+<g data-box="24 428 448 88">
+<rect class="optional" x="24" y="428" width="448" height="88" rx="6"/>
+<text class="t-title" x="40" y="452">略過不受信任作者的 fork PR</text>
+<text class="t-sub" y="472" data-r="456"><tspan x="40 52.1 64.1 76.2 88.3 100.3 112.4 124.5 136.5 148.5 160.6 172.7 184.7 196.8 208.9 220.9 233 245.1 257.1 269.2 281.2 293.3">只有三種情況會審查：作者列於信任作者清單；以</tspan><tspan x="309.1" class="t-code" textLength="57.8" lengthAdjust="spacing">prreview</tspan><tspan x="374.6" class="t-code" textLength="28.9" lengthAdjust="spacing">once</tspan><tspan x="411.3" class="t-code" textLength="28.9" lengthAdjust="spacing">--pr</tspan><tspan x="444">指</tspan></text>
+<text class="t-sub" y="488"><tspan x="40 52">定該</tspan><tspan x="67.3" textLength="16.7" lengthAdjust="spacing">PR</tspan><tspan x="84 96 108 120 132 144 156 168">；開啟「審查所有</tspan><tspan x="183.3" textLength="20.0" lengthAdjust="spacing">fork</tspan><tspan x="206.7" textLength="16.7" lengthAdjust="spacing">PR</tspan><tspan x="223.3 235.3 247.3 259.3 271.3">」的設定。</tspan></text>
+</g>
+<g data-box="488 428 448 88">
+<rect class="strip" x="488" y="428" width="448" height="88" rx="6"/>
+<rect class="bar" x="488" y="428" width="6" height="88" rx="2"/>
+<text class="t-title" x="508" y="452">pr-reviewer 從不核准或合併 PR。</text>
+<text class="t-sub" y="472" data-r="920"><tspan x="508 520.7 533.5 546.2 559 571.7 584.5 597.2 610 622.7 634.7 647.5 660.2 673 685.7 698.5 711.2 724 736.7">唯一與合併有關的動作，是關閉尚未審查的</tspan><tspan x="758" textLength="26.7" lengthAdjust="spacing">head</tspan><tspan x="794 806.8 819.5 832.3 845 857.8 869.8 882.5 895.3 908">上的自動合併。只有設</tspan></text>
+<text class="t-sub" y="488" data-r="920"><tspan x="508">定</tspan><tspan x="527.5" class="t-code" textLength="238.3" lengthAdjust="spacing">PRREVIEW_GATE_DISARM_AUTO_MERGE=1</tspan><tspan x="773.2 785.2 797.7 810.2 822.7 835.3 847.8 860.3">時，才會執行指令</tspan><tspan x="879.8" class="t-code" textLength="14.4" lengthAdjust="spacing">gh</tspan><tspan x="905.6" class="t-code" textLength="14.4" lengthAdjust="spacing">pr</tspan></text>
+<text class="t-sub" y="504"><tspan x="508" class="t-code" textLength="36.1" lengthAdjust="spacing">merge</tspan><tspan x="551.3" class="t-code" textLength="101.1" lengthAdjust="spacing">--disable-auto</tspan><tspan x="652.4 664.4 676.4 688.4 700.4 712.4 724.4 736.4 748.4 760.4 772.4 784.4 796.4 808.4 820.4">。審查結果只是一則留言，不構成</tspan><tspan x="835.7" textLength="37.3" lengthAdjust="spacing">GitHub</tspan><tspan x="876.4 888.4 900.4 912.4">的核准。</tspan></text>
+</g>
+</g>
+</svg>

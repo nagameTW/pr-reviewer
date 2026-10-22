@@ -46,7 +46,7 @@ run has three pushes and three rounds. Round 3 approves.
 <p align="center">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/overview-dark.svg">
-  <img src="docs/images/overview.svg" alt="Architecture of pr-reviewer. It runs on your machine. The review loop starts a round once a minute while a pull request is open. A round reads open PRs from GitHub through gh. It builds a worktree for each PR. It sends a prompt to Claude Code. Claude Code has only the tools Read, Grep and Glob. A round matches PR text and each comment against your sensitive-patterns file. It posts one comment for each new head. By default, it skips fork PRs from authors you do not trust. The reviewer never approves or merges." width="100%">
+  <img src="docs/images/overview.svg" alt="Architecture of pr-reviewer. It runs on your machine. The review loop starts a round once a minute while a pull request is open. A round reads open PRs from GitHub through gh. It builds a worktree for each PR. It sends a prompt to Claude Code. Claude Code has only the tools Read, Grep and Glob. A round matches PR text and each comment against your sensitive-patterns file. It posts one comment for each new head. By default, it skips fork PRs from authors you do not trust. The reviewer never approves or merges. Its only merge call is gh pr merge --disable-auto. It turns off auto-merge on a head that the reviewer has not reviewed, and runs only with PRREVIEW_GATE_DISARM_AUTO_MERGE=1." width="100%">
 </picture>
 </p>
 
@@ -241,8 +241,12 @@ down. See [docs/windows.md](docs/windows.md).
 | `prreview status`, `prreview logs -f` | Show the state and the skipped PRs. Follow the log |
 | `prreview checks` | List, add or remove review items |
 | `prreview uninstall` | Remove the background service. The settings stay |
+| `prreview version`, `prreview --version` | Print the version |
+| `prreview <command> --help` | Print the usage of one command. Nothing else happens |
 
-A command that changes a setting restarts the service. To remove everything,
+A command rejects an argument it does not take. It prints `unknown argument:`
+and its usage, exits with code 2, and changes nothing. A command that changes a
+setting restarts the service. To remove everything,
 see [docs/operations.md](docs/operations.md#removing-it).
 
 ## Upgrading
@@ -322,7 +326,8 @@ One round has seven steps. The first four steps make no model call.
 
 Every push is a new round. The prompt asks the model to mark each earlier
 blocker as fixed. Or the model repeats the blocker with the prefix
-`Carried over:`. The harness does not check that the model does this.
+`Carried over:` before it. The harness does not check that the model does
+this.
 
 <p align="center">
 <picture>

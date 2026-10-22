@@ -40,7 +40,7 @@ before 'the cooldown decides before the worktree is created' 'cooldown_decide "$
 before 'the cooldown comes after the handled-head check' 'prompt_head_handled "$PRE"' 'cooldown_decide "$CD_HEAD"' pr-autoreview.sh
 pin    'binary files are excluded by path so the text changes still apply' 'apply --whitespace=nowarn ${BIN_EXCLUDES[@]+"${BIN_EXCLUDES[@]}"} "$DIFF"' pr-autoreview.sh
 pin    'the model is told which binary files are missing from the tree' 'TREE_CLAUSE="$(prompt_tree_clause "$DIFF_APPLIED" "$TREE_AT")$TREE_CONV_NOTE$TREE_BIN_NOTE"' pr-autoreview.sh
-pin    '...and so are the red team, in the tree text it shares with the review' 'redteam_prompt "$REPO" "$PR" "$DIFF" "$TREE_CLAUSE$STACKED_CLAUSE" "$RT_PRIOR"' pr-autoreview.sh
+pin    '...and so are the red team, in the tree text it shares with the review' 'redteam_prompt "$REPO" "$PR" "$DIFF_VIEW" "$TREE_CLAUSE$STACKED_CLAUSE" "$RT_PRIOR"' pr-autoreview.sh
 pin    '...which also gets the line definition' '"$REVIEW_LANGUAGE_SPEC" "$SEVERITY_SPEC" "$REPO_DIR" "$REVIEW_LINE_SPEC")"' pr-autoreview.sh
 pin    '...and so are the verifier, in the same tree text' '"$V_ISSUE" "$TREE_CLAUSE$STACKED_CLAUSE")"' pr-autoreview.sh
 pin    'job log lines carry the repo key, so two repos with one name stay apart' 'sed -u "s|^|[$REPO_KEY#$PR] |"' pr-autoreview.sh
@@ -216,12 +216,30 @@ before 'the named PR is read before the lock is taken' 'ONCE_REF="$(trust_parse_
 # Read, and the comment then points at the wrong code.
 LINE_SPEC="$(grep -E '^REVIEW_LINE_SPEC=' lib/review-spec.sh)"
 has    'the line definition names the side the number counts on' 'the line number on the new (after-change) side of the cited file' "$LINE_SPEC"
-has    '...says to count it from the hunk header' 'take it from the hunk header "@@ -a,b +c,d @@"' "$LINE_SPEC"
+has    '...says to use the number inside the NEW[...] label' 'Use the number inside NEW[...] of the line you cite' "$LINE_SPEC"
+has    '...rules out the number that Read prints' 'Never use the line number that Read prints in front of a diff line' "$LINE_SPEC"
+has    '...says a NEW[-] line was removed' 'NEW[-] marks a removed line' "$LINE_SPEC"
+has    '...counts from the hunk header only when the labels are missing' 'If the diff file has no labels, take the number from the hunk header "@@ -a,b +c,d @@"' "$LINE_SPEC"
 has    '...rules out a line of the diff file' 'Never use a line number of the diff file itself' "$LINE_SPEC"
 has    '...allows a number from Read only on the after-change file' 'Use the number that Read shows only when the file on disk holds the version after this change' "$LINE_SPEC"
 has    '...says what a deleted line gets' 'use the nearest line that still exists on the new side' "$LINE_SPEC"
 has    '...and when the value is 0' 'Use 0 when the new side has no reliable line, for example for a deleted file' "$LINE_SPEC"
 is     'the review prompt gives the line definition right after the schema' "$(awk '/^\$REVIEW_SCHEMA$/{getline; print; exit}' pr-autoreview.sh)" '$REVIEW_LINE_SPEC'
+# The short rule sits beside the first "Read it first" instruction, so the
+# model reads it before it opens the diff. It must also hold when the display
+# copy could not be made and the model reads the raw diff.
+READ_RULE="$(grep -E '^REVIEW_DIFF_READ_RULE=' lib/review-spec.sh)"
+has    'the read rule names the label' 'use the number inside NEW[...]' "$READ_RULE"
+has    '...rules out the number that Read prints' 'never the number that Read prints in front of the line' "$READ_RULE"
+has    '...and still works without labels' 'If the lines have no labels, count from the hunk header' "$READ_RULE"
+pin    'the review prompt puts the read rule right after the first Read instruction' 'The diff you are reviewing is in $SLICE_VIEW — Read it first. $REVIEW_DIFF_READ_RULE You are in the repo root' pr-autoreview.sh
+# Round two carries a blocker forward with its file, severity and issue text.
+# The line moves only when it is wrong (lib/prompt.sh says the same). The slice
+# merge keys a carried finding without its line (tests/chunk.test.sh).
+pin    'the carry rule keeps the line unless it is wrong' 'Never reword or re-rate a carried finding. Keep its line. Change the line only when the old one is wrong: past the end of the file, or not the NEW[...] line of the code the finding names (if the diff has no labels, the new-side line counted from the hunk header). Then give that line of the code.' pr-autoreview.sh
+pin    'a slice keeps the quoted line of a finding in another slice' 'Keep its line too. Change the line only when the old one is wrong, as in duty (a): past the end of the file, or not the NEW[...] line of the code the finding names (if the diff has no labels, the new-side line counted from the hunk header).' pr-autoreview.sh
+pin    'a slice moves the line of a finding outside its slice only past the end of that file' 'for a file outside your slice change the line only when it is past the end of that file' pr-autoreview.sh
+if grep -qF 'Never reword, re-anchor, or re-rate' pr-autoreview.sh; then bad 'no rule forbids re-anchoring a carried finding' 'the old sentence is still in pr-autoreview.sh'; else ok 'no rule forbids re-anchoring a carried finding'; fi
 pin    'the structural repair gets the same definition' 'findings_repair_prompt "$OUT" "$REVIEW_SCHEMA" "$REVIEW_LINE_SPEC")"' pr-autoreview.sh
 
 # The Approved banner says what it is not. A reader who skims a comment that

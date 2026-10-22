@@ -140,9 +140,53 @@ All notable changes to this project are recorded here. The format follows
   of the 13 checklist items replaces `docs/images/checks.svg`.
 - An Approved comment has a second banner line: "Automated review, not a
   GitHub approval." A Changes requested banner is unchanged.
+- `README.zh-TW.md` uses plain wording and has its own diagrams. The body text
+  of every diagram is justified.
 
 ### Fixed
 
+- Every `prreview` command rejects an argument it does not take. It prints
+  `unknown argument: X` and the usage line of that command, exits with code 2,
+  and changes nothing. Before, `prreview uninstall --help` removed the
+  background service, and `prreview run --help` started the loop.
+- Every `prreview` command takes `--help` and `-h`. It prints the usage and
+  exits 0 with no side effect. `prreview version` and `prreview --version`
+  print the newest release in this file.
+- `prreview setup` does not start `gh auth login` when stdin is not a
+  terminal and gh is not logged in. It prints the command and stops at the
+  GitHub step. The same holds at the Claude Code login. At either step it
+  asks no "Try again?" question and exits with status 1, so a pipe that
+  always answers `y` no longer repeats the step for ever.
+- When `gh auth status` fails, "cannot see owner/repo with this gh login"
+  says to run `gh auth login`. The gate message "could not tell which GitHub
+  account" says it too, and it has no em dash.
+- `prreview set` with a name that is not a setting points to
+  `docs/configuration.md`.
+- When the editor for `prreview checks add` does not run, the error names
+  `EDITOR` and `VISUAL`.
+- Review findings often cited the wrong line. The model read the raw diff
+  with the Read tool, which prints a line number in front of each line, and
+  it copied that number instead of the line in the source file. In a bench of
+  404 findings, about 82 cited a line of the diff file, and 46 of those
+  pointed past the end of the file. The review, the red team and the
+  second-round check now read a copy of the diff where each line starts with
+  a label. A context line or an added line starts with `NEW[n]`, where n is
+  its line in the file after the change. A removed line starts with
+  `NEW[-]`. The copy changes only the start of each line. The raw diff stays
+  as it is for `git apply`, the slice splitter and the file lists. If the
+  copy cannot be made, the log shows a `WARNING` and the model reads the raw
+  diff with the old line rule.
+- A finding whose line is past the end of the cited file now keeps its
+  severity and gets line 0, and the log shows the original line. This runs
+  only when the diff was applied to the tree. It drops no finding, so no
+  blocker changes status. `PRREVIEW_GATE_VERIFY_LINES`, which deletes such
+  findings, stays off by default.
+- A blocking finding that round two carries forward could not change its
+  line, so a wrong line stayed wrong in every later round. The round two
+  instructions now keep the file, severity and issue text, and keep the line
+  unless it is past the end of the file or is not the `NEW[...]` line of the
+  code the finding names. When slices give one carried finding two lines,
+  the merge keeps one finding, the first in slice order.
 - With `PRREVIEW_GATE_VERIFY_LINES=1`, the line-number check failed on bash
   3.2, the bash that macOS ships. Bash 3.2 ended a command substitution at the
   `)` of a `case` pattern and printed a syntax error. The loop that counts the

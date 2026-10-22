@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg viewBox="0 0 880 528" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="overview-github-dark-title overview-github-dark-desc" id="overview-github-dark-root">
+<svg viewBox="0 0 892 528" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="overview-github-dark-title overview-github-dark-desc" id="overview-github-dark-root">
 <title id="overview-github-dark-title">Where pr-reviewer runs</title>
 <desc id="overview-github-dark-desc">pr-reviewer runs on your machine, reads open pull requests through gh, has Claude Code review a per-PR worktree with read-only tools, scans text against your sensitive-patterns file, and posts one comment per new head.</desc>
 <defs>
@@ -40,81 +40,82 @@
 <marker id="overview-github-dark-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon class="mk" points="0 0, 8 3, 0 6"/></marker>
 <marker id="overview-github-dark-arrow-alert" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon class="mk-alert" points="0 0, 8 3, 0 6"/></marker>
 </defs>
-<rect class="bg" width="880" height="528"/>
-<rect class="edge-frame" x="1" y="1" width="878" height="526" rx="8"/>
+<rect class="bg" width="892" height="528"/>
+<rect class="edge-frame" x="1" y="1" width="890" height="526" rx="8"/>
 <g transform="translate(0,-28)">
-<rect class="hero" x="264" y="56" width="376" height="368" rx="8"/>
-<text class="t-eye" x="280" y="78">YOUR MACHINE</text>
-<text class="t-eye" x="24" y="150">GITHUB</text>
-<text class="t-eye" x="712" y="150">MODEL</text>
-<path class="edge" d="M184,212 H284" marker-end="url(#overview-github-dark-arrow)"/>
-<path class="edge" d="M284,244 H184" marker-end="url(#overview-github-dark-arrow)"/>
-<path class="edge" d="M620,212 H712" marker-end="url(#overview-github-dark-arrow)"/>
-<path class="edge" d="M712,244 H620" marker-end="url(#overview-github-dark-arrow)"/>
-<path class="edge" d="M452,156 V180" marker-end="url(#overview-github-dark-arrow)"/>
-<path class="edge" d="M362,276 V300" marker-end="url(#overview-github-dark-arrow)"/>
-<path class="edge" d="M542,300 V276" marker-end="url(#overview-github-dark-arrow)"/>
-<rect class="mask" x="203" y="190" width="42" height="16" rx="2"/><text class="t-arrow" x="224" y="202" text-anchor="middle">READ</text>
-<rect class="mask" x="203" y="250" width="42" height="16" rx="2"/><text class="t-arrow" x="224" y="262" text-anchor="middle">POST</text>
-<rect class="mask" x="648" y="190" width="56" height="16" rx="2"/><text class="t-arrow" x="676" y="202" text-anchor="middle">PROMPT</text>
-<rect class="mask" x="652" y="250" width="48" height="16" rx="2"/><text class="t-arrow" x="676" y="262" text-anchor="middle">REPLY</text>
-<rect class="mask" x="462" y="160" width="56" height="16" rx="2"/><text class="t-arrow" x="490" y="172" text-anchor="middle">STARTS</text>
-<rect class="mask" x="370" y="280" width="56" height="16" rx="2"/><text class="t-arrow" x="398" y="292" text-anchor="middle">BUILDS</text>
-<rect class="mask" x="549" y="280" width="42" height="16" rx="2"/><text class="t-arrow" x="570" y="292" text-anchor="middle">SCAN</text>
-<g data-box="24 164 160 112">
-<rect class="node" x="24" y="164" width="160" height="112" rx="6"/>
-<text class="t-name" x="36" y="186">Pull request</text>
-<text class="t-sub" x="36" y="206">open, not a draft,</text>
-<text class="t-sub" x="36" y="222">in a repo from</text>
-<text class="t-sub" x="36" y="238"><tspan class="t-code">PRREVIEW_GATE_REPOS</tspan></text>
+<rect class="hero" x="272" y="56" width="376" height="336" rx="8"/>
+<text class="t-eye" x="288" y="78">YOUR MACHINE</text>
+<text class="t-eye" x="24" y="142">GITHUB</text>
+<text class="t-eye" x="716" y="142">MODEL</text>
+<path class="edge" d="M204,204 H292" marker-end="url(#overview-github-dark-arrow)"/>
+<path class="edge" d="M292,236 H204" marker-end="url(#overview-github-dark-arrow)"/>
+<path class="edge" d="M628,204 H716" marker-end="url(#overview-github-dark-arrow)"/>
+<path class="edge" d="M716,236 H628" marker-end="url(#overview-github-dark-arrow)"/>
+<path class="edge" d="M460,148 V172" marker-end="url(#overview-github-dark-arrow)"/>
+<path class="edge" d="M372,252 V276" marker-end="url(#overview-github-dark-arrow)"/>
+<path class="edge" d="M548,276 V252" marker-end="url(#overview-github-dark-arrow)"/>
+<rect class="mask" x="217" y="182" width="42" height="16" rx="2"/><text class="t-arrow" x="238" y="194" text-anchor="middle">READ</text>
+<rect class="mask" x="217" y="242" width="42" height="16" rx="2"/><text class="t-arrow" x="238" y="254" text-anchor="middle">POST</text>
+<rect class="mask" x="654" y="182" width="56" height="16" rx="2"/><text class="t-arrow" x="682" y="194" text-anchor="middle">PROMPT</text>
+<rect class="mask" x="658" y="242" width="48" height="16" rx="2"/><text class="t-arrow" x="682" y="254" text-anchor="middle">REPLY</text>
+<rect class="mask" x="470" y="152" width="56" height="16" rx="2"/><text class="t-arrow" x="498" y="164" text-anchor="middle">STARTS</text>
+<rect class="mask" x="380" y="256" width="56" height="16" rx="2"/><text class="t-arrow" x="408" y="268" text-anchor="middle">BUILDS</text>
+<rect class="mask" x="555" y="256" width="42" height="16" rx="2"/><text class="t-arrow" x="576" y="268" text-anchor="middle">SCAN</text>
+<g data-box="24 156 180 112">
+<rect class="node" x="24" y="156" width="180" height="112" rx="6"/>
+<text class="t-name" x="36" y="178" textLength="80.1" lengthAdjust="spacing">Pull request</text>
+<text class="t-sub" y="198" data-r="192"><tspan x="36" textLength="30.0" lengthAdjust="spacing">open,</tspan><tspan x="70.3" textLength="16.7" lengthAdjust="spacing">not</tspan><tspan x="91.3">a</tspan><tspan x="102.3" textLength="27.3" lengthAdjust="spacing">draft,</tspan><tspan x="134" textLength="20.0" lengthAdjust="spacing">and</tspan><tspan x="158.3" textLength="9.3" lengthAdjust="spacing">in</tspan><tspan x="172" textLength="20.0" lengthAdjust="spacing">one</tspan></text>
+<text class="t-sub" y="214" data-r="192"><tspan x="36" textLength="10.0" lengthAdjust="spacing">of</tspan><tspan x="52" textLength="16.7" lengthAdjust="spacing">the</tspan><tspan x="74.7" textLength="30.0" lengthAdjust="spacing">repos</tspan><tspan x="110.7" textLength="20.0" lengthAdjust="spacing">that</tspan><tspan x="136.7" textLength="19.3" lengthAdjust="spacing">you</tspan><tspan x="162" textLength="14.7" lengthAdjust="spacing">list</tspan><tspan x="182.7" textLength="9.3" lengthAdjust="spacing">in</tspan></text>
+<text class="t-sub" y="230"><tspan x="36" class="t-code" textLength="137.2" lengthAdjust="spacing">PRREVIEW_GATE_REPOS</tspan></text>
 </g>
-<g data-box="284 92 336 64">
-<rect class="raised" x="284" y="92" width="336" height="64" rx="6"/>
-<text class="t-name-code" x="296" y="114">review-loop.sh</text>
-<text class="t-sub" x="296" y="134">polls once a minute while a PR is open</text>
+<g data-box="292 92 336 56">
+<rect class="raised" x="292" y="92" width="336" height="56" rx="6"/>
+<text class="t-name-code" x="304" y="114">review-loop.sh</text>
+<text class="t-sub" y="134"><tspan x="304" textLength="24.7" lengthAdjust="spacing">polls</tspan><tspan x="332" textLength="26.0" lengthAdjust="spacing">once</tspan><tspan x="361.3">a</tspan><tspan x="371.3" textLength="36.0" lengthAdjust="spacing">minute</tspan><tspan x="410.7" textLength="27.4" lengthAdjust="spacing">while</tspan><tspan x="441.4">a</tspan><tspan x="451.4" textLength="16.7" lengthAdjust="spacing">PR</tspan><tspan x="471.4" textLength="8.7" lengthAdjust="spacing">is</tspan><tspan x="483.4" textLength="26.7" lengthAdjust="spacing">open</tspan></text>
 </g>
-<g data-box="284 180 336 96">
-<rect class="raised" x="284" y="180" width="336" height="96" rx="6"/>
-<text class="t-name-code" x="296" y="202">pr-autoreview.sh</text>
-<text class="t-sub" x="296" y="222">one round: each new head gets one review</text>
-<text class="t-sub" x="296" y="238">up to 2 PRs at the same time</text>
+<g data-box="292 172 336 80">
+<rect class="raised" x="292" y="172" width="336" height="80" rx="6"/>
+<text class="t-name-code" x="304" y="194">pr-autoreview.sh</text>
+<text class="t-sub" y="214" data-r="616"><tspan x="304" textLength="20.0" lengthAdjust="spacing">one</tspan><tspan x="328.4" textLength="34.0" lengthAdjust="spacing">round:</tspan><tspan x="366.7" textLength="26.0" lengthAdjust="spacing">each</tspan><tspan x="397.1" textLength="22.0" lengthAdjust="spacing">new</tspan><tspan x="423.5" textLength="26.7" lengthAdjust="spacing">head</tspan><tspan x="454.5" textLength="22.7" lengthAdjust="spacing">gets</tspan><tspan x="481.5" textLength="20.0" lengthAdjust="spacing">one</tspan><tspan x="505.9" textLength="38.0" lengthAdjust="spacing">review.</tspan><tspan x="548.3" textLength="15.3" lengthAdjust="spacing">Up</tspan><tspan x="567.9" textLength="10.0" lengthAdjust="spacing">to</tspan><tspan x="582.3">2</tspan><tspan x="593.3" textLength="22.7" lengthAdjust="spacing">PRs</tspan></text>
+<text class="t-sub" y="230"><tspan x="304" textLength="10.0" lengthAdjust="spacing">at</tspan><tspan x="317.3" textLength="16.7" lengthAdjust="spacing">the</tspan><tspan x="337.3" textLength="29.3" lengthAdjust="spacing">same</tspan><tspan x="370" textLength="26.0" lengthAdjust="spacing">time.</tspan></text>
 </g>
-<g data-box="284 300 156 96">
-<rect class="raised" x="284" y="300" width="156" height="96" rx="6"/>
-<text class="t-name" x="296" y="322">Per-PR worktree</text>
-<text class="t-sub" x="296" y="342">merge base + PR diff,</text>
-<text class="t-sub" x="296" y="358">rules files from the</text>
-<text class="t-sub" x="296" y="374">default branch</text>
+<g data-box="292 276 160 88">
+<rect class="raised" x="292" y="276" width="160" height="88" rx="6"/>
+<text class="t-name" x="304" y="298" textLength="108.9" lengthAdjust="spacing">Per-PR worktree</text>
+<text class="t-sub" y="318" data-r="440"><tspan x="304" textLength="34.0" lengthAdjust="spacing">merge</tspan><tspan x="346.3" textLength="26.0" lengthAdjust="spacing">base</tspan><tspan x="380.5">+</tspan><tspan x="395.8" textLength="16.7" lengthAdjust="spacing">PR</tspan><tspan x="420.7" textLength="19.3" lengthAdjust="spacing">diff,</tspan></text>
+<text class="t-sub" y="334" data-r="440"><tspan x="304" textLength="22.0" lengthAdjust="spacing">plus</tspan><tspan x="332.5" textLength="26.0" lengthAdjust="spacing">rules</tspan><tspan x="365" textLength="21.3" lengthAdjust="spacing">files</tspan><tspan x="392.8" textLength="24.0" lengthAdjust="spacing">from</tspan><tspan x="423.3" textLength="16.7" lengthAdjust="spacing">the</tspan></text>
+<text class="t-sub" y="350"><tspan x="304" textLength="36.0" lengthAdjust="spacing">default</tspan><tspan x="343.3" textLength="36.7" lengthAdjust="spacing">branch</tspan></text>
 </g>
-<g data-box="464 300 156 96">
-<rect class="raised" x="464" y="300" width="156" height="96" rx="6"/>
-<text class="t-name" x="476" y="322">Sensitive patterns</text>
-<text class="t-sub" x="476" y="342">your regex list.</text>
-<text class="t-sub" x="476" y="358">Scans PR text and</text>
-<text class="t-sub" x="476" y="374">each comment</text>
+<g data-box="468 276 160 88">
+<rect class="raised" x="468" y="276" width="160" height="88" rx="6"/>
+<text class="t-name" x="480" y="298" textLength="120.6" lengthAdjust="spacing">Sensitive patterns</text>
+<text class="t-sub" y="318" data-r="616"><tspan x="480" textLength="23.3" lengthAdjust="spacing">your</tspan><tspan x="507" textLength="30.0" lengthAdjust="spacing">regex</tspan><tspan x="540.7" textLength="18.0" lengthAdjust="spacing">list.</tspan><tspan x="562.3" textLength="33.3" lengthAdjust="spacing">Scans</tspan><tspan x="599.3" textLength="16.7" lengthAdjust="spacing">PR</tspan></text>
+<text class="t-sub" y="334"><tspan x="480" textLength="19.3" lengthAdjust="spacing">text</tspan><tspan x="502.7" textLength="20.0" lengthAdjust="spacing">and</tspan><tspan x="526" textLength="26.0" lengthAdjust="spacing">each</tspan><tspan x="555.3" textLength="49.3" lengthAdjust="spacing">comment</tspan></text>
 </g>
-<g data-box="712 164 144 112">
-<rect class="node" x="712" y="164" width="144" height="112" rx="6"/>
-<text class="t-name" x="724" y="186">Claude Code</text>
-<text class="t-sub" x="724" y="206"><tspan class="t-code">claude -p</tspan>, headless</text>
-<text class="t-sub" x="724" y="222">Read, Grep, Glob on</text>
-<text class="t-sub" x="724" y="238">the worktree only.</text>
-<text class="t-sub" x="724" y="254">No shell, no web.</text>
+<g data-box="716 156 152 112">
+<rect class="node" x="716" y="156" width="152" height="112" rx="6"/>
+<text class="t-name" x="728" y="178" textLength="85.6" lengthAdjust="spacing">Claude Code</text>
+<text class="t-sub" y="198" data-r="856"><tspan x="728" class="t-code" textLength="43.3" lengthAdjust="spacing">claude</tspan><tspan x="781" class="t-code" textLength="14.4" lengthAdjust="spacing">-p</tspan><tspan x="795.5">,</tspan><tspan x="804.6" textLength="51.4" lengthAdjust="spacing">headless.</tspan></text>
+<text class="t-sub" y="214" data-r="856"><tspan x="728" textLength="32.0" lengthAdjust="spacing">Read,</tspan><tspan x="769.1" textLength="30.0" lengthAdjust="spacing">Grep,</tspan><tspan x="808.2" textLength="25.3" lengthAdjust="spacing">Glob</tspan><tspan x="842.7" textLength="13.3" lengthAdjust="spacing">on</tspan></text>
+<text class="t-sub" y="230" data-r="856"><tspan x="728" textLength="16.7" lengthAdjust="spacing">the</tspan><tspan x="752.9" textLength="46.0" lengthAdjust="spacing">worktree</tspan><tspan x="807.1" textLength="25.3" lengthAdjust="spacing">only.</tspan><tspan x="840.7" textLength="15.3" lengthAdjust="spacing">No</tspan></text>
+<text class="t-sub" y="246"><tspan x="728" textLength="28.0" lengthAdjust="spacing">shell,</tspan><tspan x="759.3" textLength="13.3" lengthAdjust="spacing">no</tspan><tspan x="776" textLength="25.3" lengthAdjust="spacing">web.</tspan></text>
 </g>
-<g data-box="24 444 408 88">
-<rect class="optional" x="24" y="444" width="408" height="88" rx="6"/>
-<text class="t-title" x="40" y="468">Fork PRs from untrusted authors: skipped</text>
-<text class="t-sub" x="40" y="488">A fork PR is reviewed only if its author is in</text>
-<text class="t-sub" x="40" y="504"><tspan class="t-code">PRREVIEW_GATE_TRUSTED_AUTHORS</tspan>, you run</text>
-<text class="t-sub" x="40" y="520"><tspan class="t-code">prreview once --pr</tspan>, or you set <tspan class="t-code">PRREVIEW_GATE_FORK_PRS=1</tspan>.</text>
+<g data-box="24 412 414 120">
+<rect class="optional" x="24" y="412" width="414" height="120" rx="6"/>
+<text class="t-title" x="40" y="436" textLength="281.5" lengthAdjust="spacing">Fork PRs from untrusted authors: skipped</text>
+<text class="t-sub" y="456" data-r="422"><tspan x="40">A</tspan><tspan x="51.9" textLength="20.0" lengthAdjust="spacing">fork</tspan><tspan x="75.7" textLength="16.7" lengthAdjust="spacing">PR</tspan><tspan x="96.3" textLength="24.0" lengthAdjust="spacing">from</tspan><tspan x="124.1" textLength="13.3" lengthAdjust="spacing">an</tspan><tspan x="141.3" textLength="34.0" lengthAdjust="spacing">author</tspan><tspan x="179.2" textLength="19.3" lengthAdjust="spacing">you</tspan><tspan x="202.4" textLength="13.3" lengthAdjust="spacing">do</tspan><tspan x="219.6" textLength="16.7" lengthAdjust="spacing">not</tspan><tspan x="240.1" textLength="23.3" lengthAdjust="spacing">trust</tspan><tspan x="267.3" textLength="8.7" lengthAdjust="spacing">is</tspan><tspan x="279.8" textLength="48.0" lengthAdjust="spacing">reviewed</tspan><tspan x="331.7" textLength="22.0" lengthAdjust="spacing">only</tspan><tspan x="357.6" textLength="6.0" lengthAdjust="spacing">if</tspan><tspan x="367.5" textLength="16.7" lengthAdjust="spacing">the</tspan><tspan x="388" textLength="34.0" lengthAdjust="spacing">author</tspan></text>
+<text class="t-sub" y="472" data-r="422"><tspan x="40" textLength="8.7" lengthAdjust="spacing">is</tspan><tspan x="52.7" textLength="9.3" lengthAdjust="spacing">in</tspan><tspan x="66" class="t-code" textLength="209.4" lengthAdjust="spacing">PRREVIEW_GATE_TRUSTED_AUTHORS</tspan><tspan x="275.4">,</tspan><tspan x="282.8" textLength="19.3" lengthAdjust="spacing">you</tspan><tspan x="306.1" textLength="17.3" lengthAdjust="spacing">run</tspan><tspan x="327.5" class="t-code" textLength="57.8" lengthAdjust="spacing">prreview</tspan><tspan x="393.1" class="t-code" textLength="28.9" lengthAdjust="spacing">once</tspan></text>
+<text class="t-sub" y="488"><tspan x="40" class="t-code" textLength="28.9" lengthAdjust="spacing">--pr</tspan><tspan x="68.9">,</tspan><tspan x="75.5" textLength="10.7" lengthAdjust="spacing">or</tspan><tspan x="89.5" textLength="19.3" lengthAdjust="spacing">you</tspan><tspan x="112.2" textLength="16.0" lengthAdjust="spacing">set</tspan><tspan x="131.5" class="t-code" textLength="173.3" lengthAdjust="spacing">PRREVIEW_GATE_FORK_PRS=1</tspan><tspan x="304.8">.</tspan></text>
 </g>
-<g data-box="448 444 408 88">
-<rect class="strip" x="448" y="444" width="408" height="88" rx="6"/>
-<rect class="bar" x="448" y="444" width="6" height="88" rx="2"/>
-<text class="t-title" x="468" y="468">It never approves or merges.</text>
-<text class="t-sub" x="468" y="488">Its only merge call is <tspan class="t-code">gh pr merge --disable-auto</tspan>,</text>
-<text class="t-sub" x="468" y="504">off by default. A verdict is a comment,</text>
-<text class="t-sub" x="468" y="520">not a GitHub approval.</text>
+<g data-box="454 412 414 120">
+<rect class="strip" x="454" y="412" width="414" height="120" rx="6"/>
+<rect class="bar" x="454" y="412" width="6" height="120" rx="2"/>
+<text class="t-title" x="474" y="436" textLength="191.3" lengthAdjust="spacing">It never approves or merges.</text>
+<text class="t-sub" y="456" data-r="852"><tspan x="474" textLength="12.7" lengthAdjust="spacing">Its</tspan><tspan x="497.2" textLength="22.0" lengthAdjust="spacing">only</tspan><tspan x="529.8" textLength="34.0" lengthAdjust="spacing">merge</tspan><tspan x="574.3" textLength="18.0" lengthAdjust="spacing">call</tspan><tspan x="602.9" textLength="8.7" lengthAdjust="spacing">is</tspan><tspan x="622.1" class="t-code" textLength="14.4" lengthAdjust="spacing">gh</tspan><tspan x="651" class="t-code" textLength="14.4" lengthAdjust="spacing">pr</tspan><tspan x="679.8" class="t-code" textLength="36.1" lengthAdjust="spacing">merge</tspan><tspan x="730.4" class="t-code" textLength="101.1" lengthAdjust="spacing">--disable-auto</tspan><tspan x="831.5">.</tspan><tspan x="845.3" textLength="6.7" lengthAdjust="spacing">It</tspan></text>
+<text class="t-sub" y="472" data-r="852"><tspan x="474" textLength="26.7" lengthAdjust="spacing">turns</tspan><tspan x="511.1" textLength="13.3" lengthAdjust="spacing">off</tspan><tspan x="534.8" textLength="61.4" lengthAdjust="spacing">auto-merge</tspan><tspan x="606.5" textLength="41.3" lengthAdjust="spacing">(GitHub</tspan><tspan x="658.3" textLength="43.4" lengthAdjust="spacing">merging</tspan><tspan x="712">a</tspan><tspan x="729.1" textLength="16.7" lengthAdjust="spacing">PR</tspan><tspan x="756.1" textLength="13.3" lengthAdjust="spacing">on</tspan><tspan x="779.9" textLength="12.0" lengthAdjust="spacing">its</tspan><tspan x="802.3" textLength="26.0" lengthAdjust="spacing">own)</tspan><tspan x="838.7" textLength="13.3" lengthAdjust="spacing">on</tspan></text>
+<text class="t-sub" y="488" data-r="852"><tspan x="474">a</tspan><tspan x="489.9" textLength="26.7" lengthAdjust="spacing">head</tspan><tspan x="525.9" textLength="20.0" lengthAdjust="spacing">that</tspan><tspan x="555.1" textLength="16.7" lengthAdjust="spacing">the</tspan><tspan x="581.1" textLength="45.4" lengthAdjust="spacing">reviewer</tspan><tspan x="635.7" textLength="19.3" lengthAdjust="spacing">has</tspan><tspan x="664.3" textLength="16.7" lengthAdjust="spacing">not</tspan><tspan x="690.2" textLength="51.4" lengthAdjust="spacing">reviewed.</tspan><tspan x="750.9" textLength="6.7" lengthAdjust="spacing">It</tspan><tspan x="766.8" textLength="23.3" lengthAdjust="spacing">runs</tspan><tspan x="799.4" textLength="22.0" lengthAdjust="spacing">only</tspan><tspan x="830.7" textLength="21.3" lengthAdjust="spacing">with</tspan></text>
+<text class="t-sub" y="504" data-r="852"><tspan x="474" class="t-code" textLength="238.3" lengthAdjust="spacing">PRREVIEW_GATE_DISARM_AUTO_MERGE=1</tspan><tspan x="712.3">.</tspan><tspan x="720.6">A</tspan><tspan x="733.6" textLength="35.3" lengthAdjust="spacing">verdict</tspan><tspan x="774" textLength="8.7" lengthAdjust="spacing">is</tspan><tspan x="787.6">a</tspan><tspan x="799.3" textLength="52.7" lengthAdjust="spacing">comment,</tspan></text>
+<text class="t-sub" y="520"><tspan x="474" textLength="16.7" lengthAdjust="spacing">not</tspan><tspan x="494">a</tspan><tspan x="504" textLength="37.3" lengthAdjust="spacing">GitHub</tspan><tspan x="544.7" textLength="49.4" lengthAdjust="spacing">approval.</tspan></text>
 </g>
 </g>
 </svg>
