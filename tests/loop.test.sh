@@ -60,7 +60,7 @@ mkstub() {  # $1 = body
   printf '#!/usr/bin/env bash\n%s\n' "$1" > "$STUB_DIR/gh"
   chmod +x "$STUB_DIR/gh"
 }
-# PRs as `gh pr list --json number,author,isCrossRepository` prints them.
+# PRs as `gh pr list --json number,author,isCrossRepository,isDraft` prints them.
 PR_OWN='{"number":1,"author":{"login":"maint"},"isCrossRepository":false}'
 PR_FORK='{"number":2,"author":{"login":"stranger"},"isCrossRepository":true}'
 PR_FORK2='{"number":3,"author":{"login":"other"},"isCrossRepository":true}'
@@ -153,13 +153,33 @@ stub_list '[{"number":5,"author":{"login":"stranger"},"isCrossRepository":true}]
 is 'a complete allowlisted fork PR counts 1 per repo' \
    "$( export PRREVIEW_GATE_TRUSTED_AUTHORS='stranger'; count )" '3'
 
+# The round skips a draft PR, so the count skips it too. Only a boolean true is
+# a draft. A missing or non-boolean isDraft counts as not a draft, so the round
+# decides.
+stub_list "[{\"number\":6,$GOOD_AUTHOR,\"isCrossRepository\":false,\"isDraft\":true}]"
+is 'a draft PR from the repository itself counts 0' "$(count)" '0'
+stub_list "[{\"number\":6,$GOOD_AUTHOR,\"isCrossRepository\":true,\"isDraft\":true}]"
+is 'a draft fork PR of an allowlisted author counts 0' \
+   "$( export PRREVIEW_GATE_TRUSTED_AUTHORS='stranger'; count )" '0'
+stub_list "[{\"number\":6,$GOOD_AUTHOR,\"isCrossRepository\":false,\"isDraft\":true},{\"number\":7,$GOOD_AUTHOR,\"isCrossRepository\":false,\"isDraft\":false}]"
+is 'a PR that is ready counts when a draft is open next to it' "$(count)" '3'
+for D in '' ',"isDraft":false' ',"isDraft":null' ',"isDraft":"true"' ',"isDraft":1' ',"isDraft":[true]'; do
+  stub_list "[{\"number\":8,$GOOD_AUTHOR,\"isCrossRepository\":false$D}]"
+  is "a PR with this isDraft counts 1 per repo: ${D:-missing}" "$(count)" '3'
+done
+# The draft filter changes nothing for an answer that is not a list.
+stub_list '{"message":"Bad credentials"}'
+is 'an answer that is not a list still counts as work' "$(count)" '3'
+stub_list '[null,{"number":9,"isDraft":true}]'
+is 'an entry that is not an object is not dropped as a draft' "$(count)" '3'
+
 # One list call for each repo, and it carries what the rule reads. The default
 # limit of gh is 30; the round asks for 1000, and so does the count, or a
 # trusted PR behind 30 forks would not be seen.
 mkstub "echo \"\$*\" >> '$STUB_DIR/args'; echo '[]'"
 count >/dev/null
 is  'one list call for each repo' "$(wc -l < "$STUB_DIR/args" | tr -d ' ')" '3'
-has 'the list call reads the number, author and fork flag' '--json number,author,isCrossRepository' "$(cat "$STUB_DIR/args")"
+has 'the list call reads the number, author, fork flag and draft flag' '--json number,author,isCrossRepository,isDraft' "$(cat "$STUB_DIR/args")"
 has 'the list call asks for the same limit as the round' '--limit 1000' "$(cat "$STUB_DIR/args")"
 
 # The loop and the round read the same process environment, and

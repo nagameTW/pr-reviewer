@@ -32,6 +32,14 @@ loop_repos_of() {
   printf '%s\n' "$REPOS"
 }
 
+# The JSON array $1 without its draft PRs: the entries that are objects whose
+# isDraft is the boolean true. Every other entry stays, so trust_plan_prs can
+# refuse a bad one. A $1 that is not an array is printed as it is, for the same
+# reason. Fails when $1 is not JSON.
+loop_without_drafts() {
+  jq -c 'if type == "array" then map(select((type == "object" and .isDraft == true) | not)) else . end' <<<"${1-}"
+}
+
 # How many open PRs the round would review, across every repo the driven
 # script covers. $1 = path to the driven script, $2 = gh binary (default `gh`).
 #
@@ -42,8 +50,13 @@ loop_repos_of() {
 # both see the same values. A count that includes the PRs the round skips
 # starts a full round every interval for as long as one fork PR stays open,
 # and each round pays for the merged-PR scan. The scan itself stays unfiltered.
+# A draft PR does not count, because the round skips it. Only a boolean true
+# is a draft. A missing or non-boolean isDraft counts as not a draft, so the
+# round decides.
 # The loop needs lib/trust.sh sourced and jq on PATH. The call asks for the
-# same fields and the same limit as the round, and the answer is read once.
+# same limit as the round. It reads the fields that the rule needs (number,
+# author, isCrossRepository) and isDraft. The round reads the labels too, and
+# the rule does not use them. The answer is read once.
 #
 # Every failure direction answers 1 per repo, i.e. "assume there is work". A
 # round that runs with nothing to do costs one `gh pr list` per repo; a round
@@ -59,8 +72,9 @@ loop_open_pr_count() {
   repos="$(loop_repos_of "$script")" || { printf '1\n'; return 0; }
   for r in $repos; do
     # An empty answer is not an empty list: jq reads no input as no entries.
-    if list="$("$gh" pr list --repo "$r" --state open --limit 1000 --json number,author,isCrossRepository 2>/dev/null)" \
+    if list="$("$gh" pr list --repo "$r" --state open --limit 1000 --json number,author,isCrossRepository,isDraft 2>/dev/null)" \
        && [ -n "${list//[[:space:]]/}" ] \
+       && list="$(loop_without_drafts "$list" 2>/dev/null)" \
        && plan="$(trust_plan_prs "$list" "${PRREVIEW_GATE_TRUSTED_AUTHORS-}" "${PRREVIEW_GATE_FORK_PRS-}" "" 2>/dev/null)"; then
       n="$(printf '%s\n' "$plan" | grep -c '^review ' || true)"
     else

@@ -65,8 +65,11 @@ All notable changes to this project are recorded here. The format follows
   reads `PRREVIEW_GATE_TRUSTED_AUTHORS` and `PRREVIEW_GATE_FORK_PRS` from the
   same environment as the round, and it asks for up to 1000 PRs, as the round
   does. The count applies the same rule, so a PR with a missing field or a
-  wrong type counts 0. A list the loop cannot read counts as work. The scan of
-  merged PRs does not look at the author. The count needs `jq`. If `jq` is
+  wrong type counts 0. A draft PR counts 0 too, because the round skips it.
+  Only a boolean `isDraft` that is true makes a PR a draft. If the field is
+  missing or has another type, the PR counts, and the round decides. The count
+  asks for `isDraft` in the same `gh pr list` call. A list the loop cannot read
+  counts as work. The scan of merged PRs does not look at the author. The count needs `jq`. If `jq` is
   missing, the loop stops at startup and names it, as it does for the timeout
   command.
 - The reviewer finds `gtimeout` and `gsha256sum` on its own. At startup it uses
