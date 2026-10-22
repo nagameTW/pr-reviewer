@@ -64,4 +64,15 @@ has '...and its line says FAIL' 'FAIL' "$(printf '%s\n' "$OUT" | grep '^shellche
 has '...and ends with SOME CHECKS FAILED' 'SOME CHECKS FAILED' "$OUT"
 has 'a missing tool prints as not found' 'not found' "$(printf '%s\n' "$OUT" | grep '^gh')"
 
+# ── the temp directory goes away when the bash link cannot be made ──────────
+# A PATH with a `ln` that fails. The run ends at once, so it must not leave
+# the directory that holds the bash link.
+mkdir -p "$T/noln" "$T/tmpd"
+for n in git dirname mktemp rm; do ln -s "$(command -v "$n")" "$T/noln/$n"; done
+printf '#!/bin/sh\nexit 1\n' > "$T/noln/ln"
+chmod +x "$T/noln/ln"
+TMPDIR="$T/tmpd" run_all "$T/noln" >/dev/null; RC=$?
+is  'a bash link that cannot be made ends the run with status 1' "$RC" 1
+is  '...and leaves no temp directory behind' "$(ls -A "$T/tmpd")" ''
+
 if [ "$FAILED" -eq 0 ]; then echo "PASS: run-all"; else echo "FAIL: run-all"; exit 1; fi

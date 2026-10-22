@@ -350,13 +350,29 @@ prreview set checks "$MYCHECKS" >/dev/null
 # "installed"; this systemctl logs its calls and succeeds, so a started
 # service reads as running.
 D2="$T/d2"; mkdir -p "$D2"
-printf '#!/bin/sh\necho "$*" >> "%s"\n' "$D2/systemctl.log" > "$D2/systemctl"; chmod +x "$D2/systemctl"
+# With FAKE_SYSTEMCTL_STOPPED set, is-active fails, so an installed service
+# reads as stopped.
+printf '#!/bin/sh\necho "$*" >> "%s"\ncase "$*" in *is-active*) [ -z "$FAKE_SYSTEMCTL_STOPPED" ] || exit 3 ;; esac\n' "$D2/systemctl.log" > "$D2/systemctl"; chmod +x "$D2/systemctl"
 UNIT_FILE="$H/.config/systemd/user/$PRREVIEW_SERVICE_NAME.service"
-# d2 <gh git_protocol> <prreview arguments>: on Linux; gh records config set.
-d2() {
-  local proto="$1"; shift
-  "${PRREVIEW_ENV[@]}" PRREVIEW_PLATFORM=linux PATH="$D2:$FAKE:$PATH" FAKE_GH_PROTOCOL="$proto" FAKE_GH_SET_LOG="$D2/ghset.log" bash "$ROOT/prreview" "$@"
+# d2_via <runner> <gh git_protocol> <prreview arguments>: on Linux; gh records
+# config set. The runner (a command name, or empty) starts the command.
+d2_via() {
+  local run="$1" proto="$2"; shift 2
+  $run "${PRREVIEW_ENV[@]}" PRREVIEW_PLATFORM=linux PATH="$D2:$FAKE:$PATH" FAKE_GH_PROTOCOL="$proto" FAKE_GH_SET_LOG="$D2/ghset.log" bash "$ROOT/prreview" "$@"
 }
+d2() { d2_via "" "$@"; }
+# pty_run <command...>: runs the command with a terminal on stdin and stdout.
+# This script's stdin gives the typed answers. script(1) from util-linux takes
+# the command as a string. The BSD one on macOS takes it as arguments. A
+# deadline stops a terminal that waits for input for good.
+pty_run() {
+  if script --version >/dev/null 2>&1; then
+    "$TIMEOUT_BIN" 30 script -qec "$(printf '%q ' "$@")" /dev/null
+  else
+    "$TIMEOUT_BIN" 30 script -q /dev/null "$@"
+  fi
+}
+d2_tty() { d2_via pty_run "$@"; }
 d2_reset() { rm -f "$UNIT_FILE" "$D2/ghset.log"; : > "$D2/systemctl.log"; }
 # Five answers for the steps before the service question: Enter for the
 # repositories, who posts, parallel and model; n for the patterns file.
@@ -389,16 +405,54 @@ printf "${D2_STEPS}y\nn\n" | d2 ssh setup >/dev/null 2>&1
 is 'n to the https question leaves gh alone' "$(cat "$D2/ghset.log" 2>/dev/null)" ''
 is '...and the service is installed anyway' "$([ -e "$UNIT_FILE" ] && echo installed || echo none)" installed
 
+# prreview start. A service that is not installed is installed here, and the
+# https question belongs to that step. With no terminal on stdin, start prints
+# the advice and the command and asks nothing: it must not stop at the end of
+# the input. A service that is installed starts or runs with no question.
 d2_reset
-printf 'y\n' | d2 ssh start >/dev/null 2>&1
-is 'start asks about https where it installs the service, and switches on yes' "$(cat "$D2/ghset.log" 2>/dev/null)" 'config set git_protocol https -h github.com'
-is '...and installs it' "$([ -e "$UNIT_FILE" ] && echo installed || echo none)" installed
+OUT="$(d2 ssh start </dev/null 2>&1)"; RC=$?
+is 'start with no terminal installs the service while gh clones over ssh' "$RC" 0
+is '...and does install it' "$([ -e "$UNIT_FILE" ] && echo installed || echo none)" installed
+has '...says why ssh can fail' "$OUT" 'no ssh-agent'
+has '...prints the command that switches gh' "$OUT" "gh config set git_protocol https -h github.com"
+is '...asks nothing, so it does not stop at the end of the input' "$(grep -c 'no more input' <<<"$OUT")" 0
+is '...and leaves gh alone' "$(cat "$D2/ghset.log" 2>/dev/null)" ''
 d2_reset
-printf 'n\n' | d2 ssh start >/dev/null 2>&1
-is 'start with n to the https question leaves gh alone' "$(cat "$D2/ghset.log" 2>/dev/null)" ''
-is '...and still installs the service' "$([ -e "$UNIT_FILE" ] && echo installed || echo none)" installed
+OUT="$(d2 https start </dev/null 2>&1)"
+is 'start with no terminal prints no https advice when gh already uses https' "$(grep -c 'no ssh-agent' <<<"$OUT")" 0
 OUT="$(d2 ssh start </dev/null 2>&1)"
 has 'start asks nothing when the service already runs' "$OUT" 'Already running'
+is '...and gives no advice' "$(grep -c 'no ssh-agent' <<<"$OUT")" 0
+
+# A stopped service that is installed: start starts it and asks nothing, with
+# or without a terminal.
+d2_reset; mkdir -p "$(dirname "$UNIT_FILE")"; : > "$UNIT_FILE"
+OUT="$(FAKE_SYSTEMCTL_STOPPED=1 d2 ssh start </dev/null 2>&1)"; RC=$?
+is 'start of a stopped service starts it' "$RC" 0
+has '...with enable --now' "$(cat "$D2/systemctl.log")" "--user enable --now $PRREVIEW_SERVICE_NAME"
+has '...and says Started' "$OUT" 'Started.'
+is '...asks nothing, so it does not stop at the end of the input' "$(grep -c 'no more input' <<<"$OUT")" 0
+is '...gives no https advice' "$(grep -c 'no ssh-agent' <<<"$OUT")" 0
+is '...and leaves gh alone' "$(cat "$D2/ghset.log" 2>/dev/null)" ''
+
+# With a terminal, answers typed to the https question reach gh. A pty needs
+# script(1). Trade-off: a system whose script cannot give a terminal skips
+# these cases, and the Linux runs of the suite check them.
+if [ "$(printf '' | pty_run bash -c 'test -t 0 && echo tty' 2>/dev/null | tr -d '\r')" = tty ]; then
+  d2_reset
+  printf 'y\n' | d2_tty ssh start >/dev/null 2>&1
+  is 'start at a terminal asks about https where it installs the service, and switches on yes' "$(cat "$D2/ghset.log" 2>/dev/null)" 'config set git_protocol https -h github.com'
+  is '...and installs it' "$([ -e "$UNIT_FILE" ] && echo installed || echo none)" installed
+  d2_reset
+  printf 'n\n' | d2_tty ssh start >/dev/null 2>&1
+  is 'start at a terminal with n to the https question leaves gh alone' "$(cat "$D2/ghset.log" 2>/dev/null)" ''
+  is '...and still installs the service' "$([ -e "$UNIT_FILE" ] && echo installed || echo none)" installed
+  d2_reset; mkdir -p "$(dirname "$UNIT_FILE")"; : > "$UNIT_FILE"
+  printf 'y\n' | FAKE_SYSTEMCTL_STOPPED=1 d2_tty ssh start >/dev/null 2>&1
+  is 'start at a terminal does not ask when it starts a stopped service' "$(cat "$D2/ghset.log" 2>/dev/null)" ''
+else
+  echo '  skip start at a terminal: script(1) gives no terminal here'
+fi
 rm -f "$UNIT_FILE"
 
 # ── setup with a GitHub App ───────────────────────────────────────────────

@@ -51,8 +51,8 @@ models. Current costs can differ.
 
 It is plain bash on top of `gh`, `git`, `jq` and the `claude` CLI. There is no
 server and no webhook: a loop polls once a minute, and each round is one run
-of `pr-autoreview.sh`. `prreview setup` walks you through the settings and, if you
-say yes, installs the loop as a background service.
+of `pr-autoreview.sh`. `prreview setup` walks you through the settings and, if
+you say yes, installs the loop as a background service.
 
 ## Contents
 
@@ -333,8 +333,10 @@ chooses one the same way it does for the built-in items.
   `gh`'s own login. With `ssh`, the background service has to use your SSH
   key with no prompt and possibly no ssh-agent (a systemd user service gets
   none), so `prreview setup` offers to switch `gh` to `https` when you choose
-  the background service. `prreview start` offers it too, when it installs or
-  starts the service. The switch changes `gh` for all programs, not only this one.
+  the background service. `prreview start` offers it too, when it installs the
+  service and stdin is a terminal. With no terminal, it prints the command
+  and goes on. It asks nothing when it starts a service that is installed.
+  The switch changes `gh` for all programs, not only this one.
 - **[Claude Code](https://code.claude.com/docs/en/overview) 2.1.305
   or later**, the `claude` CLI, logged in. `prreview setup` checks both, with
   `claude --version` and `claude auth status`, and the reviewer refuses to start
@@ -508,10 +510,11 @@ ROUND USAGE: 3 call(s)  in=28 out=6978 cache_read=347346 cache_write=40101  cost
 Run it again without pushing anything and the PR is skipped: the head already
 has its comment. For the same reason, with the service installed,
 `./prreview once` right after setup usually prints
-`this head was already handled` for every PR, because the service got there first. If it prints `another pr-autoreview run holds … — exiting`, the
-service is in the middle of a round. `./prreview logs -f` shows that round, or run
-`./prreview stop` first to try `once` on its own and `./prreview start` afterwards; a
-stopped service stays stopped.
+`this head was already handled` for every PR, because the service got there
+first. If it prints `another pr-autoreview run holds … — exiting`, the service
+is in the middle of a round. `./prreview logs -f` shows that round, or run
+`./prreview stop` first to try `once` on its own and `./prreview start`
+afterwards; a stopped service stays stopped.
 
 ## Everyday commands
 
@@ -686,6 +689,8 @@ to end on Windows yet; if something differs, please open an issue.
 
 3. **Follow the Linux steps inside Ubuntu:** install the tools, clone into
    your Linux home directory (`~`, not `/mnt/c`), and run `./prreview setup`.
+   Answer `y` at the background service step, or run `./prreview start`
+   after setup. Step 4 keeps that service running, so it needs one.
 4. **Keep WSL running.** WSL shuts Ubuntu down about 15 seconds after the last
    Windows program using it closes, and a running service does not count.
    Two changes keep the reviewer alive while you are logged in to Windows:

@@ -274,10 +274,15 @@ setup_github() {
 
 # The reviewer clones with `gh repo clone`, which follows git_protocol, and
 # the background service has no ssh-agent. Asked only where the service is
-# installed or started, since the answer changes gh for every program.
+# installed, since the answer changes gh for every program. With "tell" it asks
+# nothing: it prints the command and returns.
 offer_https_for_service() {
   [ "$("${GH_BIN:-gh}" config get git_protocol -h github.com 2>/dev/null)" = ssh ] || return 0
   say "gh clones over ssh. The background service has no ssh-agent to unlock your key (a systemd user service gets none), so its clones can fail; over https, gh signs in with its own login."
+  if [ "${1-}" = tell ]; then
+    say "To switch gh to https, run: gh config set git_protocol https -h github.com"
+    return 0
+  fi
   if yes_no "Switch gh to https ('gh config set git_protocol https -h github.com')?" y; then
     "${GH_BIN:-gh}" config set git_protocol https -h github.com && say "gh now clones over https."
   fi
@@ -717,11 +722,13 @@ cmd_start() {
   # would restart it every 30 seconds for nothing.
   [ -n "${PRREVIEW_GATE_REPOS:-$(setting PRREVIEW_GATE_REPOS)}" ] || die "no repositories are set; run prreview setup first"
   state="$(prreview_service_state "$PLATFORM")"
-  # Trade-off: with gh on ssh, start asks, so it needs a terminal or piped answers.
-  [ "$state" = running ] || offer_https_for_service
   case "$state" in
     running) say "Already running." ;;
-    "not installed") prreview_service_install "$PLATFORM" "$PRREVIEW_HOME" "$LOG" && say "Installed and started." ;;
+    "not installed")
+      # Trade-off: with no terminal on stdin, start never switches gh. It
+      # prints the command, and the operator runs it.
+      if [ -t 0 ]; then offer_https_for_service; else offer_https_for_service tell; fi
+      prreview_service_install "$PLATFORM" "$PRREVIEW_HOME" "$LOG" && say "Installed and started." ;;
     *) prreview_service_start "$PLATFORM" && say "Started." ;;
   esac || die "the service did not start (above); 'prreview logs' shows why"
 }
