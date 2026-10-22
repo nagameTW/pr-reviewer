@@ -33,6 +33,32 @@ is 'a trigger for another PR does not help'             "$(trusted "$FORK" '' 5)
 is 'a missing isCrossRepository is not trusted'         "$(trusted "$NOFIELD" '' '')" not-trusted
 is 'a missing author is not trusted'                    "$(trusted '{"number":4,"isCrossRepository":true}' 'mallory' '')" not-trusted
 is 'a string where the boolean belongs is not trusted'  "$(trusted '{"number":5,"isCrossRepository":"false"}' '' '')" not-trusted
+# Every path but the trigger needs the whole record: a whole PR number, a
+# boolean fork flag, an author object and a login that is a non-empty string.
+# A test that passes alone is not enough: an allowlisted login does not excuse
+# a bad fork flag, and a same-repository flag does not excuse a bad author.
+is 'a complete same-repository record is trusted'       "$(trusted '{"number":7,"isCrossRepository":false,"author":{"login":"alice"}}' '' '')" trusted
+is 'a complete allowlisted fork record is trusted'      "$(trusted '{"number":7,"isCrossRepository":true,"author":{"login":"alice"}}' 'alice' '')" trusted
+for F in '' ',"isCrossRepository":null' ',"isCrossRepository":"false"' ',"isCrossRepository":"true"' ',"isCrossRepository":0'; do
+  is "an allowlisted author with this fork flag is not trusted: ${F:-missing}" \
+     "$(trusted "{\"number\":6,\"author\":{\"login\":\"mallory\"}$F}" 'mallory' '')" not-trusted
+done
+for A in '' ',"author":null' ',"author":{}' ',"author":{"login":null}' ',"author":{"login":5}' ',"author":{"login":""}' ',"author":"alice"' ',"author":[]'; do
+  is "a same-repository PR with this author is not trusted: ${A:-missing}" \
+     "$(trusted "{\"number\":7,\"isCrossRepository\":false$A}" '' '')" not-trusted
+done
+for N in '' '"number":null,' '"number":"7",'; do
+  is "a same-repository PR with this number is not trusted: ${N:-missing}" \
+     "$(trusted "{${N}\"isCrossRepository\":false,\"author\":{\"login\":\"alice\"}}" '' '')" not-trusted
+done
+# The maintainer named the PR, so the other fields do not matter. The number
+# must still be a whole number that equals the trigger.
+is 'a named PR with a null author is trusted'           "$(trusted '{"number":2,"author":null}' '' 2)" trusted
+is 'a named PR with only a number is trusted'           "$(trusted '{"number":2}' '' 2)" trusted
+is 'a named PR with a bad fork flag is trusted'         "$(trusted '{"number":2,"isCrossRepository":"x","author":{"login":5}}' '' 2)" trusted
+is 'a number in a string does not match the trigger'    "$(trusted '{"number":"2","author":null}' '' 2)" not-trusted
+is 'a number with a fraction does not match the trigger' "$(trusted '{"number":2.5}' '' 2.5)" not-trusted
+is 'a record without a number does not match the trigger' "$(trusted '{"author":null}' '' 2)" not-trusted
 is 'text that is not JSON is not trusted'               "$(trusted 'not json' 'mallory' 7)" not-trusted
 is 'an empty answer is not trusted'                     "$(trusted '' '' '')" not-trusted
 
@@ -61,6 +87,7 @@ is 'by default only the same-repository PR is reviewed' "$(plan "$LIST" '' 0 '')
 is 'a listed fork author is reviewed too'             "$(plan "$LIST" 'bob' 0 '')" 'review 1 skip 2 review 3 skip 4 '
 is 'PRREVIEW_GATE_FORK_PRS=1 reviews every PR'         "$(plan "$LIST" '' 1 '')" 'review 1 review 2 review 3 review 4 '
 is 'a named PR is the only one reviewed'               "$(plan "$LIST" '' 0 2)" 'review 2 '
+is 'a named PR is reviewed whatever its other fields hold' "$(plan '[{"number":2,"author":null},{"number":3}]' '' 0 2)" 'review 2 '
 is 'a named PR that is not open gives an empty plan'   "$(plan "$LIST" '' 0 9)" ''
 is 'an empty list gives an empty plan'                 "$(plan '[]' '' 0 '')" ''
 is 'a list that is not an array is refused'            "$(trust_plan_prs '{"a":1}' '' 0 '' >/dev/null 2>&1; echo $?)" 1

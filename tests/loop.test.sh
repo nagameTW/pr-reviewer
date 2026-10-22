@@ -134,6 +134,25 @@ stub_list '[{"number":5,"author":null,"isCrossRepository":true}]'
 is 'a fork PR with a null author counts 0' \
    "$( export PRREVIEW_GATE_TRUSTED_AUTHORS='stranger'; count )" '0'
 
+# An allowlisted author does not excuse a bad fork flag, and a same-repository
+# flag does not excuse a bad author. One record at a time, so one bad field is
+# the only cause of a count of 0.
+GOOD_AUTHOR='"author":{"login":"stranger"}'
+for F in '' ',"isCrossRepository":null' ',"isCrossRepository":"false"' ',"isCrossRepository":"true"'; do
+  stub_list "[{\"number\":5,$GOOD_AUTHOR$F}]"
+  is "an allowlisted author with this fork flag counts 0: ${F:-missing}" \
+     "$( export PRREVIEW_GATE_TRUSTED_AUTHORS='stranger'; count )" '0'
+done
+for A in '' ',"author":null' ',"author":{}' ',"author":{"login":null}' ',"author":{"login":5}' ',"author":{"login":""}'; do
+  stub_list "[{\"number\":5,\"isCrossRepository\":false$A}]"
+  is "a same-repository PR with this author counts 0: ${A:-missing}" "$(count)" '0'
+done
+stub_list '[{"number":5,"author":{"login":"maint"},"isCrossRepository":false}]'
+is 'a complete same-repository PR counts 1 per repo' "$(count)" '3'
+stub_list '[{"number":5,"author":{"login":"stranger"},"isCrossRepository":true}]'
+is 'a complete allowlisted fork PR counts 1 per repo' \
+   "$( export PRREVIEW_GATE_TRUSTED_AUTHORS='stranger'; count )" '3'
+
 # One list call for each repo, and it carries what the rule reads. The default
 # limit of gh is 30; the round asks for 1000, and so does the count, or a
 # trusted PR behind 30 forks would not be seen.
