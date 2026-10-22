@@ -72,4 +72,14 @@ needs 'correctness: a same-name wrapper must call the wrapped object' $COR \
 needs 'correctness: route names and methods are confirmed with Read or Grep first' $COR \
   'route parameter name or an HTTP method[^.]*Read or Grep'
 
+# ── one finding, one defect ───────────────────────────────────────────────
+needs 'finding unit: one finding is one defect that one fix removes' pr-autoreview.sh \
+  'One finding is one defect that one fix removes'
+needs 'finding unit: every location is listed as path:line in that finding' pr-autoreview.sh \
+  'List every location of that defect as path:line in that finding'
+needs 'finding unit: two defects that need two fixes are two findings' pr-autoreview.sh \
+  'Two defects that need two fixes are two findings'
+needs 'finding unit: the unit rule follows the pattern completeness rule' pr-autoreview.sh \
+  'Pattern completeness.*One finding is one defect'
+
 if [ "$FAILED" -eq 0 ]; then echo "PASS: review rules"; else echo "FAIL: review rules"; exit 1; fi

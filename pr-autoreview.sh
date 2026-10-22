@@ -1987,7 +1987,7 @@ Report every finding you have, at every severity, whatever your confidence — d
 $REVIEW_KIND_SPEC wording, judgment and half_fix never block (except at CRITICAL, which no kind can unblock): the harness caps them at MEDIUM and they stay in the PR comment carrying their original severity.
 
 $REVIEW_AREA_SPEC
-Pattern completeness — when a finding is one instance of a repeated pattern, name EVERY instance in THIS round: one finding whose issue text lists all the file:line sites. A later round must not open a new blocker for another instance of a pattern already reported.
+Pattern completeness — when a finding is one instance of a repeated pattern, name EVERY instance in THIS round: one finding whose issue text lists all the file:line sites. A later round must not open a new blocker for another instance of a pattern already reported. One finding is one defect that one fix removes. List every location of that defect as path:line in that finding. Two defects that need two fixes are two findings.
 Scope discipline — an improvement beyond what the linked issue asked, when this diff did not break the thing, is MEDIUM at most; and a direction an earlier round of THIS gate recommended is in scope by definition — never block it as scope creep.
 
 Every finding must be actionable: name the concrete failure it causes and the direction of the fix, anchored to file:line.
