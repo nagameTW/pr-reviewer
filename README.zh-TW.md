@@ -235,7 +235,7 @@ setup 會重新啟動服務，因為迴圈在重新啟動前仍執行舊的程�
 - 由 linter 強制的風格問題。
 - 讚美。
 
-CRITICAL 與 HIGH 的發現會阻擋。MEDIUM 與 LOW 的發現只列出，不阻擋。「阻擋」只決定判定的文字。使用者可以[新增、移除或修改項目](docs/configuration.md#adding-your-own-checks)。每個項目的完整內容見 [checks/](checks/) 資料夾。[pr-reviewer 的審查內容](docs/how-it-reviews.md)逐項說明這些項目、各項引用的安全標準，以及目前尚未涵蓋的範圍。
+CRITICAL 與 HIGH 的發現會阻擋。MEDIUM 與 LOW 的發現只列出，不阻擋。「阻擋」只決定判定的文字。使用者可以[新增、移除或修改項目](docs/configuration.md#adding-your-own-checks)。每個項目的完整內容見 [checks/](checks/) 資料夾。[pr-reviewer 的審查內容](docs/how-it-reviews.md)逐項說明這些項目、各項引用的安全標準，以及未涵蓋的範圍。
 
 一輪有七個步驟，前四個步驟不呼叫模型。
 
