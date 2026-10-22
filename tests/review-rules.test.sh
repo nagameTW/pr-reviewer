@@ -61,4 +61,15 @@ needs 'scope: moved or reformatted added lines still belong to the PR' pr-autore
 needs 'scope: such lines get defects only, and the issue says the code was moved' pr-autoreview.sh \
   'report only defects on them, and say in the issue text that the code was moved'
 
+# ── correctness paragraphs ────────────────────────────────────────────────
+COR=checks/01-correctness.md
+needs 'correctness: a null check is reported only with a returning line or a nullable type' $COR \
+  'missing null check only when you can point to the line that returns null[^.]*or to a type that allows it'
+needs 'correctness: an unfollowed signature change belongs to the contract area' $COR \
+  'changed signature that a caller or an implementer did not follow[^.]*\.[^.]*contract'
+needs 'correctness: a same-name wrapper must call the wrapped object' $COR \
+  'wrapper, cache or delegate that calls a method of the same name must call the wrapped object'
+needs 'correctness: route names and methods are confirmed with Read or Grep first' $COR \
+  'route parameter name or an HTTP method[^.]*Read or Grep'
+
 if [ "$FAILED" -eq 0 ]; then echo "PASS: review rules"; else echo "FAIL: review rules"; exit 1; fi
