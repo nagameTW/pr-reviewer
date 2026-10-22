@@ -153,6 +153,11 @@ has '...and names the tool' 'timeout(1) missing' "$OUT"
 OUT="$(env -i HOME="$TMP/home" PATH="$TMP/gtimeout:$TMP/base" "$BASH" review-loop.sh 2>&1)"; RC=$?
 is  'review-loop.sh with gtimeout goes past the tool check' "$RC" 2
 lacks '...and does not name the tool' 'timeout(1) missing' "$OUT"
+# The open-PR count reads the PR list with jq, so the loop needs it up front.
+shim "$TMP/nojq" dirname mkdir cut cat sleep tr grep sed awk head git curl openssl flock
+OUT="$(env -i HOME="$TMP/home" PATH="$TMP/gtimeout:$TMP/nojq" "$BASH" review-loop.sh 2>&1)"; RC=$?
+is  'review-loop.sh with no jq stops with status 1' "$RC" 1
+has '...and names the tool' 'jq missing' "$OUT"
 
 # ── prreview setup ─────────────────────────────────────────────────────────
 # The real setup_tools and install_hint, read out of the script.
