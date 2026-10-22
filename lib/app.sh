@@ -48,12 +48,15 @@ app_installation() {
 
 # app_token_for <app id> <key> <owner/repo> — an installation token that can
 # post on that repository. Non-zero when the App cannot reach it or GitHub
-# did not answer.
+# did not answer. The token is for that one repository. Without the body, it
+# would reach every repository of the installation.
 app_token_for() {
-  local jwt inst
+  local jwt inst body repo="${3-}"
   jwt="$(app_jwt "${1-}" "${2-}")" || return 1
   inst="$(app_installation "$jwt" "${3-}")" || return 1
-  app_curl "$jwt" -X POST "$APP_API/app/installations/$inst/access_tokens" | jq -er '.token // empty'
+  body="$(jq -nc --arg r "${repo#*/}" '{repositories: [$r]}')" || return 1
+  app_curl "$jwt" -X POST -H "Content-Type: application/json" -d "$body" \
+    "$APP_API/app/installations/$inst/access_tokens" | jq -er '.token // empty'
 }
 
 # app_slug <app id> <key> — the App's slug. Its comments are authored by

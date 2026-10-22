@@ -116,14 +116,64 @@ run, means it is not posted. Two fixed notices carry neither and are not
 scanned: the notice that a title, description or linked issue matched the scan,
 and the title-format reminder. The reviewer will not start without that file.
 The scan matches your patterns against the text as written. Text shaped to
-slip past it, such as a key split by an HTML entity or a zero-width
-character, is not caught, so treat it as a safety net for accidents.
+slip past it, such as a key split by an HTML entity or by a zero-width
+character other than U+200B, is not caught, so treat it as a safety net for
+accidents.
 
-**What the model writes is posted as written.** A pull request can steer
-the model's words, and those words go out under the reviewer's identity. If a
-bot in your repository acts on commands in comments (`/lgtm`, `/approve`,
+**What the model writes is escaped before it is posted.** A pull request can
+steer the model's words, and those words go out under the reviewer's login.
+In the summary, the findings, the follow-up tickets, the refutation notes and
+the list of unverified items, the reviewer puts a zero-width space into four kinds of text:
+
+- An `@name` that GitHub would turn into a mention. An `@` inside a closed
+  fenced code block stays as it is, because it is code.
+- A line that starts with `/command` or with `bors`, which a bot can read as
+  a command.
+- The words `Automated review:` before a verdict emoji, which look like the
+  banner of the reviewer.
+- A line that starts with `- **HIGH**`, `- ~~**` or the like, which the next
+  round would read as a finding of this round.
+
+The text keeps its look. The sensitive-data scan reads the text without those
+spaces. Links and images are not changed. The file path of a finding is not
+changed either, because the next round reads the path back from the comment,
+so a path that holds `@name` is posted as it is. This does not make a bot safe.
+If a bot in your repository acts on commands in comments (`/lgtm`, `/approve`,
 `bors r+`), run the reviewer as a GitHub App that bot does not take commands
 from, not as a person it trusts.
+
+**A comment from another App that carries the marker does not stop a
+review.** The marker of a head is computable from public fields, and a bot
+that repeats text can print it. The reviewer writes a warning to the log and
+reviews the head. Only comments from the reviewer's own login count as its
+earlier reviews.
+
+If a wrong list of App logins (`PRREVIEW_REVIEW_APP_SLUG`) hides the
+reviewer's own comments, the same review would repeat every round. So the
+reviewer keeps a count on the machine: one line in its hold directory for each
+verdict it posted for a head. At two verdicts for one head, it treats the head
+as handled: no review, no model call, and one `WARNING:` line in the log that
+names the setting. No comment author can raise this count, because the
+reviewer writes it only after its own post. An App that prints the marker
+cannot stop a review. The guard on an armed auto-merge still runs for such a
+head.
+
+The count has limits. The file stays while its PR is open. The reviewer
+removes it once its PR is not open and the file is three days old or more. A
+repo with 1000 or more open PRs keeps all its count files until the list is
+shorter, because the list may omit an open PR. If the hold directory cannot be
+written, or the name of the file cannot be built because the owner or repo
+name holds a character outside the GitHub name characters, the reviewer
+skips the PR before any model call and the round fails. If a record fails after
+a post, the post stays and the round fails. In both cases the failure alert
+runs. A person who deletes the reviewer's
+comments to ask for a new review gets two before the bound stops it. After a
+switch from an App back to your own account, a head that the machine posted for
+twice stays stopped until its author pushes again.
+
+**The App token is for one repository.** When the reviewer posts as a GitHub
+App, it asks for an installation token for the repository of the PR only, and
+not for every repository the App is installed on.
 
 **Refutation is not a security control.** The refutation step can only remove
 blocking findings. Against an author who writes the diff to fool the model, it

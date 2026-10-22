@@ -670,9 +670,14 @@ in. To go back to your own account, run `prreview setup` and pick 1 at "Who post
 
 Switching from your account to an App changes whose comments count as the
 reviewer's own: the next round finds no comment from the App on any open PR
-and reviews every one of them again. Switching back leaves alone the heads the
-App already commented on, and logs a warning for each of them every round
-until its author pushes again.
+and reviews every one of them again. Switching back does the same for the
+heads where the App left one comment: the reviewer logs a warning for each of
+them, then reviews it once with your account. The reviewer also counts, on
+your machine, the verdicts it posted for each head. A head for which the
+machine posted two verdicts counts as handled, and the reviewer logs a warning
+for it every round. It reviews the head again after the author pushes. After a
+switch back, such a head stays stopped until then, even though your account
+has not commented on it yet.
 
 ## Windows
 
@@ -761,7 +766,20 @@ works in place of the loop, and a lock stops two rounds from overlapping.
    again, with its own read of the PR, before any model call. The comment
    carries a hidden marker with the head SHA and a hash of the title,
    description and base branch (for a stacked PR, also the base commit), and
-   only comments by the reviewer's own account count. A PR on hold after a
+   only comments by the reviewer's own account count. A comment from another
+   App that carries the marker gets a `WARNING` line in the log, and the head
+   is reviewed anyway, however many such comments there are. The reviewer also
+   keeps a count of the verdicts it posted for the head, in the hold directory
+   (`PRREVIEW_GATE_HOLDOFF_DIR`). At two, the list of App logins is probably
+   wrong (`PRREVIEW_REVIEW_APP_SLUG`) and the reviewer does not see its own
+   comments. The head then counts as handled: no review, no model call, and a
+   `WARNING` line in the log every round. The count file stays while its PR is
+   open. Once its PR is not open and the file is three days old or more, the
+   reviewer removes it, as it does the hold files. A repo
+   with 1000 or more open PRs keeps all its count files, because the list of
+   open PRs may be cut off. If the hold directory cannot be written, or the
+   count file name cannot be built for the owner and repo, the reviewer skips
+   the PR before any model call and the round fails, so the failure alert runs. A PR on hold after a
    failure waits out its hold (see [When something fails](#when-something-fails)).
 2. **Scan.** Check the PR's title and description against your
    sensitive-patterns file. A hit stops the review of that PR. The title and
@@ -958,7 +976,7 @@ even when you run `prreview once` from a terminal. After moving a tool, run
 | `PRREVIEW_GATE_HOLDOFF_FAIL` | `300` | Seconds a head waits after a failed review or post (see [When something fails](#when-something-fails)) |
 | `PRREVIEW_GATE_HOLDOFF_QUOTA` | `1800` | Seconds a head waits after a usage-limit error |
 | `PRREVIEW_GATE_HOLDOFF_MAX` | `3600` | Longest wait after repeated failures |
-| `PRREVIEW_GATE_HOLDOFF_DIR` | `~/.cache/pr-reviewer/review-holdoff` | Where those holds are kept, along with verdicts waiting to be posted again |
+| `PRREVIEW_GATE_HOLDOFF_DIR` | `~/.cache/pr-reviewer/review-holdoff` | Where those holds are kept, along with verdicts waiting to be posted again and the count of verdicts posted for each head |
 | `PRREVIEW_GATE_PR_COOLDOWN_MIN` | `10` | Minutes a PR waits after the reviewer's last comment when its title, description or base branch changed and the head is the same. A push to the PR branch never waits. A push to the parent branch of a stacked PR can wait, because only the head is compared. A whole number; `0` turns the wait off. `prreview once --pr` ignores it |
 | `PRREVIEW_GATE_PARALLEL` | `2` | PRs reviewed at the same time |
 | `PRREVIEW_GATE_CALL_CAP` | `8` | Model calls in flight for one PR |
@@ -1084,6 +1102,16 @@ Who controls each input, and how the reviewer treats it:
   is posted. A hit, or a scan that cannot run, means it is not posted. Two
   fixed notices carry neither and are not scanned: the notice that a title or
   description matched your patterns, and the title-format reminder.
+- **The model's words are escaped before they are posted.** In the summary,
+  the findings, the follow-up tickets, the refutation notes and the list of
+  unverified items, an `@name`, a line that starts with
+  `/command` or `bors`, the words `Automated review:` before a verdict emoji,
+  and a line that starts like a finding get a zero-width space. A mention does
+  not notify, a command does not act, and a later round does not read the line
+  as a finding. An `@` in a closed fenced code block, and the file path of a
+  finding, stay as they are. See [SECURITY.md](SECURITY.md) for the limits.
+- **A GitHub App token covers one repository.** The reviewer asks for a token
+  for the repository of the PR only.
 - **It cannot merge.** It never approves or merges. Its only merge call is
   `gh pr merge --disable-auto`, which is off by default. It posts with whatever
   `gh` token you give it, or as the GitHub App you set up. With the defaults,
