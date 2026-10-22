@@ -92,4 +92,10 @@ needs 'comparison: the section says when the pages were read' $CMP 'pages were r
 needs 'comparison: the section calls the options another choice, not a replacement' $CMP 'other choices next to pr-reviewer, not replacements'
 needs 'comparison: the price is dated' $CMP '2025-03-04 price post'
 
+# ── changelog records the changes under Unreleased ────────────────────────
+UNREL="$(awk '/^## \[Unreleased\]/{f=1;next} /^## \[/{f=0} f' CHANGELOG.md)"
+for k in 'security checklist' 'verification step' 'noise list' 'moved or reformatted' 'null check' 'one defect that one fix' 'official options'; do
+  case "$UNREL" in *"$k"*) ok "changelog: Unreleased mentions $k" ;; *) bad "changelog: Unreleased mentions $k" 'not found' ;; esac
+done
+
 if [ "$FAILED" -eq 0 ]; then echo "PASS: review rules"; else echo "FAIL: review rules"; exit 1; fi

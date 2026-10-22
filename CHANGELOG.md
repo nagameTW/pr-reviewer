@@ -35,6 +35,13 @@ All notable changes to this project are recorded here. The format follows
   They hold the install steps, the trust, cost and limits text, and the demo
   recording with the example comment. `docs/zh-TW/diagrams.md` holds the
   diagrams for `README.zh-TW.md`.
+- `docs/comparison.md` has a section on the official options for security
+  review: Claude Code `/security-review`, the `claude-code-security-review`
+  Action, Claude Code GitHub Actions, Copilot code review, and CodeQL with
+  Copilot Autofix. It states them as other choices, with the date each page
+  was read.
+- `tests/review-rules.test.sh` checks the key ideas of the review rules in
+  the prompts and in the comparison page.
 
 ### Changed
 
@@ -157,6 +164,36 @@ All notable changes to this project are recorded here. The format follows
   GitHub approval." A Changes requested banner is unchanged.
 - `README.zh-TW.md` uses plain wording. The body text of every diagram is
   justified.
+- The security checklist (`checks/02-security.md`) has four new rules for the
+  source-to-sink trace:
+  - A control counts only where the value lands. HTML escaping does not
+    protect a value inside a script block, an event attribute or a JavaScript
+    string.
+  - An allowlist counts only when it matches the whole normalized value. A
+    substring check or an unanchored regular expression does not count.
+  - A diff that loosens a protection is reported when the protection worked
+    before, does not work after, and no equal control remains. The finding
+    names the affected responses and the new behavior.
+  - SQL or shell built by interpolation is CRITICAL when an attacker can
+    reach it. A value that only an administrator can set is a data or
+    correctness finding at its real severity, unless the threat model treats
+    that administrator as an attacker.
+- The security checklist adds examples for framing headers, a Referer or
+  Origin header used as access control, request headers placed into script,
+  and `postMessage` with target origin `"*"` or an unchecked `event.origin`.
+- The verification step no longer refutes a finding about an output context,
+  an allowlist, a loosened protection or SQL or shell interpolation only
+  because a framework default exists.
+- The noise list no longer tells the model to drop a loosened protection as
+  defence in depth or speculation.
+- Added lines that were moved or reformatted count as part of the PR. The
+  reviewer reports only defects on them and says that the code was moved.
+- `checks/01-correctness.md` adds two paragraphs. A missing null check needs a
+  line that returns null or a nullable type. A same-name wrapper must call the
+  wrapped object, and route names and HTTP methods are confirmed before they
+  are reported.
+- The main prompt defines one finding as one defect that one fix removes, with
+  every location of that defect listed as `path:line`.
 
 ### Fixed
 
