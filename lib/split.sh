@@ -41,6 +41,9 @@ SPLIT_EXEMPT_RE_DEFAULT='(^|/)(package-lock\.json|yarn\.lock|pnpm-lock\.yaml|poe
 #      count.
 #   3. An extension used only for translations, in any directory.
 # Source files always count, even in these directories (`i18n/Foo.java`).
+# Trade-off: rule 2 still matches a plain name that ends in a code and a
+#   2-letter part, such as `messages/user_is-ok.json`. Such a file then does
+#   not count toward the limit. It is still reviewed.
 # Any other layout is the author's to explain with `split-exempt:`.
 # ISO 639-1 language codes, 184 entries including the retired `sh`. Source:
 # the alpha_2 column of iso-codes 4.16 (iso_639-3.json), which tracks the
