@@ -1026,10 +1026,14 @@ review_one_pr() { # $1 = PR number, $2 = the worktree the dispatcher made
     echo "PR #$PR: $(prompt_local_post_warning "$POSTED_N")"
     return 0
   fi
-  # The count must be writable before the model is called. Else a wrong login
-  # list gives a new verdict every round, and nothing counts them. The round
-  # fails, so the failure alert runs.
-  if [ -n "$POSTED_F" ] && ! holdoff_dir_writable; then
+  # The count needs a path and a writable directory before the model is
+  # called. Else a wrong login list gives a new verdict every round, and
+  # nothing counts them. The round fails, so the failure alert runs.
+  if [ -z "$POSTED_F" ]; then
+    note_skip "cannot build the path of the count that bounds reposts for $REPO (a name outside the GitHub name characters), so the count cannot be kept — skipping, no model call (fail closed)"
+    return 0
+  fi
+  if ! holdoff_dir_writable; then
     note_skip "the hold directory $HOLDOFF_DIR cannot be made or written, so the count that bounds reposts cannot be kept — skipping, no model call (fail closed)"
     return 0
   fi
@@ -3306,14 +3310,22 @@ for PR in $OPEN_PRS; do
     # machine already posted that many verdicts is not reviewed, so no job and
     # no worktree is made for it. The job still guards auto-merge on a head it
     # did not review, so this does the same.
-    if PRE_KEY="$(prompt_review_key "$PRE" "$DEFAULT_BRANCH")" \
-       && PRE_POSTED_F="$(holdoff_posted_path "$REPO" "$PR" "$PRE_KEY")" \
-       && PRE_POSTED_N="$(holdoff_posted_count "$PRE_POSTED_F")" \
-       && prompt_local_post_bound "$PRE_POSTED_N"; then
-      echo "[$REPO_KEY#$PR] PR #$PR: $(prompt_local_post_warning "$PRE_POSTED_N")"
-      disarm_unreviewed_auto_merge "$PRE" "$PR" \
-        || note_skip "auto-merge could not be disarmed — skipping (fail closed)"
-      continue
+    # A key with no count path cannot be bounded: the job skips it too (fail
+    # closed), so no job and no worktree is made for it. The round fails.
+    if PRE_KEY="$(prompt_review_key "$PRE" "$DEFAULT_BRANCH")"; then
+      if ! PRE_POSTED_F="$(holdoff_posted_path "$REPO" "$PR" "$PRE_KEY")"; then
+        note_skip "cannot build the path of the count that bounds reposts for $REPO (a name outside the GitHub name characters), so the count cannot be kept — skipping, no model call (fail closed)"
+        disarm_unreviewed_auto_merge "$PRE" "$PR" \
+          || note_skip "auto-merge could not be disarmed — skipping (fail closed)"
+        continue
+      fi
+      PRE_POSTED_N="$(holdoff_posted_count "$PRE_POSTED_F")"
+      if prompt_local_post_bound "$PRE_POSTED_N"; then
+        echo "[$REPO_KEY#$PR] PR #$PR: $(prompt_local_post_warning "$PRE_POSTED_N")"
+        disarm_unreviewed_auto_merge "$PRE" "$PR" \
+          || note_skip "auto-merge could not be disarmed — skipping (fail closed)"
+        continue
+      fi
     fi
     # Same head, a changed key (title, description, base branch or, for a
     # stacked PR, parent branch), and the reviewer commented a moment ago:

@@ -503,7 +503,10 @@ OUT="$(run_gate PRREVIEW_GATE_TRUSTED_AUTHORS=mallory PRREVIEW_GATE_HOLDOFF_DIR=
 has 'two local posts and foreign markers: the count in the line is the local one' "$OUT" 'posted 2 verdicts'
 rm -rf "$HP"; mkdir -p "$HP"
 OUT="$(run_gate PRREVIEW_GATE_TRUSTED_AUTHORS=mallory PRREVIEW_GATE_HOLDOFF_DIR="$HP")"
-lacks 'foreign markers and zero local posts: no local-post warning' "$OUT" 'posted 2 verdicts'
+lacks 'foreign markers and zero local posts: no local-post warning' "$OUT" 'this machine posted'
+lacks '...the foreign markers do not stop the review'         "$OUT" 'does not see its own comments'
+is '...the job goes on: it asks for the merge base' \
+   "$([ "$(grep -c '^api repos/owner/repo/compare/' "$T/gh.calls")" -ge 1 ] && echo yes || echo no)" yes
 # One post is not enough to stop a review.
 view2 '[]' false > "$T/view-2.json"
 rm -rf "$HP"; mkdir -p "$HP"; rec "$HP" 1
@@ -548,7 +551,7 @@ fine" '' )
 }
 HR="$T/holdR"; rm -rf "$HR"; mkdir -p "$HR"
 view2 '[]' false > "$T/view-2.json"
-PF="$HR/owner__repo+2+$KEY2.posted"
+PF="$HR/owner+repo+2+$KEY2.posted"
 park "$HR"; OUT="$(run_gate PRREVIEW_ONCE_PR=owner/repo#2 PRREVIEW_GATE_HOLDOFF_DIR="$HR")"
 has 'a verdict is posted'                                     "$OUT" 'review-only verdict comment posted'
 is '...and recorded once'                                     "$(cat "$PF" 2>/dev/null | wc -l | tr -d ' ')" 1
@@ -562,7 +565,7 @@ is '...and no model call'                                     "$(grep -vc '^--ve
 # A failed write of the record does not undo the post. The log says what
 # failed, and the round fails so the failure alert runs: without the record a
 # wrong login list is not bounded for this head.
-HW="$T/holdW"; rm -rf "$HW"; mkdir -p "$HW/owner__repo+2+$KEY2.posted"
+HW="$T/holdW"; rm -rf "$HW"; mkdir -p "$HW/owner+repo+2+$KEY2.posted"
 park "$HW"; OUT="$(run_gate PRREVIEW_ONCE_PR=owner/repo#2 PRREVIEW_GATE_HOLDOFF_DIR="$HW")"
 has 'a record that cannot be written: the verdict is still posted' "$OUT" 'review-only verdict comment posted'
 has '...the log says the record failed'                       "$OUT" 'could not record the post'
@@ -578,6 +581,43 @@ has 'a hold directory that cannot be written: the log says so' "$OUT" 'hold dire
 is '...with no model call'                                    "$(grep -vc '^--version$' "$T/claude.calls")" 0
 is '...and no post'                                           "$(grep -c '^pr comment' "$T/gh.calls")" 0
 has '...and the round fails'                                  "$OUT" 'rc=1'
+# An Enterprise Managed User login holds an underscore (alice_acme). The count
+# has a path for it, so the bound works there too: two posts stop the third.
+HU="$T/holdU"; rm -rf "$HU"; mkdir -p "$HU"
+( PRREVIEW_GATE_HOLDOFF_DIR="$HU"; . lib/holdoff.sh
+  holdoff_posted_record "$(holdoff_posted_path alice_acme/repo 2 "$KEY2")" 1700000000
+  holdoff_posted_record "$(holdoff_posted_path alice_acme/repo 2 "$KEY2")" 1700000000 )
+view2 '[]' false > "$T/view-2.json"
+OUT="$(run_gate PRREVIEW_GATE_REPOS=alice_acme/repo PRREVIEW_GATE_TRUSTED_AUTHORS=mallory PRREVIEW_GATE_HOLDOFF_DIR="$HU")"
+has 'an owner with an underscore, two local posts: the WARNING line' "$OUT" 'PR #2: WARNING: this machine posted 2 verdicts for this head'
+is '...with no model call'                                    "$(grep -vc '^--version$' "$T/claude.calls")" 0
+is '...and no post'                                           "$(grep -c '^pr comment' "$T/gh.calls")" 0
+# A name that cannot form a count path: the PR is skipped before any model
+# call, nothing is posted, and the round fails. Fail closed: no path means no
+# bound, so no review.
+HB="$T/holdB"; rm -rf "$HB"; mkdir -p "$HB"
+OUT="$(run_gate PRREVIEW_GATE_REPOS=own.er/repo PRREVIEW_GATE_TRUSTED_AUTHORS=mallory PRREVIEW_GATE_HOLDOFF_DIR="$HB")"
+has 'a name with no count path: the log says the count path cannot be built' "$OUT" 'cannot build the path of the count'
+is '...with no model call'                                    "$(grep -vc '^--version$' "$T/claude.calls")" 0
+is '...no merge base'                                         "$(grep -c '^api ' "$T/gh.calls")" 0
+is '...and no post'                                           "$(grep -c '^pr comment' "$T/gh.calls")" 0
+has '...and the round fails'                                  "$OUT" 'rc=1'
+is '...the dispatcher stops it: one read of the PR'           "$(viewed 2)" 1
+# The job asks the same question when the dispatcher could not read the PR.
+printf 'not json\n' > "$T/view-2.1.json"; view2 '[]' false > "$T/view-2.2.json"; rm -f "$T/view-2.json"
+OUT="$(run_gate PRREVIEW_GATE_REPOS=own.er/repo PRREVIEW_GATE_TRUSTED_AUTHORS=mallory PRREVIEW_GATE_HOLDOFF_DIR="$HB")"
+has 'a name with no count path that only the job sees: the job says so' "$OUT" 'cannot build the path of the count'
+is '...with no model call'                                    "$(grep -vc '^--version$' "$T/claude.calls")" 0
+is '...no merge base'                                         "$(grep -c '^api ' "$T/gh.calls")" 0
+has '...and the round fails'                                  "$OUT" 'rc=1'
+rm -f "$T/view-2.1.json" "$T/view-2.2.json"
+# The skip ends the review, not the guard on auto-merge.
+view2 '[]' false | jq -c --argjson a "$ARMED" '.autoMergeRequest = $a' > "$T/view-2.json"
+OUT="$(run_gate PRREVIEW_GATE_DISARM_AUTO_MERGE=1 PRREVIEW_GATE_REPOS=own.er/repo PRREVIEW_GATE_TRUSTED_AUTHORS=mallory PRREVIEW_GATE_HOLDOFF_DIR="$HB")"
+is 'a name with no count path, disarm on: an armed auto-merge is disarmed once' \
+   "$(grep -c '^pr merge 2 --repo own.er/repo --disable-auto$' "$T/gh.calls")" 1
+rm -f "$T/view-2.json"
+rm -rf "$HU" "$HB"
 # The end-of-round prune keeps the count of an open PR and drops the count of
 # a PR that is not open, however old both files are.
 HK="$T/holdK"; rm -rf "$HK"; mkdir -p "$HK"; rec "$HK" 2
@@ -585,8 +625,8 @@ rec9() { ( PRREVIEW_GATE_HOLDOFF_DIR="$HK"; . lib/holdoff.sh; holdoff_posted_rec
 rec9
 touch -d '5 days ago' "$HK"/*.posted 2>/dev/null || touch -t "$(date -d '5 days ago' +%Y%m%d%H%M 2>/dev/null || date -v-5d +%Y%m%d%H%M)" "$HK"/*.posted
 OUT="$(run_gate PRREVIEW_ONCE_PR=owner/repo#2 PRREVIEW_GATE_HOLDOFF_DIR="$HK")"
-is 'an old count for an open PR survives the round'           "$([ -e "$HK/owner__repo+2+$KEY2.posted" ] && echo yes || echo no)" yes
-is '...an old count for a PR that is not open is removed'     "$([ -e "$HK/owner__repo+99+$KEY2.posted" ] && echo yes || echo no)" no
+is 'an old count for an open PR survives the round'           "$([ -e "$HK/owner+repo+2+$KEY2.posted" ] && echo yes || echo no)" yes
+is '...an old count for a PR that is not open is removed'     "$([ -e "$HK/owner+repo+99+$KEY2.posted" ] && echo yes || echo no)" no
 # A list that is as long as the limit may be cut off: an open PR beyond it is
 # not in the list. Such a list proves nothing about the PRs it omits, so the
 # repo keeps all its count files. A shorter list is whole.
@@ -595,7 +635,7 @@ case "$LIMIT" in ''|*[!0-9]*) bad 'pr-autoreview.sh names the list limit in PR_L
 cut_run() { # N: a list of N fork PRs from a stranger, so none is read or reviewed
   set_list "$(jq -nc --argjson n "$1" '[range(1; $n + 1) | {number: ., title: "t", author: {login: "mallory"}, isCrossRepository: true, labels: []}]')"
   HC="$T/holdC"; rm -rf "$HC"; mkdir -p "$HC"
-  OLDPOSTED="$HC/owner__repo+$(( LIMIT + 500 ))+$KEY2.posted"
+  OLDPOSTED="$HC/owner+repo+$(( LIMIT + 500 ))+$KEY2.posted"
   ( PRREVIEW_GATE_HOLDOFF_DIR="$HC"; . lib/holdoff.sh; holdoff_posted_record "$OLDPOSTED" 1700000000 )
   touch -d '5 days ago' "$OLDPOSTED" 2>/dev/null || touch -t "$(date -d '5 days ago' +%Y%m%d%H%M 2>/dev/null || date -v-5d +%Y%m%d%H%M)" "$OLDPOSTED"
   OUT="$(run_gate PRREVIEW_GATE_TRUSTED_AUTHORS=nobody PRREVIEW_GATE_HOLDOFF_DIR="$HC")"

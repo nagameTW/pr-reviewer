@@ -144,12 +144,15 @@ All notable changes to this project are recorded here. The format follows
   next push: no review, no model call, no job, and one `WARNING` line that
   says it does not see its own comments and names the setting. No comment
   author can change this count. The guard on an armed auto-merge still runs.
-  The count file stays while its PR is open. After the PR closes, it expires
-  with the other hold files, after two days. A repo with 1000 or more open
+  The count file stays while its PR is open. The reviewer removes it once its
+  PR is not open and the file is more than two days old, as it does the other
+  hold files. A repo with 1000 or more open
   PRs keeps all its count files, because a list that long may omit an open
   PR. Before a model call, the
-  reviewer checks that the hold directory can be written. If it cannot, the
-  reviewer skips the PR and the round fails, so the failure alert runs. If
+  reviewer checks that the hold directory can be written. If it cannot, or if the
+  file name cannot be built for the owner and repo, the reviewer skips the PR
+  and the round fails, so the failure alert runs. An owner login with an
+  underscore (Enterprise Managed User) is allowed. If
   a record fails after a post, the post stays and the round fails. The count
   file name holds the owner, the repo, the PR and the key, joined with `+`,
   so two owners with the same repo name never share a count, and repo `r`

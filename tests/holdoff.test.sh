@@ -630,7 +630,7 @@ grep -qE '^holdoff_knobs_ok \|\| exit 2$' pr-autoreview.sh \
 # One line per verdict this machine posted for a key. No comment author can
 # write it, so a count from here cannot be forged on GitHub.
 PF="$(holdoff_posted_path o/r 42 "abc123-def456")" || PF=""
-case "$PF" in */o__r+42+abc123-def456.posted) ok "posted path names the owner, the repo, the PR and the key" ;;
+case "$PF" in */o+r+42+abc123-def456.posted) ok "posted path names the owner, the repo, the PR and the key" ;;
   *) fail "unexpected posted path: '$PF'" ;; esac
 holdoff_posted_path o/r 42 'a/b' >/dev/null 2>&1 && fail "a key with a slash became a posted path"
 holdoff_posted_path o/r 42 'a+b' >/dev/null 2>&1 && fail "a key with a plus became a posted path"
@@ -663,13 +663,35 @@ holdoff_posted_path 'o/r/x' 7 abc >/dev/null 2>&1 && fail "a repo with a slash b
 holdoff_posted_path 'o w/r' 7 abc >/dev/null 2>&1 && fail "an owner with a space became a posted path"
 holdoff_posted_path '/r' 7 abc >/dev/null 2>&1 && fail "an empty owner became a posted path"
 holdoff_posted_path 'o/' 7 abc >/dev/null 2>&1 && fail "an empty repo became a posted path"
+holdoff_posted_path 'a+b/r' 7 abc >/dev/null 2>&1 && fail "an owner with a plus became a posted path"
+holdoff_posted_path 'o/r+x' 7 abc >/dev/null 2>&1 && fail "a repo with a plus became a posted path"
 ok "posted path refuses an owner or repo outside the GitHub name characters"
+old() { touch -d '5 days ago' "$@" 2>/dev/null || touch -t "$(date -d '5 days ago' +%Y%m%d%H%M 2>/dev/null || date -v-5d +%Y%m%d%H%M)" "$@"; }
+# An Enterprise Managed User login holds an underscore (alice_acme). It gets
+# a path, and the count works on it.
+PM="$(holdoff_posted_path alice_acme/r 7 abc)" || PM=""
+case "$PM" in */alice_acme+r+7+abc.posted) ok "an owner with an underscore gets a posted path" ;;
+  *) fail "no posted path for an owner with an underscore: '$PM'" ;; esac
+holdoff_posted_record "$PM" "$NOW"; holdoff_posted_record "$PM" "$NOW"
+is "...two records count 2 for it" "$(holdoff_posted_count "$PM")" 2
+PM2="$(holdoff_posted_path alice/acme_r 7 abc)"
+[ -n "$PM2" ] && [ "$PM" != "$PM2" ] \
+  && ok "alice_acme/r and alice/acme_r get different posted paths" \
+  || fail "an underscore in the owner or the repo made two names equal: '$PM' '$PM2'"
+holdoff_posted_record "$PM" "$NOW"; old "$PM"
+holdoff_prune 2 "alice_acme/r#7"
+[ -e "$PM" ] \
+  && ok "prune keeps the count of an open PR of an owner with an underscore" \
+  || fail "prune dropped the count of an underscore owner"
+holdoff_prune 2 "alice_acme/r#8"
+[ -e "$PM" ] \
+  && fail "prune kept the count of a PR that is not open (underscore owner)" \
+  || ok "...and drops it when its PR is not open"
 # The hold path keeps the shared base name: its files would be lost on upgrade.
 case "$(holdoff_path owner-a/project 7 abc)" in */project-7-abc) ok "hold path is unchanged" ;;
   *) fail "hold path changed" ;; esac
 
 # Finding 1: prune keeps the count of an open PR, however old the file is.
-old() { touch -d '5 days ago' "$@" 2>/dev/null || touch -t "$(date -d '5 days ago' +%Y%m%d%H%M 2>/dev/null || date -v-5d +%Y%m%d%H%M)" "$@"; }
 PO="$(holdoff_posted_path o/r 42 abc)"; PC="$(holdoff_posted_path o/r 43 abc)"
 PX="$(holdoff_posted_path o/unlisted 5 abc)"; PY="$(holdoff_posted_path o/gone 5 abc)"
 PN="$(holdoff_posted_path o/r 44 abc)"
@@ -696,7 +718,7 @@ is "...and the count of a pruned file is 0 again" "$(holdoff_posted_count "$PO")
 
 # Names that look alike must not keep each other: repo r with PR 4, and repo
 # r-4 with any PR. The separator "+" is not a GitHub name character, so the
-# prefix owner__repo+PR+ is exact.
+# prefix owner+repo+PR+ is exact.
 mk() { for f in "$@"; do holdoff_posted_record "$f" "$NOW"; done; old "$@"; }
 PR4="$(holdoff_posted_path o/r 4 abc)"; PRD4="$(holdoff_posted_path o/r-4 9 abc)"
 mk "$PR4" "$PRD4"

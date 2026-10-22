@@ -199,7 +199,7 @@ holdoff_stuck() {
 # in lib/prompt.sh.
 #
 # The file lives next to the hold and is named from the owner, the repo, the PR
-# and the same sanitised key. Holds keep only the repo base name; this name
+# and the same checked key. Holds keep only the repo base name; this name
 # keeps the owner, so owner-a/x and owner-b/x never share a count.
 # Pruning (holdoff_prune) keeps the file while its PR is open, so a head that
 # waits for days cannot get a new count. The file of a closed PR goes by age.
@@ -209,20 +209,20 @@ holdoff_stuck() {
 # caller's to report (holdoff_dir_writable runs before the model, and a failed
 # record after a post fails the round).
 
-# The owner and the repo in a form that is safe in a file name: owner__repo.
-# $1 = owner/repo. A GitHub owner has no underscore, so the first "__" splits
-# the two. The stem is lower case. The count file name joins the stem, the PR
-# and the key with "+", which no GitHub owner, repo name or key holds, so no
-# stem is the prefix of another and a prefix test is exact. Nothing is printed for a name outside
-# the GitHub name characters.
+# The owner and the repo in a form that is safe in a file name: owner+repo.
+# $1 = owner/repo. The count file name joins every field with "+": the owner,
+# the repo, the PR and the key. No owner, repo name or key holds a "+", so no
+# name is the prefix of another and a prefix test is exact. An owner may hold
+# an underscore (Enterprise Managed User logins, such as alice_acme). Nothing
+# is printed for a name outside the GitHub name characters.
 holdoff_posted_stem() {
   local owner="${1%%/*}" repo="${1#*/}"
   case "$1" in */*) ;; *) return 1 ;; esac
-  case "$owner" in ''|*[!0-9a-zA-Z-]*) return 1 ;; esac
+  case "$owner" in ''|*[!0-9a-zA-Z_-]*) return 1 ;; esac
   case "$repo"  in ''|*[!0-9a-zA-Z._-]*) return 1 ;; esac
   # GitHub names ignore case, so the stem is lower case. The prune test
   # builds its stem here too, so an open entry in any case matches the file.
-  printf '%s__%s' "$owner" "$repo" | LC_ALL=C tr '[:upper:]' '[:lower:]'
+  printf '%s+%s' "$owner" "$repo" | LC_ALL=C tr '[:upper:]' '[:lower:]'
 }
 
 # Where the count for this repo, PR and key lives. Same arguments as holdoff_path.
