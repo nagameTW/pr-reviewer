@@ -88,6 +88,8 @@ the suite in the `bash:3.2` Docker image.
 - **Untrusted text stays data.** PR titles, descriptions, diffs and model
   output reach prompts inside labeled, fenced blocks, and never reach a shell,
   `eval` or a file path unchecked.
+- **Predictable behavior comes before review breadth.** A change that makes
+  the reviewer find more but act less predictably will not land.
 - **Every rule has a test that fails without it.** If you add a check, add the
   test, and make sure it goes red when you revert the check.
 - **Comments say why.** Comments say why a line is written the way it is.

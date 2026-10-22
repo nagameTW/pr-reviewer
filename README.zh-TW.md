@@ -10,9 +10,9 @@
 
 本文件譯自英文版。內容以英文版為準。
 
-pr-reviewer 在使用者自己的機器上審查 pull request（請求把修改合併進專案的申請，簡稱 PR），審查時沿用使用者本人的 Claude Code 登入。pr-reviewer 不需要 GitHub Action、App、webhook，也不需要 repo 的管理員權限。
+pr-reviewer 在使用者自己的機器上審查 pull request（請求把修改合併進專案的申請，簡稱 PR），審查時沿用使用者本人的 Claude Code（Anthropic 的 AI 寫程式工具）登入。pr-reviewer 不需要在 GitHub 上設定任何自動化功能（Action、App、webhook），也不需要 repo 的管理員權限。
 
-pr-reviewer 監看使用者列出的 repo（存放專案程式碼的位置）。每檢查這些 repo 一次，稱為一輪。一輪之中，[受信任作者](docs/operations.md#whose-prs-it-reviews)開啟的 PR 只要出現新的 head，pr-reviewer 就以無介面模式（不開啟互動介面）呼叫 [Claude Code](https://code.claude.com/docs/en/overview)（Anthropic 的 AI 寫程式工具）執行審查。head 指 PR 最新的 commit（一筆程式碼修改紀錄）。審查完成後，pr-reviewer 貼出一則留言，內含審查結果（核准或要求修改）與問題清單。
+pr-reviewer 監看使用者列出的 repo（存放專案程式碼的位置）。每檢查這些 repo 一次，稱為一輪。一輪之中，pr-reviewer 檢查[受信任作者](docs/operations.md#whose-prs-it-reviews)開啟的 PR。PR 每出現新的 head，就以無介面模式（不開啟互動介面）呼叫 [Claude Code](https://code.claude.com/docs/en/overview) 執行審查。head 指 PR 最新的 commit（一筆程式碼修改紀錄）。審查完成後，pr-reviewer 貼出一則留言，內含審查結果（核准或要求修改）與問題清單。
 
 留言以使用者自己的 `gh`（GitHub 的命令列工具）帳號發出。若已設定 [GitHub App](docs/github-app.md)，改由該 App 發出。pr-reviewer 是一組呼叫 `gh`、`git`、`jq` 與 `claude` 的 bash（一種命令列腳本語言）腳本。真實的執行過程與留言見[展示頁](docs/demo.md)。
 
@@ -21,7 +21,7 @@ pr-reviewer 監看使用者列出的 repo（存放專案程式碼的位置）。
 完整說明見 [SECURITY.md](SECURITY.md) 與 [docs/trust-cost-limits.md](docs/trust-cost-limits.md)。
 
 - 只留言。pr-reviewer 不核准 PR，也不合併 PR。
-- 模型只能讀取。他只能在每個 PR 專屬的獨立 checkout（git worktree）中使用 `Read`、`Grep` 與 `Glob`。PR 的程式碼不會執行。
+- 模型只能讀取。他只能在每個 PR 專屬的獨立工作目錄（git worktree）中使用 `Read`、`Grep` 與 `Glob`，這三個工具只能讀取與搜尋檔案。PR 的程式碼不會執行。
 - 請在只有使用者本人使用的機器上執行。服務使用使用者的 `gh` 登入與 Claude Code 登入。
 - 來自 fork（從他人複製出的 repo）的 PR 一律略過，作者列在受信任名單的 PR 除外。
 - pr-reviewer 使用使用者的 Claude Code 登入，因此審查計入使用者的用量上限。審查展示用的 PR 一次花費 $0.54。
@@ -38,7 +38,7 @@ pr-reviewer 監看使用者列出的 repo（存放專案程式碼的位置）。
 - bash 3.2 以上。macOS 內建的 `/bin/bash` 可用。
 - [gh](https://cli.github.com/) 2.63.0 以上與 [Claude Code](https://code.claude.com/docs/en/overview) 2.1.305 以上。兩者都須已登入。
 - `git`、`jq`、`curl`、`openssl` 與 `flock`。另需一個 timeout 指令（`timeout` 或 `gtimeout`），以及一個 SHA-256 指令（`sha256sum`、`gsha256sum` 或 `shasum`）。
-- Linux 上需 systemd 240 以上，供背景服務使用。
+- Linux 上需 systemd（Linux 的服務管理程式）240 以上，供背景服務使用。
 
 `prreview setup` 檢查每一項，並印出適合該系統的安裝指令。詳見[安裝工具](docs/install.md#install-the-tools)。
 
@@ -75,7 +75,7 @@ prreview start
 | `prreview version` | 顯示版本 |
 | `prreview <command> --help` | 顯示該指令的用法 |
 
-完整移除的方式見 [Removing it](docs/operations.md#removing-it)。
+完整移除的方式見[移除說明](docs/operations.md#removing-it)。
 
 ## 升級
 
@@ -103,11 +103,11 @@ pr-reviewer 依一份 13 個項目的檢查清單審查 diff（PR 的程式碼�
 | 7 文件同步 | 仍在描述舊行為的文件 |
 | 8 相依套件 | 未宣告的相依套件，或鎖定版本的方式與其他套件不一致 |
 | 9 證據優先 | 沒有實測數據，就改動依經驗設定的規則、數值上限、所用的模型或 prompt |
-| 10 模型能使用哪些工具 | 模型可呼叫的工具範圍過廣，或使用時無需核准 |
-| 11 是否完成 issue 的需求 | diff 未達成關聯 issue（記錄需求的頁面）的某項需求 |
-| 12 只修一處，附近同類的問題仍存在 | 修了其中一處，相鄰且寫法相同的程式碼仍有同樣的缺陷 |
+| 10 工具範圍 | 模型可呼叫的工具範圍過廣，或使用時無需核准 |
+| 11 需求是否達成 | diff 未達成關聯 issue（記錄需求的頁面）的某項需求 |
+| 12 漏修同類問題 | 修了其中一處，相鄰且寫法相同的程式碼仍有同樣的缺陷 |
 
-CRITICAL 與 HIGH 的問題會擋下核准，審查結果為 Changes requested（要求修改）。MEDIUM 與 LOW 的問題只列出，不改變審查結果。審查結果是留言中的文字，不是 GitHub 的 review 狀態。[docs/how-it-reviews.md](docs/how-it-reviews.md) 說明檢查清單、一輪的每個步驟，以及 pr-reviewer 不回報的內容。使用者可以[新增、移除或修改項目](docs/configuration.md#adding-your-own-checks)。四張流程圖收在[圖表頁](docs/zh-TW/diagrams.md)。
+每個問題有嚴重度，由高到低是 CRITICAL、HIGH、MEDIUM、LOW。CRITICAL 與 HIGH 的問題會擋下核准，審查結果為 Changes requested（要求修改）。MEDIUM 與 LOW 的問題只列出，不改變審查結果。審查結果是留言中的文字，不是 GitHub 內建 review 功能的核准或要求修改。[docs/how-it-reviews.md](docs/how-it-reviews.md) 說明檢查清單、一輪的每個步驟，以及 pr-reviewer 不回報的內容。使用者可以[新增、移除或修改項目](docs/configuration.md#adding-your-own-checks)。四張圖收在[圖表頁](docs/zh-TW/diagrams.md)。
 
 ## 設定
 

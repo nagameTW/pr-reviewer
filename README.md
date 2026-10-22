@@ -19,7 +19,7 @@ Comments come from your own `gh` account, or from a [GitHub App](docs/github-app
 [SECURITY.md](SECURITY.md) and [docs/trust-cost-limits.md](docs/trust-cost-limits.md) have the details.
 
 - It only comments. It never approves a PR and never merges one.
-- The model can only read. It gets `Read`, `Grep` and `Glob` in a separate checkout (a git worktree) of each PR. The PR code never runs.
+- The model can only read. It gets `Read`, `Grep` and `Glob` in a separate working directory (a git worktree) of each PR. The PR code never runs.
 - Run it on a machine only you use. The service runs with your `gh` login and your Claude Code login.
 - It skips PRs from forks unless the author is on your trusted list.
 - It uses your Claude Code login, so reviews count against your usage limits. One review of the demo PR cost $0.54.
@@ -105,7 +105,7 @@ The reviewer checks the diff against a checklist of 13 items. Each item is one f
 | 11 Acceptance | A requirement of the linked issue that the diff does not deliver |
 | 12 Half-fixes | The same defect left in a similar place, such as a sibling file or function |
 
-CRITICAL and HIGH findings make the verdict Changes requested. MEDIUM and LOW findings are listed and do not change it. The verdict is text in the comment. It is not a GitHub review state. [docs/how-it-reviews.md](docs/how-it-reviews.md) describes the checklist, each step of a round and what the reviewer leaves out. It also has [diagrams](docs/how-it-reviews.md#diagrams). You can [add, remove or change items](docs/configuration.md#adding-your-own-checks).
+Each finding has a severity: CRITICAL, HIGH, MEDIUM or LOW, from highest to lowest. CRITICAL and HIGH findings make the verdict Changes requested. MEDIUM and LOW findings are listed and do not change it. The verdict is text in the comment. It is not a GitHub review state. [docs/how-it-reviews.md](docs/how-it-reviews.md) describes the checklist, each step of a round and what the reviewer leaves out. It also has [diagrams](docs/how-it-reviews.md#diagrams). You can [add, remove or change items](docs/configuration.md#adding-your-own-checks).
 
 ## Settings
 
