@@ -40,6 +40,25 @@ Each point names the code that does it. The code paths are at the commit that yo
 | OpenCodeReview | CLI on your machine, or GitHub Actions, GitLab CI, GitFlic CI or Gerrit | `npm install -g @alibaba-group/open-code-review` and a provider key. PR comments need a workflow file and `pull_request_target` | Posts reviews with `event: "COMMENT"` | Not found | [README][ocr-readme], [CI][ocr-ci], [post script][ocr-post] |
 | Kodus | Self-hosted on a VM (2 CPU, 8 GB RAM, 60 GB disk) or Kodus Cloud | Connect a Git provider | Request Changes and Auto-approve are optional. The sample config has both off | `kodus-config.yml` at the repo root. The branch it is read from not found | [README][kodus-readme], [policy][kodus-policy], [config][kodus-config] |
 
+## Official options for security review
+
+These rows cover the options that Anthropic and GitHub document for security review of code changes. They are other choices next to pr-reviewer, not replacements for it. The pages were read on 2026-10-23. A date in a cell is the date that the page or post carries.
+
+| Option | What it checks | How it runs | Access and cost | Limits the docs state | Sources |
+| --- | --- | --- | --- | --- | --- |
+| Claude Code `/security-review` | The diff between your branch and the default branch of `origin`: injection, auth issues and data exposure | Locally, in your Claude Code session, on demand | A Claude Code login and an `origin` remote. It counts toward your plan usage | It is "a single pass" over the changes on the current branch. It is not a PR gate | [commands][cc-commands], [security guidance][cc-secguide] |
+| `claude-code-security-review` Action | Injection, auth, data exposure, crypto, input validation, logic races, configuration, supply chain, code execution and XSS | A GitHub Action on `pull_request`. You add a workflow file | A `CLAUDE_API_KEY` secret. You pay for API tokens and runner minutes. The default model in the README is `claude-opus-4-1-20250805` | The README says it is "not hardened against prompt injection attacks" and is for trusted PRs only. It drops denial-of-service, rate-limit and open-redirect findings. The last push was 2026-02-11 and there are no releases | [README][ccsr] |
+| Claude Code GitHub Actions (`claude-code-action@v1`) | Whatever your prompt asks. The docs show a `/code-review` run on PRs | A GitHub Action that runs on `@claude` mentions or on a `prompt` for any event | Repo admin access, the Claude GitHub App or a custom app, and an API key or an OAuth token. You pay for runner minutes plus API tokens, or use a subscription through OAuth | It can push commits. Only users with write access trigger it. On public repos, fork PRs get no secrets, so they get no review | [GitHub Actions docs][cc-actions], [security][cca-security] |
+| GitHub Copilot code review | Bugs, security vulnerabilities and style. The docs describe no dedicated security scanner | A GitHub service. Agentic context uses Actions runners | A Copilot Pro, Pro+, Max, Business or Enterprise plan. It bills AI credits, about $0.05 to $1 per review on the Lite tier and about $0.25 to $5 on the Balanced tier, plus Actions minutes | "Not guaranteed to spot all problems". It reads custom instructions from the head branch, so a PR can change them. It skips dependency files, logs and SVG | [about][gh-about], [use][gh-use] |
+| GitHub CodeQL code scanning with Copilot Autofix | CodeQL runs deterministic queries for known vulnerability patterns in C/C++, C#, Go, Java/Kotlin, JavaScript/TypeScript, Python, Ruby, Rust, Swift and Actions workflows. Autofix writes a suggested fix for a CodeQL alert | GitHub Actions (default or advanced setup) or your own CI | Free on public repos. Other repos need GitHub Code Security. The 2025-03-04 price post lists $30 per active committer per month, and the figure may have changed. Autofix needs no Copilot subscription | PHP, Scala and some other languages are not covered. Autofix fixes only a subset of queries, is non-deterministic and says "You must always review suggestions" | [CodeQL][codeql-about], [access][ghas-about], [price post][ghcs-price], [Autofix][autofix-about] |
+
+Where each option stands next to pr-reviewer:
+
+- **Deterministic analysis.** CodeQL follows fixed queries and needs no model. pr-reviewer reads code with a model and runs no scanner. The two can run side by side.
+- **Where it runs.** Copilot code review and CodeQL run on GitHub. The Action options run on your GitHub runner. pr-reviewer runs on one machine with one login, and it pauses when that machine sleeps.
+- **Setup rights.** The Action options need a workflow file or repo admin access, and the Copilot and CodeQL options need a plan or policy. pr-reviewer needs none of these ([Where pr-reviewer differs](#where-pr-reviewer-differs)).
+- **Security detection rate.** pr-reviewer has no published number for security findings. See [Accuracy](#accuracy).
+
 ## What the tools list for scanners, context and learning
 
 These columns come from each vendor's own documentation.
@@ -118,6 +137,13 @@ Independent studies:
 [cc-customize]: https://code.claude.com/docs/en/code-review-customize
 [cc-costs]: https://code.claude.com/docs/en/code-review-costs
 [cc-legal]: https://code.claude.com/docs/en/legal-and-compliance
+[cc-commands]: https://code.claude.com/docs/en/commands
+[cc-secguide]: https://code.claude.com/docs/en/security-guidance
+[ccsr]: https://github.com/anthropics/claude-code-security-review
+[codeql-about]: https://docs.github.com/en/code-security/code-scanning/introduction-to-code-scanning/about-code-scanning-with-codeql
+[ghas-about]: https://docs.github.com/en/get-started/learning-about-github/about-github-advanced-security
+[ghcs-price]: https://github.blog/changelog/2025-03-04-introducing-github-secret-protection-and-github-code-security/
+[autofix-about]: https://docs.github.com/en/code-security/code-scanning/managing-code-scanning-alerts/about-autofix-for-codeql-code-scanning
 [cc-actions]: https://code.claude.com/docs/en/github-actions
 [cr-pricing]: https://www.coderabbit.ai/pricing
 [cr-faq]: https://docs.coderabbit.ai/faq

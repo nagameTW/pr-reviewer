@@ -82,4 +82,14 @@ needs 'finding unit: two defects that need two fixes are two findings' pr-autore
 needs 'finding unit: the unit rule follows the pattern completeness rule' pr-autoreview.sh \
   'Pattern completeness.*One finding is one defect'
 
+# ── comparison page lists the official options with a date ────────────────
+CMP=docs/comparison.md
+needs 'comparison: a section for the official security options' $CMP '^## Official options for security review'
+for opt in '/security-review' 'claude-code-security-review' 'Claude Code GitHub Actions' 'GitHub Copilot code review' 'CodeQL'; do
+  needs "comparison: a table row for $opt" $CMP "^\\| [^|]*${opt}"
+done
+needs 'comparison: the section says when the pages were read' $CMP 'pages were read on 2026-10-'
+needs 'comparison: the section calls the options another choice, not a replacement' $CMP 'other choices next to pr-reviewer, not replacements'
+needs 'comparison: the price is dated' $CMP '2025-03-04 price post'
+
 if [ "$FAILED" -eq 0 ]; then echo "PASS: review rules"; else echo "FAIL: review rules"; exit 1; fi
