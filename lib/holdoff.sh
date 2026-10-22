@@ -222,7 +222,7 @@ holdoff_posted_stem() {
   case "$repo"  in ''|*[!0-9a-zA-Z._-]*) return 1 ;; esac
   # GitHub names ignore case, so the stem is lower case. The prune test
   # builds its stem here too, so an open entry in any case matches the file.
-  printf '%s__%s' "$owner" "$repo" | tr '[:upper:]' '[:lower:]'
+  printf '%s__%s' "$owner" "$repo" | LC_ALL=C tr '[:upper:]' '[:lower:]'
 }
 
 # Where the count for this repo, PR and key lives. Same arguments as holdoff_path.
