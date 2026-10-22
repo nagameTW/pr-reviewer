@@ -954,8 +954,10 @@ review_one_pr() { # $1 = PR number, $2 = the worktree the dispatcher made
     return 0
   fi
 
-  # PR title/body are never fed to the model, but after a squash merge the
-  # title becomes main's commit message — scan them like everything else.
+  # PR title/body reach the model through the intent file (built below), and
+  # after a squash merge the title becomes main's commit message — scan them
+  # like everything else. The linked issue's title and body get the same scan
+  # where that text is fetched, before it enters the intent file.
   # Materialized, NEVER piped into `grep -q`: under pipefail an
   # early-quitting grep SIGPIPEs jq, so the pipeline returns non-zero EVEN ON
   # A MATCH and the `if` reads a hit as a miss. Direction matters — this is
@@ -1635,6 +1637,24 @@ $SPLIT_TEXT"
     ISSUE_TEXT="$("$GH" issue view "$ISSUE_N" --repo "$REPO" --json title,body \
                    -q '"TITLE: " + .title + "\n\nBODY:\n" + (.body // "")' 2>/dev/null)"
     if [ -n "$ISSUE_TEXT" ]; then
+      # Same scan, same patterns file, as the PR title and description above.
+      # ISSUE_TEXT is already a variable: never pipe it into `grep -q`. A hit,
+      # or a scan that cannot decide, withholds the review before the text
+      # reaches the intent file or any model call. The notice does not quote
+      # the value.
+      if scan_hit_or_unknown "$PATS_FILE" "$ISSUE_TEXT"; then
+        NOTICE_TEXT="
+> **Automated review: ⛔ Review withheld**
+
+The linked issue matched the sensitive-data scan, or the scan could not run. Replace the value with a placeholder in the issue title or body. The issue keeps its earlier versions, so also delete them from the issue's edit history. Then push a new commit or edit the PR description; the PR is then reviewed again automatically."
+        BODY="<!-- $MARKER $KEY -->
+
+> [!CAUTION]$NOTICE_TEXT"
+        gh_post pr comment "$PR" --repo "$REPO" -b "$BODY"
+        echo "PR #$PR: linked issue #$ISSUE_N matched sensitive patterns (or the scan could not run) — notice posted, not reviewed"
+        rm -f "$DIFF"
+        return 0
+      fi
       # Nonce marker, not a fixed one. Both halves of this file are author
       # text, and with a fixed `=== LINKED ISSUE #N ===` line the author can
       # type it into the PR description and hand the model a ticket of their
