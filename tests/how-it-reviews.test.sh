@@ -120,8 +120,15 @@ else bad 'a check file cites a standard (Name|Edition|file) that the table does 
 if [ -z "$EXTRA" ]; then ok 'every file in the table is a check file that cites that standard'
 else bad 'the table lists a standard (Name|Edition|file) that the check file does not cite' "$EXTRA"; fi
 
-NODATE="$(awk -F'|' '$3 !~ /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/ { print $1 "|" $2 }' "$T/rows" 2>/dev/null)"
 # The third field is "Name|Edition|Checked": awk splits on |, so field 3 is Checked.
+# The classes are written out because old mawk (1.3.4-20200120) has no {n} intervals.
+# A failed awk or a short rows file would leave NODATE empty and pass, so fail closed.
+ROWS_N="$(wc -l < "$T/rows")"
+TABLE_N="$(cut -d'|' -f1,2 "$T/table" | LC_ALL=C sort -u | wc -l)"
+NODATE="$(awk -F'|' '$3 !~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/ { print $1 "|" $2 }' "$T/rows")" \
+  || { bad "the date check runs" "awk failed on the table rows"; echo "SOME CHECKS FAILED"; exit 1; }
+[ "$ROWS_N" -ge "$TABLE_N" ] && [ "$ROWS_N" -gt 0 ] \
+  || { bad "the date check reads every table row" "read $ROWS_N rows, the table lists $TABLE_N standards"; echo "SOME CHECKS FAILED"; exit 1; }
 if [ -z "$NODATE" ]; then ok 'every row has a check date (YYYY-MM-DD)'
 else bad 'a row has no check date' "$NODATE"; fi
 
