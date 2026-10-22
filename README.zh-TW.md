@@ -57,22 +57,23 @@
 - **PR 文字視為資料。** prompt 中有這項聲明。這只是對模型的指示，不能當作沙箱。即使
   模型被誘騙，上述工具限制仍然有效，但需要 Claude Code 2.1.305 或更新版本。
 - **每則含有 PR 文字或模型輸出的留言，貼出前都會比對你的 `sensitive-patterns` 檔。**
-  命中，或掃描無法執行，都不會貼出任何內容。
+  命中，或掃描無法執行，該則留言會改為一則簡短的通知，通知中不會引用命中的值。
 - **它貼出的是模型寫的內容。** 如果你的 repo 中有 bot 會依留言指令（例如 `/lgtm`
   或 `bors r+`）動作，請改用該 bot 不接受其指令的 GitHub App 發留言。
 - **它使用你的 Claude Code 登入。** 全天候運作的審查工具是否屬於訂閱方案的一般個人
   使用，由 Anthropic 決定，其條款也曾變動。請閱讀最新條款。改用 API key 可避開這個
-  問題。
+  問題，但在 shell 中設定的 key 不會傳給背景服務。請在有該 key 的終端機執行
+  `prreview run`（[詳情](docs/operations.md#where-to-run-it)）。
 
 **成本。**
 
-- 每次推送都會開始新的一輪。編輯 PR 的標題、描述或 base 分支，以及推送到堆疊式 PR
-  （stacked PR）的父分支，也會開始新的一輪。head 未變的編輯，會等到審查工具上一則
-  留言滿 10 分鐘（`PRREVIEW_GATE_PR_COOLDOWN_MIN`）才處理。
+- 每次推送到該 PR，都會立即開始新的一輪。編輯 PR 的標題、描述或 base 分支，以及
+  推送到堆疊式 PR（stacked PR）的父分支，也會開始新的一輪。若 head 未變，後兩種
+  情況會等到審查工具上一則留言滿 10 分鐘（`PRREVIEW_GATE_PR_COOLDOWN_MIN`）才處理。
 - 一輪最多可能發出以下呼叫：每個切片（diff 切出的一小段，約 250 行）一次審查呼叫
-  （最多 8 個切片；第一輪遇到 1000 行以上的 diff 時，每個切片兩次）、每項阻擋型發現
+  （最多 8 個切片；第一輪遇到 1000 行以上的 diff，或免拆分的 PR 時，每個切片兩次）、每項阻擋型發現
   一次反駁呼叫（最多 6 次），以及一次修復呼叫。最大的第一輪會有 16 次審查、6 次反駁
-  與 1 次修復呼叫。尚無實測數字說明這要花多少錢。
+  與 1 次修復呼叫。尚無測試執行涵蓋這種情況，因此費用未知。
 - 展示的第 1 輪花費 $0.54，三輪共 $1.14（Run A）。第二個測試 PR 花費 $0.75，之後一次
   沒有改動內容的推送花費 $0.73（Run B）。在一個小型且沒有問題的 PR 上，紅隊使 $0.34
   的審查增加 $0.23（Run C）。這些執行發生在 2026 年 9 月與 10 月，早於 v0.2.0 更換
@@ -82,11 +83,11 @@
 ## 狀態與限制
 
 - **1.0 之前。** 版本之間任何事都可能改變。升級前請閱讀 [CHANGELOG.md](CHANGELOG.md)。
-- **偵測能力尚未量測。** 沒有人統計過它找出多少真實 bug，或產生多少誤報。
+- **偵測能力尚未量測。** 沒有人統計過它找出多少 bug，或產生多少誤報。
 - **它只讀程式碼。** 它不執行你的測試，也不讀取 CI 結果。判定是一則留言，沒有 GitHub
-  的 review 狀態。核准橫幅會寫 "Automated review, not a GitHub approval."。
+  的 review 狀態。核准橫幅會寫「Automated review, not a GitHub approval.」。
 - **只支援 GitHub，且僅在機器處於喚醒狀態時有效。** PC 睡眠時它會暫停。CI 在 Ubuntu
-  與 macOS 上以 `/bin/bash`（bash 3.2）執行測試。WSL2 不在 CI 內，只在維護者自己的
+  上以系統內建的 bash 執行測試，在 macOS 上以 `/bin/bash`（bash 3.2）執行測試。WSL2 不在 CI 內，只在維護者自己的
   機器上確認過（[docs/windows.md](docs/windows.md)）。Bedrock、Vertex 與 gateway
   未經測試。
 - **一項已知缺口。** 合併進預設分支的 PR，其審查鍵（review key）不包含 base commit
@@ -106,7 +107,8 @@
 - `git`、`jq`、`curl`、`openssl` 與 `flock`；一個 timeout 指令（`timeout` 或
   `gtimeout`）；一個 SHA-256 指令（`sha256sum`、`gsha256sum` 或 `shasum`）。腳本會
   使用最先找到的那一個。
-- **Linux 上需 systemd 240 以上**，供背景服務使用。
+- **Linux 上需 systemd 240 以上**，供背景服務使用。服務以 `StandardOutput=append:`
+  寫入日誌。
 
 `prreview setup` 會檢查每一項，並印出適合你系統的安裝指令。macOS 搭配 Homebrew 時，
 執行 `brew install git jq gh coreutils flock`。Debian 或 Ubuntu 則執行
@@ -123,8 +125,8 @@ git clone https://github.com/nagameTW/pr-reviewer.git ~/pr-reviewer
 mkdir -p ~/.local/bin && ln -s ~/pr-reviewer/prreview ~/.local/bin/prreview
 ```
 
-請不要把 clone 放在 `~/Documents`、`~/Desktop`、`~/Downloads` 與 iCloud Drive 內，
-macOS 背景服務無法讀取這些位置。若 `~/.local/bin` 不在 `PATH` 中，請把它加進去。
+請不要把 clone 放在 `~/Documents`、`~/Desktop`、`~/Downloads` 與 iCloud Drive
+（`~/Library/Mobile Documents`）內，macOS 背景服務無法讀取這些位置。若 `~/.local/bin` 不在 `PATH` 中，請把它加進去。
 
 ### 2. 執行 setup
 
@@ -133,7 +135,8 @@ prreview setup
 ```
 
 它一次問一個問題，按 Enter 即採用方括號內的值。它會檢查你的工具，以及 `claude` 與
-`gh` 的登入狀態，接著詢問要審查的 repo（請列入一個你自己擁有的）、由誰發留言、使用
+`gh` 的登入狀態，接著詢問要審查的 repo（它會列出你帳號下最多 30 個 repo，其他 repo 請輸入
+`owner/repo`；請列入一個你自己擁有的）、由誰發留言、使用
 的模型等項目。問到 **Background service** 時，目前請回答 `n`。答案會寫入
 `~/.config/pr-reviewer/config`。
 
@@ -162,7 +165,9 @@ prreview status
 prreview logs -f
 ```
 
-沒有待審 PR 時，迴圈每檢查 15 次才開始一輪。在 Linux 上，你登出時 systemd 會停止
+若 `gh` 以 `ssh` 進行 clone，`prreview start` 會提議把 `gh` 改為 `https`，因為
+systemd 使用者服務沒有 ssh-agent（[詳情](docs/operations.md#where-to-run-it)）。沒有
+待審 PR 時，迴圈每檢查 15 次才開始一輪。在 Linux 上，你登出時 systemd 會停止
 使用者服務；請執行一次 `sudo loginctl enable-linger "$USER"`，服務才會持續運作。在
 WSL2 上，服務需要 `systemd=true`，且在 WSL 關閉時停止，詳見
 [docs/windows.md](docs/windows.md)。
@@ -196,9 +201,12 @@ prreview setup
 程式碼。若 `claude --version` 或 `gh --version` 低於最低版本，setup 會停止。請更新
 該工具後，再執行一次 setup。
 
-自受信任作者規則實施起，審查工具會略過 fork PR，除非作者列在
+在 0.2.0 之後的版本，審查工具會略過 fork PR，除非作者列在
 `PRREVIEW_GATE_TRUSTED_AUTHORS` 中。`prreview status` 會顯示略過的數量。設定
 `PRREVIEW_GATE_FORK_PRS=1` 可恢復舊行為。
+
+你的檢查清單副本中的項目會保留舊的措辭。若要查看新版改了什麼，請執行
+`diff -r ~/pr-reviewer/checks ~/.config/pr-reviewer/checks`。
 
 ## 審查如何運作
 
@@ -206,9 +214,9 @@ prreview setup
   <img src="docs/images/example-comment.png" alt="一則審查留言：Changes requested 橫幅，計有 2 項阻擋、1 項不阻擋的發現；一行摘要；一項 CRITICAL 的 SQL injection 發現，展開後可見從輸入到危險呼叫點（sink）的追蹤路徑，以及引用的 A05:2025 Injection、CWE-89；另有一項 HIGH 的分頁發現。摘要其餘部分、MEDIUM 發現，以及審查無法驗證的內容皆已摺疊。" width="820">
 </p>
 
-留言以判定開頭，每項發現一行。每項發現都指出檔案、行號與修正方式。每個切片都依同樣
-的 13 個項目審查，每個項目一個檔案，放在 `checks/` 內。每項發現會標明所屬項目與
-嚴重度。
+此留言取自 Run B。留言以判定開頭，每項發現一行。每項發現都指出檔案、行號與修正
+方式。每個切片都依同一份共 13 個項目的清單審查，每個項目一個檔案，放在 `checks/`
+內。「適用時機」欄說明何時採用該項目。每項發現會標明所屬項目與嚴重度。
 
 | 項目 | 檢查內容 | 適用時機 |
 | --- | --- | --- |
@@ -237,7 +245,7 @@ CRITICAL 與 HIGH 的發現會阻擋，MEDIUM 與 LOW 只列出而不阻擋。�
 <p align="center">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/round-dark.svg">
-  <img src="docs/images/round.svg" alt="單一審查輪的七步驟流程圖。步驟 1 到 4 不呼叫模型。1 Pick：挑出目前 head 尚無留言的開啟中 PR。來自不受信任作者的 fork PR 會被略過。若 head 未變，且審查工具上一則留言距今不到 10 分鐘，該輪等待。只有標題、描述或 base 的編輯會造成這種情況，新的推送從不等待。2 Scan：將標題、描述與關聯 issue 比對你的 sensitive-patterns 檔。若命中，或掃描無法執行，則貼出一則不含該值的 Review withheld 通知，且不審查該 PR。3 Build：merge base 加上 PR diff，再加上取自預設分支的慣例檔。超過 2000 行變更或 40 個檔案時，回覆拆分請求，不進行審查。4 Slice：切成約 250 行的切片，最多 8 個。5 Review：Claude Code 讀取 worktree。6 Verify：引用了不存在檔案的發現會被丟棄。每項阻擋型發現各用一次呼叫嘗試反駁。7 Post：模型文字經過跳脫處理，留言比對你的 sensitive-patterns 檔，然後貼出一則留言。無法解析的輸出不會貼出。" width="100%">
+  <img src="docs/images/round.svg" alt="單一審查輪的七步驟流程圖。步驟 1 到 4 不呼叫模型。1 Pick：挑出目前 head 尚無留言的開啟中 PR。來自不受信任作者的 fork PR 會被略過。若 head 未變，且審查工具上一則留言距今不到 10 分鐘，該輪等待。標題、描述或 base 的編輯，或推送到堆疊式 PR 的父分支，會造成這種等待。推送到 PR 分支從不等待。2 Scan：將標題、描述與關聯 issue 比對你的 sensitive-patterns 檔。若命中，或掃描無法執行，則貼出一則不含該值的 Review withheld 通知，且不審查該 PR。3 Build：merge base 加上 PR diff，再加上取自預設分支的慣例檔。超過 2000 行變更或 40 個檔案時，回覆拆分請求，不進行審查，除非該 PR 屬於豁免情況。4 Slice：切成約 250 行的切片，最多 8 個。5 Review：Claude Code 讀取 worktree。6 Verify：引用了不存在檔案的發現會被丟棄。每項阻擋型發現各用一次呼叫嘗試反駁。7 Post：模型文字經過跳脫處理，留言比對你的 sensitive-patterns 檔，然後貼出一則留言。無法解析的輸出不會貼出。" width="100%">
 </picture>
 </p>
 
@@ -267,7 +275,8 @@ CRITICAL 與 HIGH 的發現會阻擋，MEDIUM 與 LOW 只列出而不阻擋。�
 
 設定由一個設定檔加上覆寫值組成。設定檔是 `~/.config/pr-reviewer/config`，每行一個
 `KEY=value`，由 `prreview set` 寫入。環境中設定的變數會覆寫設定檔。有兩項設定為
-必填：`PRREVIEW_GATE_REPOS`，以及 `prreview setup` 寫出的 `sensitive-patterns` 檔。
+必填：`PRREVIEW_GATE_REPOS`，以及 `PRREVIEW_SENSITIVE_PATTERNS_FILE`，也就是
+`prreview setup` 寫出的 `sensitive-patterns` 檔。
 最常被修改的有 `PRREVIEW_GATE_TRUSTED_AUTHORS`、`PRREVIEW_GATE_FORK_PRS`、
 `PRREVIEW_REVIEW_MODEL`、`PRREVIEW_GATE_PARALLEL`、
 `PRREVIEW_GATE_PR_COOLDOWN_MIN`、`PRREVIEW_GATE_REDTEAM`、
@@ -284,7 +293,9 @@ bash tests/run-all.sh
 ```
 
 該指令會執行 `bash -n`、`shellcheck -S warning` 與每一個 `tests/*.test.sh`，不需要
-網路、`gh` 或模型。CI 在 Ubuntu 與 macOS 上執行相同的指令。請見
+網路、`gh` 或模型。未安裝 `shellcheck` 時該指令會失敗。請在 `git clone` 的目錄內
+執行，因為檢查會用 `git ls-files` 列出腳本，ZIP 下載的內容會在這裡停止。CI 在
+Ubuntu 與 macOS 上執行相同的指令。請見
 [CONTRIBUTING.md](CONTRIBUTING.md)。本專案把可預測的審查行為，置於審查範圍的廣度
 之前。
 

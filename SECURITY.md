@@ -139,6 +139,13 @@ skips because of its author. A head that an earlier `prreview once --pr`
 reviewed loses its auto-merge too, because the PR list does not show that
 review.
 
+Give it the smallest token scope that can read the repos and comment on pull
+requests. GitHub's pull-request write permission also allows approvals, which
+the reviewer's code never uses. A GitHub App needs only the permissions its
+setup link asks for. `PRREVIEW_GATE_TICKETS=1` and `PRREVIEW_ALERT_REPO` also
+need permission to open issues. `PRREVIEW_GATE_DISARM_AUTO_MERGE=1` needs write
+access to the repo.
+
 **Scratch files stay private.** Diffs, slices and raw model output are written
 under the reviewer's own work directory, not a shared `/tmp`.
 

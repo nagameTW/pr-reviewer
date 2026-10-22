@@ -61,8 +61,8 @@
 <text class="t-sub" x="192" y="87">Open PRs that are not drafts and have no comment for the current head.</text>
 <text class="t-sub" x="192" y="103">Skips fork PRs from authors you do not trust.</text>
 <text class="t-sub" x="192" y="119">Waits if the head is unchanged and the reviewer's last comment is under 10 minutes old.</text>
-<text class="t-sub" x="192" y="135">Only a title, description or base edit can cause this wait. A new push never waits.</text>
-<text class="t-sub" x="192" y="151">Setting: <tspan class="t-code">PRREVIEW_GATE_PR_COOLDOWN_MIN</tspan>.</text>
+<text class="t-sub" x="192" y="135">Cause: a title, description or base edit, or a push to the parent branch of a stacked PR.</text>
+<text class="t-sub" x="192" y="151">A push to the PR branch never waits. Setting: <tspan class="t-code">PRREVIEW_GATE_PR_COOLDOWN_MIN</tspan>.</text>
 </g>
 <g data-box="32 180 816 72" data-left="170">
 <rect class="raised" x="32" y="180" width="816" height="72" rx="6"/>
@@ -80,7 +80,7 @@
 <text class="t-name" x="80" y="295">Build</text>
 <text class="t-sub" x="192" y="295">Checks out the merge base and applies the PR diff.</text>
 <text class="t-sub" x="192" y="311">Then copies convention files (CLAUDE.md, AGENTS.md, README, CONTRIBUTING) from the default branch.</text>
-<text class="t-sub" x="192" y="327">Over 2000 changed lines or 40 files: no review, one split request.</text>
+<text class="t-sub" x="192" y="327">Over 2000 changed lines or 40 files: a split request, not a review, unless exempt.</text>
 </g>
 <g data-box="32 356 816 56" data-left="170">
 <rect class="raised" x="32" y="356" width="816" height="56" rx="6"/>
@@ -96,7 +96,7 @@
 <text class="t-chip" x="56" y="512" text-anchor="middle">5</text>
 <text class="t-name" x="80" y="513">Review</text>
 <text class="t-sub" x="192" y="513">Claude Code reads the worktree with Read, Grep and Glob. It has no shell and no web tools.</text>
-<text class="t-sub" x="192" y="529">Every slice gets the 13 checklist items.</text>
+<text class="t-sub" x="192" y="529">Every slice gets the checklist items that apply to the diff.</text>
 </g>
 <g data-box="32 558 816 56" data-left="170">
 <rect class="raised" x="32" y="558" width="816" height="56" rx="6"/>

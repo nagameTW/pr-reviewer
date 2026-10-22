@@ -2,7 +2,7 @@
 
 This page puts pr-reviewer next to the tools people most often ask about. It lists facts that a reader can check. It does not list price or review quality, because no measurement of pr-reviewer's detection rate exists yet.
 
-The rows for other tools come from each project's public documentation, read on 2026-10-22. Tools change. Check the linked pages before you rely on a row. "Not stated" means the pages read did not say. It does not mean "no".
+The rows for other tools come from the maintainer's research notes, written in October 2026. Nobody re-read each project's page for this release, and the rows link only to home pages. Tools change. Check the project's own documentation before you rely on a row. "Not stated" means the notes found no statement. It does not mean "no".
 
 ## The short version
 
@@ -51,7 +51,7 @@ claude-code-action can take an OAuth token for a subscription, but it needs a wo
 - It runs only on GitHub, and only while the machine is on and awake.
 - It posts as your own `gh` account unless you set up a [GitHub App](github-app.md).
 - It comments only. It cannot gate a merge.
-- Nobody has measured how many real bugs it finds or how many false alarms it raises.
+- Nobody has counted how many bugs it finds or how many false alarms it raises.
 - It does not strip hidden content from PR text. A zero-width character or an HTML comment in a PR description reaches the prompt as written. The prompt wraps PR text in markers with a random value and tells the model that the text is data. SECURITY.md says plainly that this is an instruction to the model, not a sandbox.
 - Its protection depends on the Claude Code version. The tool limits need 2.1.305 or later.
 

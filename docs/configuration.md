@@ -33,7 +33,7 @@ Settings come from two layers: a config file, and overrides in the environment.
 | `PRREVIEW_GATE_CHEAP_MODEL` | `claude-sonnet-5-5` | Model for repairing unparseable output |
 | `PRREVIEW_GATE_SAMPLES` | `1` | Review passes per slice after a PR's first round; findings are merged across passes |
 | `PRREVIEW_GATE_SAMPLES_ROUND1` | `1` | Review passes per slice in a PR's first round |
-| `PRREVIEW_GATE_ZERO_RECHECK_LINES` | `1000` | From this many changed lines, a first round gets at least two passes; `0` turns it off |
+| `PRREVIEW_GATE_ZERO_RECHECK_LINES` | `1000` | From this many changed lines, a first round gets at least two passes; `0` turns it off. The first round of a split-exempt PR gets two passes whatever its size |
 | `PRREVIEW_GATE_REVIEW_TIMEOUT` | `900` | Seconds per review call |
 | `PRREVIEW_GATE_REPAIR_TIMEOUT` | `300` | Seconds for the call that repairs an unparseable answer |
 | `PRREVIEW_GATE_VERIFY_MAX` | `6` | Most blocking findings that get a refutation call |
@@ -59,7 +59,7 @@ Settings come from two layers: a config file, and overrides in the environment.
 | `PRREVIEW_GATE_REDTEAM_SPEC_MAX` | `80` | Most document paths (docs, specs, ADRs, schemas) the red team is shown |
 | `PRREVIEW_GATE_SYMBOLS` | `1` | Lists, for each definition the diff changes, the references it left untouched, and gives the list to the model; no model cost. `0` turns it off |
 | `PRREVIEW_GATE_VERIFY_LINES` | `0` | `1` drops a finding whose line number is past the end of the file it cites |
-| `PRREVIEW_GATE_WORKROOT` | `~/.cache/pr-reviewer/work` | Where the review clones and scratch files live; must be absolute |
+| `PRREVIEW_GATE_WORKROOT` | `~/.cache/pr-reviewer/work` (under `$XDG_CACHE_HOME` when that is set) | Where the review clones and scratch files live; must be absolute |
 | `PRREVIEW_GATE_LOCK` | `~/.cache/pr-reviewer/pr-autoreview.lock` | The lock that keeps two rounds from running at once |
 | `PRREVIEW_STATE_DIR` | `$XDG_STATE_HOME`, else `~/.local/state` | Where state that must outlive a cleared cache goes, under `pr-reviewer/` |
 | `PRREVIEW_GATE_CURSOR` | `pr-reviewer/gate-repo-cursor` in that directory | The file that records which repo the next round starts with |
@@ -69,7 +69,7 @@ Settings come from two layers: a config file, and overrides in the environment.
 | `PRREVIEW_GATE_TICKETS` | `0` | `1` opens follow-up issues for some findings that do not block (see [Follow-up issues](#follow-up-issues)); the token then needs to open issues |
 | `PRREVIEW_GATE_ISSUE_MIN_SEVERITY` | `high` | Which of those findings get an issue: `critical`, `high`, `medium` or `low` |
 | `PRREVIEW_GATE_DISARM_AUTO_MERGE` | `0` | `1` turns off an auto-merge that was armed on a head the reviewer has not reviewed yet, and on a PR it skips because of its author; the token then needs write access |
-| `PRREVIEW_ALERT_REPO` | empty | `owner/repo` where the loop opens an issue when a round fails, or when `pr-autoreview.sh` itself no longer parses (the token then needs to open issues there); empty only logs it. Use a private repository. Each alert issue records a time when the host was up. |
+| `PRREVIEW_ALERT_REPO` | empty | `owner/repo` where the loop opens an issue when a round fails, or when `pr-autoreview.sh` itself no longer parses (the token then needs to open issues there); empty only logs it. Use a repository that only you can read. Each alert issue records a time when the host was up. |
 | `PRREVIEW_ALERT_REPEAT_HOURS` | `6` | Hours between "Still failing" comments on an alert issue that is still open |
 | `PRREVIEW_LOOP_INTERVAL` | `60` | Seconds between the loop's checks for open PRs; a check that finds any PR the reviewer would read starts a round |
 | `PRREVIEW_LOOP_IDLE_EVERY` | `15` | With no PR to review, start a round only on every this-many-th check |
@@ -125,6 +125,8 @@ reviewer reads every `.md` file in it at the start of each round.
   the same number: two files with one number stop the reviewer.
 - **Remove an item:** delete its file. The other items keep their numbers.
 - **Change an item:** edit its file. The text goes to the model as written.
+
+Item 3 treats a host address in any RFC 1918 private range as a finding, in tests too. It allows the address ranges and names that RFC 5737, RFC 3849 and RFC 2606 reserve for documentation. If your test fixtures use other ranges, edit `checks/03-sensitive-data.md` to match.
 
 An item that only matters for some files can say so in front matter. This one
 is sent only when the PR changes a Python file:

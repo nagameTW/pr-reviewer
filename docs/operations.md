@@ -186,9 +186,9 @@ The refutation calls in step 6 can only remove findings. The red team is the
 one step that looks for a defect the review missed, and it runs only on a
 round that is about to post ✅ Approved.
 
-It is off by default because it adds cost and time to every approval. In
-Run C, a small clean PR in the test repo, the review cost $0.34 and the
-red-team call $0.23. These figures were measured on a test PR in September and
+It is off by default because it adds cost and time to every approval. On
+a small clean test PR (Run C in the README), the review cost $0.34 and the
+red-team call $0.23. These figures come from a test PR in September and
 October 2026, before v0.2.0 changed the default models. Current costs can
 differ. Each candidate it raises adds one refutation call, so at most three
 more. The red-team call runs after the review, and the refutation calls run
@@ -261,6 +261,38 @@ The reviewer does not post a verdict it could not reach. What happens instead:
   `PRREVIEW_GATE_REVIEW_TIMEOUT`.
 
 
+## Watching a round
+
+`prreview logs` shows the service's own log, a few lines per round. The full
+output of each round is in `~/.cache/pr-reviewer/gate-logs/round-*.log`.
+
+With no open PR, `prreview once` prints only `ROUND USAGE: 0 call(s)`. That is
+not an error.
+
+A round that reviews one PR prints a log like this sample. The cost comes from
+a test PR in September and October 2026, before v0.2.0 changed the default
+models. Current costs can differ.
+
+```text
+[your-name__your-repo#3] PR #3: refutation upheld CRITICAL app/store.py:30 (refuted=false, confidence 0.97)
+[your-name__your-repo#3] PR #3: refutation upheld HIGH app/store.py:29 (refuted=false, confidence 0.95)
+[your-name__your-repo#3] https://github.com/your-name/your-repo/pull/3#issuecomment-…
+[your-name__your-repo#3] PR #3: review-only verdict comment posted (verdict=request_changes)
+ROUND USAGE: 3 call(s)  in=28 out=6978 cache_read=347346 cache_write=40101  cost=$0.75
+  review       1 call(s)  $0.44
+  verify       2 call(s)  $0.31
+```
+
+If you run `prreview once` again without a push, the head already has its
+comment and the PR is skipped. With the service installed, `prreview once`
+right after setup usually prints `this head was already handled` for every PR,
+because the service got there first. If it prints
+`another pr-autoreview run holds … — exiting`, the service is in the middle of
+a round. `prreview logs -f` shows that round. To try `once` on its own, run
+`prreview stop` first, then `prreview start` afterwards. A stopped service
+stays stopped.
+
+
 ## Where to run it
 
 Run it on a machine only you use. The background service runs as your user,
@@ -271,11 +303,22 @@ The service is started by launchd or systemd, not by your shell, so it does
 not see variables your shell profile exports. Log in with `gh auth login` and
 `claude auth login`: a `GH_TOKEN` or `ANTHROPIC_API_KEY` that exists only
 in your shell never reaches the service, although `prreview once` in that same
-terminal does see it. On a machine with no browser, such as a server you
-reach over SSH, `claude auth login` prints a link to open on another device.
+terminal does see it. To use an API key, run `prreview run` from a terminal that has the key, or
+run `claude auth login` to store a login. On a machine with no browser, such
+as a server you reach over SSH, `claude auth login` prints a link to open on
+another device.
 Claude Code also runs with no settings sources, so nothing in
 `~/.claude/settings.json` (model, permissions, hooks, `env`) applies to a
 review.
+
+The reviewer clones over the protocol that `gh config get git_protocol`
+reports and fetches with the login of `gh`. With `ssh`, the background service
+would need your SSH key with no prompt, and a systemd user service has no
+ssh-agent. So `prreview setup` offers to switch `gh` to `https` when you choose
+the background service, and `prreview start` offers it when it installs the
+service and stdin is a terminal. With no terminal, `prreview start` prints the
+command and goes on. The switch changes `gh` for all programs, not only this
+one. The command is `gh config set git_protocol https -h github.com`.
 
 On Linux, a separate account for the reviewer, called `reviewer` below, is a
 good way to keep it to itself. Log in to that account directly, for example

@@ -488,7 +488,7 @@ setup_service() {
   SETUP_DONE="$SETUP_DONE_RUNNING"
   say "Installed. It checks for new PRs every minute. 'prreview status' shows it, 'prreview logs' follows it."
   [ "$PLATFORM" != linux ] || say "On a server nobody logs in to, run 'sudo loginctl enable-linger $(id -un)' so it keeps running after you log out."
-  [ "$PLATFORM" != wsl ] || say "WSL stops when Windows has no WSL window open; see the README's Windows section to keep it running."
+  [ "$PLATFORM" != wsl ] || say "WSL stops when Windows has no WSL window open; see docs/windows.md to keep it running."
 }
 
 cmd_setup() {
@@ -637,7 +637,7 @@ cmd_set() {
   local key value
   [ $# -ge 2 ] || die "usage: prreview set <name> <value>   (names: repos, parallel, model, checks, patterns, or any PRREVIEW_ setting)"
   key="$(prreview_key_of "$1")" || die "not a setting name: $1"
-  prreview_key_known "$PRREVIEW_HOME" "$key" || die "$key is not a setting the reviewer reads (check the spelling; the README lists them)"
+  prreview_key_known "$PRREVIEW_HOME" "$key" || die "$key is not a setting the reviewer reads (check the spelling; docs/configuration.md lists them)"
   shift
   value="$(checked_value "$key" "$*")" || exit 1
   prreview_config_set "$CONFIG" "$key" "$value" && say "$key=$value" && restart_if_running
@@ -661,7 +661,7 @@ cmd_get() {
   value="${value//\$REVIEW_MODEL_DEFAULT/$REVIEW_MODEL_DEFAULT}"
   case "$value" in
     '') ;;
-    *'$'*) echo "(not set; the default is worked out when the reviewer runs, see the README)" >&2 ;;
+    *'$'*) echo "(not set; the default is worked out when the reviewer runs, see docs/configuration.md)" >&2 ;;
     *) printf '%s\n' "$value"; echo "(not set; that is the default)" >&2 ;;
   esac
 }
@@ -746,7 +746,7 @@ prreview: set up and run pr-reviewer
   prreview repos remove <o/r>    stop reviewing one
 
   prreview set <name> <value>    change a setting: repos, parallel, model, checks,
-                                 patterns, or any PRREVIEW_ setting from the README
+                                 patterns, or any PRREVIEW_ setting in docs/configuration.md
   prreview get <name>            print one setting
   prreview unset <name>          back to the default
 

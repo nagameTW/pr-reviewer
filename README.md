@@ -59,25 +59,29 @@ pushes, three rounds, and an approval in round 3.
   they need Claude Code 2.1.305 or later.
 - **Every comment that carries PR text or model output is scanned** against
   your sensitive-patterns file before it is posted. A hit, or a scan that
-  cannot run, means nothing is posted.
+  cannot run, replaces the comment with a short notice that does not quote the
+  value.
 - **It posts what the model wrote.** If a bot in your repo acts on comment
   commands such as `/lgtm` or `bors r+`, post as a GitHub App that the bot does
   not take commands from.
 - **It uses your Claude Code login.** Whether an always-on reviewer counts as
   ordinary individual use of a subscription is Anthropic's call, and its terms
-  have changed before. Read the current terms. An API key avoids the question.
+  have changed before. Read the current terms. An API key avoids the question,
+  but a key set in your shell does not reach the background service. Run
+  `prreview run` from a terminal that has the key
+  ([details](docs/operations.md#where-to-run-it)).
 
 **Cost.**
 
-- Every push starts a new round. So does an edit of the PR's title,
-  description or base branch, and a push to the parent branch of a stacked PR.
-  An edit with the same head waits until the reviewer's last comment is 10
-  minutes old (`PRREVIEW_GATE_PR_COOLDOWN_MIN`).
+- Every push to the PR starts a new round at once. So does an edit of the PR's
+  title, description or base branch, and a push to the parent branch of a
+  stacked PR. When the head is unchanged, those last two cases wait until the
+  reviewer's last comment is 10 minutes old (`PRREVIEW_GATE_PR_COOLDOWN_MIN`).
 - One round can make one review call per slice (up to 8 slices, two passes
-  each in a first round on a diff of 1000 lines or more), one refutation call
-  per blocking finding (up to 6), and one repair call. The largest first round
-  makes 16 review, 6 refutation and 1 repair calls. No run has measured what
-  that costs.
+  each in a first round on a diff of 1000 lines or more or on a split-exempt
+  PR), one refutation call per blocking finding (up to 6), and one repair
+  call. The largest first round makes 16 review, 6 refutation and 1 repair
+  calls. No test run has covered that case, so its cost is unknown.
 - Round 1 of the demo cost $0.54, and the three rounds cost $1.14 (Run A). A
   second test PR cost $0.75, then $0.73 for a push that changed nothing (Run
   B). On a small clean PR, the red team added $0.23 to a $0.34 review (Run C).
@@ -90,14 +94,15 @@ pushes, three rounds, and an approval in round 3.
 
 - **Pre-1.0.** Anything can change between versions. Read
   [CHANGELOG.md](CHANGELOG.md) before you upgrade.
-- **Detection is not measured.** No one has counted how many real bugs it finds
-  or how many false alarms it raises.
+- **Detection rate is unknown.** No one has counted how many bugs it finds or
+  how many false alarms it raises.
 - **It reads code and nothing else.** It does not run your tests or read your
   CI results. A verdict is a comment, not a GitHub review state. The Approved
   banner says "Automated review, not a GitHub approval."
 - **GitHub only, and only while the machine is awake.** It pauses while the PC
-  sleeps. CI runs the tests on Ubuntu and on macOS with `/bin/bash` (bash 3.2).
-  WSL2 is not in CI and is checked only on the maintainer's own machine
+  sleeps. CI runs the tests on Ubuntu with its system bash and on macOS with
+  `/bin/bash` (bash 3.2). WSL2 is not in CI and is checked only on the
+  maintainer's own machine
   ([docs/windows.md](docs/windows.md)). Bedrock, Vertex and gateways are not
   tested.
 - **One known gap.** The review key of a PR into the default branch does not
@@ -117,7 +122,8 @@ How it differs from other tools: [docs/comparison.md](docs/comparison.md).
 - `git`, `jq`, `curl`, `openssl` and `flock`, one timeout command (`timeout` or
   `gtimeout`), and one SHA-256 command (`sha256sum`, `gsha256sum` or
   `shasum`). The scripts use the first they find.
-- **On Linux, systemd 240 or newer** for the background service.
+- **On Linux, systemd 240 or newer** for the background service, which writes
+  its log with `StandardOutput=append:`.
 
 `prreview setup` checks every item and prints the install command for your
 system. On macOS with Homebrew: `brew install git jq gh coreutils flock`. On
@@ -135,7 +141,8 @@ mkdir -p ~/.local/bin && ln -s ~/pr-reviewer/prreview ~/.local/bin/prreview
 ```
 
 Keep the clone out of `~/Documents`, `~/Desktop`, `~/Downloads` and iCloud
-Drive, which a macOS background service cannot read. Put `~/.local/bin` on your
+Drive (`~/Library/Mobile Documents`), which a macOS background service cannot
+read. Put `~/.local/bin` on your
 `PATH` if it is not there.
 
 ### 2. Run the setup
@@ -146,7 +153,8 @@ prreview setup
 
 It asks one question at a time, and Enter keeps the value in brackets. It
 checks your tools and your `claude` and `gh` logins, then asks for the repos to
-review (list one that you own), who posts, the model and more. At **Background
+review (it lists up to 30 of your own; type `owner/repo` for any other, and
+list one that you own), who posts, the model and more. At **Background
 service**, answer `n` for now. The answers go to
 `~/.config/pr-reviewer/config`.
 
@@ -176,7 +184,10 @@ prreview status
 prreview logs -f
 ```
 
-With no PR to review, the loop starts a round only on every 15th check. On
+If `gh` clones over `ssh`, `prreview start` offers to switch `gh` to `https`,
+because a systemd user service has no ssh-agent
+([details](docs/operations.md#where-to-run-it)). With no PR to review, the loop
+starts a round only on every 15th check. On
 Linux, systemd stops a user service when you log out; run
 `sudo loginctl enable-linger "$USER"` once to keep it running. On WSL2 the
 service needs `systemd=true` and stops when WSL shuts down; see
@@ -212,9 +223,13 @@ service, because the loop keeps running the old code until it restarts. If
 `claude --version` or `gh --version` is older than the minimum, setup stops.
 Update the tool and run setup again.
 
-Since the trusted-author rule, the reviewer skips fork PRs unless the author is
-in `PRREVIEW_GATE_TRUSTED_AUTHORS`. `prreview status` shows how many it
+In versions after 0.2.0, the reviewer skips fork PRs unless the author is in
+`PRREVIEW_GATE_TRUSTED_AUTHORS`. `prreview status` shows how many it
 skipped. `PRREVIEW_GATE_FORK_PRS=1` brings back the old behavior.
+
+Items in your copy of the checklist keep their old wording. To see what a new
+version changed in them, run
+`diff -r ~/pr-reviewer/checks ~/.config/pr-reviewer/checks`.
 
 ## How a review works
 
@@ -222,10 +237,11 @@ skipped. `PRREVIEW_GATE_FORK_PRS=1` brings back the old behavior.
   <img src="docs/images/example-comment.png" alt="A review comment: a Changes requested banner counting 2 blocking and 1 not blocking findings, a one-line summary, a CRITICAL SQL injection finding opened to show its trace from input to sink and its citation A05:2025 Injection, CWE-89, and a HIGH paging finding. The rest of the summary, the MEDIUM finding and what the review could not verify are folded." width="820">
 </p>
 
-The comment leads with the verdict and one line per finding. Every finding
-names a file, a line and a fix. Every slice is reviewed against the same 13
-items, one file each in `checks/`, and each finding names its item and a
-severity.
+This comment is from Run B. The comment leads with the verdict and one line
+per finding. Every finding names a file, a line and a fix. Every slice is
+reviewed against the same checklist of 13 items, one file each in `checks/`.
+The Applies column says when an item is used. Each finding names its item and
+a severity.
 
 | Item | Looks for | Applies |
 | --- | --- | --- |
@@ -256,7 +272,7 @@ One round has seven steps. The first four make no model call.
 <p align="center">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/round-dark.svg">
-  <img src="docs/images/round.svg" alt="Flowchart of one review round in seven steps. Steps 1 to 4 make no model call. 1 Pick: open PRs with no comment for the current head. Fork PRs from untrusted authors are skipped. If the head is unchanged and the reviewer's last comment is under 10 minutes old, the round waits. Only a title, description or base edit can cause this, and a new push never waits. 2 Scan: the title, description and linked issue are matched against your sensitive-patterns file. On a match, or if the scan cannot run, a Review withheld notice is posted without the value and the PR is not reviewed. 3 Build: merge base plus PR diff, then convention files from the default branch. More than 2000 changed lines or 40 files gets a split request and no review. 4 Slice: slices of about 250 lines, up to 8. 5 Review: Claude Code reads the worktree. 6 Verify: findings that cite a missing file are dropped. One call for each blocking finding tries to refute it. 7 Post: model text is escaped, the comment is matched against your sensitive-patterns file, and one comment is posted. Output that cannot be parsed is not posted." width="100%">
+  <img src="docs/images/round.svg" alt="Flowchart of one review round in seven steps. Steps 1 to 4 make no model call. 1 Pick: open PRs with no comment for the current head. Fork PRs from untrusted authors are skipped. If the head is unchanged and the reviewer's last comment is under 10 minutes old, the round waits. A title, description or base edit, or a push to the parent branch of a stacked PR, can cause this wait. A push to the PR branch never waits. 2 Scan: the title, description and linked issue are matched against your sensitive-patterns file. On a match, or if the scan cannot run, a Review withheld notice is posted without the value and the PR is not reviewed. 3 Build: merge base plus PR diff, then convention files from the default branch. More than 2000 changed lines or 40 files gets a split request and no review, unless the PR is exempt. 4 Slice: slices of about 250 lines, up to 8. 5 Review: Claude Code reads the worktree. 6 Verify: findings that cite a missing file are dropped. One call for each blocking finding tries to refute it. 7 Post: model text is escaped, the comment is matched against your sensitive-patterns file, and one comment is posted. Output that cannot be parsed is not posted." width="100%">
 </picture>
 </p>
 
@@ -290,8 +306,9 @@ What happens when a step fails, and what each step does in detail:
 Settings are a config file plus overrides. The file is
 `~/.config/pr-reviewer/config`, one `KEY=value` per line, and `prreview set`
 writes it. A variable set in the environment overrides the file. Two settings
-are required: `PRREVIEW_GATE_REPOS` and the sensitive-patterns file that
-`prreview setup` writes. The ones people change most are
+are required: `PRREVIEW_GATE_REPOS` and `PRREVIEW_SENSITIVE_PATTERNS_FILE`,
+the sensitive-patterns file that `prreview setup` writes. The ones people
+change most are
 `PRREVIEW_GATE_TRUSTED_AUTHORS`, `PRREVIEW_GATE_FORK_PRS`,
 `PRREVIEW_REVIEW_MODEL`, `PRREVIEW_GATE_PARALLEL`,
 `PRREVIEW_GATE_PR_COOLDOWN_MIN`, `PRREVIEW_GATE_REDTEAM`,
@@ -308,7 +325,9 @@ bash tests/run-all.sh
 ```
 
 That runs `bash -n`, `shellcheck -S warning` and every `tests/*.test.sh`, with
-no network, no `gh` and no model. CI runs the same command on Ubuntu and on
+no network, no `gh` and no model. It fails when `shellcheck` is not installed.
+Run it in a `git clone`, because the checks list the scripts with
+`git ls-files` and a ZIP download stops there. CI runs the same command on Ubuntu and on
 macOS. See [CONTRIBUTING.md](CONTRIBUTING.md). The project puts predictable
 review behavior ahead of review breadth.
 
