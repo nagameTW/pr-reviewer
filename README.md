@@ -662,9 +662,9 @@ in. To go back to your own account, run `prreview setup` and pick 1 at "Who post
 
 Switching from your account to an App changes whose comments count as the
 reviewer's own: the next round finds no comment from the App on any open PR
-and reviews every one of them again. Switching back leaves alone the heads the
-App already commented on, and logs a warning for each of them every round
-until its author pushes again.
+and reviews every one of them again. Switching back does the same for the
+heads the App already commented on: the reviewer logs a warning for each of
+them, then reviews it once with your account.
 
 ## Windows
 
@@ -753,7 +753,9 @@ works in place of the loop, and a lock stops two rounds from overlapping.
    again, with its own read of the PR, before any model call. The comment
    carries a hidden marker with the head SHA and a hash of the title,
    description and base branch (for a stacked PR, also the base commit), and
-   only comments by the reviewer's own account count. A PR on hold after a
+   only comments by the reviewer's own account count. A comment from another
+   App that carries the marker gets a `WARNING` line in the log, and the head
+   is reviewed anyway. A PR on hold after a
    failure waits out its hold (see [When something fails](#when-something-fails)).
 2. **Scan.** Check the PR's title and description against your
    sensitive-patterns file. A hit stops the review of that PR. The title and
@@ -1072,6 +1074,15 @@ Who controls each input, and how the reviewer treats it:
   is posted. A hit, or a scan that cannot run, means it is not posted. Two
   fixed notices carry neither and are not scanned: the notice that a title or
   description matched your patterns, and the title-format reminder.
+- **The model's words are escaped before they are posted.** In the summary,
+  the findings and the follow-up tickets, an `@name`, a line that starts with
+  `/command` or `bors`, the words `Automated review:` before a verdict emoji,
+  and a line that starts like a finding get a zero-width space. A mention does
+  not notify, a command does not act, and a later round does not read the line
+  as a finding. An `@` in a closed fenced code block, and the file path of a
+  finding, stay as they are. See [SECURITY.md](SECURITY.md) for the limits.
+- **A GitHub App token covers one repository.** The reviewer asks for a token
+  for the repository of the PR only.
 - **It cannot merge.** It never approves or merges. Its only merge call is
   `gh pr merge --disable-auto`, which is off by default. It posts with whatever
   `gh` token you give it, or as the GitHub App you set up. With the defaults,

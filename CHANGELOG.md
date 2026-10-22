@@ -101,6 +101,12 @@ All notable changes to this project are recorded here. The format follows
   `)` of a `case` pattern and printed a syntax error. The loop that counts the
   lines of each cited file now writes the pattern with a leading `(`. The check
   is off by default.
+- A comment from an App that was not the reviewer, with the marker of a head
+  on its first line, stopped the review of that head for good. The marker is
+  computed from public fields, and a bot that repeats a command can print it.
+  Now the reviewer writes a `WARNING` line to the log and reviews the head.
+  After a switch from a GitHub App back to your own account, each head the
+  App commented on gets one new review, and the log has a warning for it.
 
 ### Security
 
@@ -130,6 +136,20 @@ All notable changes to this project are recorded here. The format follows
   does the same when a PR turns into a fork PR after the list. A head that an
   earlier `prreview once --pr` reviewed also loses its auto-merge, because the
   list does not show that review.
+- The reviewer escapes the model's words before it posts them. A pull request
+  can steer those words, and they go out under the reviewer's login. In the
+  summary, the findings, the follow-up tickets and the refutation notes, the
+  reviewer now puts a zero-width space into an `@name` (so it does not
+  notify), a line that starts with `/command` or `bors` (so a bot does not
+  read a command), the words `Automated review:` before a verdict emoji (so
+  they do not look like the banner), and a line that starts with `- **HIGH**`
+  or `- ~~**` (so a later round does not read it as a finding). An `@` in a
+  closed fenced code block and the file path of a finding stay as they are.
+  The sensitive-data scan now ignores U+200B, so the escape cannot hide a
+  match. Links and images are not changed.
+- The token of a GitHub App is now for the one repository of the PR. Before,
+  the token request had no body, and the token reached every repository of
+  the installation.
 
 ## [0.2.2] - 2026-10-22
 

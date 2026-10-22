@@ -114,14 +114,41 @@ run, means it is not posted. Two fixed notices carry neither and are not
 scanned: the notice that a title, description or linked issue matched the scan,
 and the title-format reminder. The reviewer will not start without that file.
 The scan matches your patterns against the text as written. Text shaped to
-slip past it, such as a key split by an HTML entity or a zero-width
-character, is not caught, so treat it as a safety net for accidents.
+slip past it, such as a key split by an HTML entity or by a zero-width
+character other than U+200B, is not caught, so treat it as a safety net for
+accidents.
 
-**What the model writes is posted as written.** A pull request can steer
-the model's words, and those words go out under the reviewer's identity. If a
-bot in your repository acts on commands in comments (`/lgtm`, `/approve`,
+**What the model writes is escaped before it is posted.** A pull request can
+steer the model's words, and those words go out under the reviewer's login.
+In the summary, the findings, the follow-up tickets and the refutation notes,
+the reviewer puts a zero-width space into four kinds of text:
+
+- An `@name` that GitHub would turn into a mention. An `@` inside a closed
+  fenced code block stays as it is, because it is code.
+- A line that starts with `/command` or with `bors`, which a bot can read as
+  a command.
+- The words `Automated review:` before a verdict emoji, which look like the
+  banner of the reviewer.
+- A line that starts with `- **HIGH**`, `- ~~**` or the like, which the next
+  round would read as a finding of this round.
+
+The text keeps its look. The sensitive-data scan reads the text without those
+spaces. Links and images are not changed. The file path of a finding is not
+changed either, because the next round reads the path back from the comment,
+so a path that holds `@name` is posted as it is. This does not make a bot safe.
+If a bot in your repository acts on commands in comments (`/lgtm`, `/approve`,
 `bors r+`), run the reviewer as a GitHub App that bot does not take commands
 from, not as a person it trusts.
+
+**A comment from another App that carries the marker does not stop a
+review.** The marker of a head is computable from public fields, and a bot
+that repeats text can print it. The reviewer writes a warning to the log and
+reviews the head. Only comments from the reviewer's own login count as its
+earlier reviews.
+
+**The App token is for one repository.** When the reviewer posts as a GitHub
+App, it asks for an installation token for the repository of the PR only, and
+not for every repository the App is installed on.
 
 **Refutation is not a security control.** The refutation step can only remove
 blocking findings. Against an author who writes the diff to fool the model, it
