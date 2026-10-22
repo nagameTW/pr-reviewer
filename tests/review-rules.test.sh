@@ -55,4 +55,10 @@ needs 'noise: a loosened protection is not defence in depth and not speculation'
 needs 'noise: the loosened-protection case points at the security trace' lib/review-spec.sh \
   'report it under the security trace'
 
+# ── scope rule ────────────────────────────────────────────────────────────
+needs 'scope: moved or reformatted added lines still belong to the PR' pr-autoreview.sh \
+  'Added lines that were moved from elsewhere or only reformatted still belong to this PR'
+needs 'scope: such lines get defects only, and the issue says the code was moved' pr-autoreview.sh \
+  'report only defects on them, and say in the issue text that the code was moved'
+
 if [ "$FAILED" -eq 0 ]; then echo "PASS: review rules"; else echo "FAIL: review rules"; exit 1; fi
