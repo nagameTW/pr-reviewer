@@ -36,7 +36,8 @@ It must end with `ALL PASS`. It prints the versions of bash, gh, git, jq and
 flock, then runs `bash -n` on every script, `shellcheck -S warning`, and every
 `tests/*.test.sh`. Each test runs with the bash that runs `run-all.sh`. It
 finds the scripts with `git ls-files`, so `git add` a new script before you
-run it.
+run it. A ZIP download of the repo fails at that step, so run the command in a
+`git clone`.
 
 CI runs the command on Ubuntu, and on macOS with `/bin/bash`, which is bash
 3.2. A script that works on a newer bash can fail there. Bash 3.2 has no
@@ -87,6 +88,8 @@ the suite in the `bash:3.2` Docker image.
 - **Untrusted text stays data.** PR titles, descriptions, diffs and model
   output reach prompts inside labeled, fenced blocks, and never reach a shell,
   `eval` or a file path unchecked.
+- **Predictable behavior comes before review breadth.** A change that makes
+  the reviewer find more but act less predictably will not land.
 - **Every rule has a test that fails without it.** If you add a check, add the
   test, and make sure it goes red when you revert the check.
 - **Comments say why.** Comments say why a line is written the way it is.

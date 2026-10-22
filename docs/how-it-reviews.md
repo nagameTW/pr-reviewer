@@ -12,6 +12,7 @@ Contents:
 - [Security standards the checks cite](#security-standards-the-checks-cite)
 - [What the reviewer does not cover](#what-the-reviewer-does-not-cover)
 - [How a review runs](#how-a-review-runs)
+- [Diagrams](#diagrams)
 - [Other tools](#other-tools)
 
 ## The checklist
@@ -197,6 +198,66 @@ Your own checks can fill a gap. See [Adding your own checks](configuration.md#ad
    - A slice that fails makes the comment say Changes requested, whatever the other slices found.
    - A refutation that is unclear leaves the finding in place.
    - The red team is the one step that fails open. A failed red-team call changes nothing, and the round approves as it would have without that step.
+
+## Diagrams
+
+Each diagram is collapsed. Open one to read it. The diagrams follow the light or dark theme of your browser.
+
+### Overview
+
+How the parts of the reviewer work together on your machine.
+
+<details>
+<summary>Overview: your machine, GitHub and Claude Code</summary>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/overview-dark.svg">
+  <img src="images/overview.svg" alt="Architecture of pr-reviewer. It runs on your machine. The review loop starts a round once a minute while a pull request is open. A round reads open PRs from GitHub through gh. It builds a worktree for each PR. It sends a prompt to Claude Code. Claude Code has only the tools Read, Grep and Glob. A round matches PR text and each comment against your sensitive-patterns file. It posts one comment for each new head. By default, it skips fork PRs from authors you do not trust. The reviewer never approves or merges. Its only merge call is gh pr merge --disable-auto. It turns off auto-merge on a head that the reviewer has not reviewed, and runs only with PRREVIEW_GATE_DISARM_AUTO_MERGE=1." width="720">
+</picture>
+
+</details>
+
+### One round
+
+One round has seven steps. The first four steps make no model call.
+
+<details>
+<summary>One review round in seven steps</summary>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/round-dark.svg">
+  <img src="images/round.svg" alt="Flowchart of one review round in seven steps. Steps 1 to 4 make no model call. Step 1 Pick: open PRs with no comment for the current head. Fork PRs from untrusted authors are skipped. If the head is unchanged and the last comment of the reviewer is under 10 minutes old, the round waits. A title, description or base edit can cause this wait. A push to the parent branch of a stacked PR can cause it too. A push to the PR branch never waits. Step 2 Scan: the title, description and linked issue are matched against your sensitive-patterns file. If a match is found, or the scan cannot run, a Review withheld notice is posted without the value. The PR is not reviewed. Step 3 Build: merge base plus PR diff, then convention files from the default branch. A PR with more than 2000 changed lines or 40 files gets a split request and no review, unless the PR is exempt. Step 4 Slice: slices of about 250 lines, up to 8. Step 5 Review: Claude Code reads the worktree. Step 6 Verify: findings that cite a missing file are dropped. One call for each blocking finding tries to refute it. Step 7 Post: model text is escaped. The comment is matched against your sensitive-patterns file. Then one comment is posted. Output that cannot be parsed is not posted." width="640">
+</picture>
+
+</details>
+
+### One finding across rounds
+
+Every push is a new round. The prompt asks the model to mark each earlier blocker as fixed. Or the model repeats the blocker with the prefix `Carried over:` before it. The harness does not check that the model does this. [Across rounds](operations.md#across-rounds) describes the rule.
+
+<details>
+<summary>States of one finding across rounds</summary>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/rounds-dark.svg">
+  <img src="images/rounds.svg" alt="State diagram of one finding across rounds. Each push starts a new round. A new CRITICAL or HIGH finding is blocking. On the next push, the model marks it fixed. Or the model repeats it with the prefix Carried over. A carried-over finding still blocks. It stays carried over until the model marks it fixed. A new HIGH finding can be on a file that the push did not change and that no earlier round cited. Then it is shown as MEDIUM. It does not block and is not carried over. CRITICAL is never lowered. The harness does not check that the model marks findings correctly. A round with no blocking findings posts Approved. If a PR is merged while its verdict is changes requested, it gets one alert comment." width="720">
+</picture>
+
+</details>
+
+### Red team
+
+An optional red team argues against an approval. It is off by default, because it adds cost and time to every approval. Run `prreview set PRREVIEW_GATE_REDTEAM 1` to turn it on.
+
+<details>
+<summary>The optional red team before an approval</summary>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="images/redteam-dark.svg">
+  <img src="images/redteam.svg" alt="Flowchart of the optional red team. A round has no blockers and is about to approve. One more call argues that the approval is wrong. It looks for five things in the diff. The first is parts that disagree. The next is a limit at the wrong level. The next is an error returned as success. The next is a branch that decides from other input. The last is a rule that the docs of the repo pin. If the call fails or times out, the approval stands. If there is no CRITICAL or HIGH candidate, the approval stands. Up to 3 candidates each go through one refutation call. A refuted candidate is dropped and the approval stands. A survivor is posted and marked as raised by the red team. The red team is off by default. The command prreview set PRREVIEW_GATE_REDTEAM 1 turns it on." width="720">
+</picture>
+
+</details>
 
 ## Other tools
 
