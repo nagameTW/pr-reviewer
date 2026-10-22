@@ -212,7 +212,8 @@ reads the settings named `PRREVIEW_LOOP_*`. It starts the rounds.
    it. The end of the round prints the model usage and the cost of the round.
 
 CRITICAL and HIGH findings block. MEDIUM and LOW findings are listed under the
-verdict and do not block. Two kinds of HIGH finding are listed and do not block:
+verdict and do not block. Two or more of them about tests, conventions, wording,
+process or maintainer docs share one item, `Tests, docs and process (N)`. Two kinds of HIGH finding are listed and do not block:
 
 - On a PR of 300 changed lines or more (`PRREVIEW_GATE_COACH_MAX_LINES`), some
   HIGH findings do not block. They are findings about tests, conventions,

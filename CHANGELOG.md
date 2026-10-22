@@ -38,6 +38,14 @@ All notable changes to this project are recorded here. The format follows
 
 ### Changed
 
+- The comment lists the findings that do not block and are about tests,
+  conventions, wording, process, or a doc for maintainers or team members as
+  one item, `Tests, docs and process (N)`, when there are two or more. The
+  item holds one line for each finding with its severity, `path:line` and
+  issue. A HIGH finding, a finding that blocks, and a doc finding for
+  operators or users stay on their own lines. Only the display changes. The
+  count, the verdict, the follow-up tickets and the files that the next round
+  reads are the same as before.
 - `checks/02-security.md` states CC BY 3.0 for the OWASP Top 10:2025 page. It
   said CC BY-SA 4.0.
 - `tests/run-all.sh` fails when `shellcheck` is not installed. It used to

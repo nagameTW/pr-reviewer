@@ -119,6 +119,8 @@ The model sets an `area` field on each finding, such as `test`, `convention`, `w
 - A HIGH finding gets MEDIUM when the model sets its `kind` field to `wording`, `judgment` or `half_fix`.
 - From round 2, a HIGH on a file that the push did not change, and that no earlier round cited, becomes MEDIUM. This applies when the reviewer knows which files the push changed.
 
+The comment lists the findings that do not block behind one fold. When two or more of them are about tests, conventions, wording, process, or a doc for maintainers or team members, the comment lists those as one item. The item is titled `Tests, docs and process (N)` and holds one line for each finding, with its severity, `path:line` and a one-line issue. A HIGH finding never joins this item, and neither does a finding that blocks, a doc finding for operators or users, or a finding that a rule lowered. One such finding stays on its own line. The grouping is part of the display only. The count, the verdict, the refutation pass, the follow-up ticket and the file list that the next round reads all use the separate findings. The function is `findings_render_soft` in [`lib/findings.sh`](../lib/findings.sh).
+
 `FINDINGS_CONVERGE_JQ` applies the last two rules. CRITICAL is never lowered. The comment keeps the original severity of a lowered finding. [Operating the reviewer](operations.md#how-one-round-works) describes the same rules from the side of the operator.
 
 ## Security standards the checks cite

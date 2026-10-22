@@ -2851,8 +2851,10 @@ $SLICE_CLEAN"
   fi
   FINDINGS="$(jq -c --argjson blocking true "$FINDINGS_PARTITION_JQ" <<<"$CLEANED" \
               | jq -r "$FINDINGS_RENDER_JQ")"
-  SOFT_FINDINGS="$(jq -c --argjson blocking false "$FINDINGS_PARTITION_JQ" <<<"$CLEANED" \
-                   | jq -r "$FINDINGS_RENDER_JQ")"
+  # Display only: two or more non-product findings that do not block are
+  # listed as one item (findings_render_soft). N_SOFT below and every reader
+  # of CLEANED still see each finding.
+  SOFT_FINDINGS="$(findings_render_soft <<<"$CLEANED")"
   N_SOFT="$(jq -r --argjson blocking false \
             "$FINDINGS_PARTITION_JQ | [.findings[]?] | length" <<<"$CLEANED")"
 
