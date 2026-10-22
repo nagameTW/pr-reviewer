@@ -595,6 +595,8 @@ to end on Windows yet; if something differs, please open an issue.
 
 3. **Follow the Linux steps inside Ubuntu:** install the tools, clone into
    your Linux home directory (`~`, not `/mnt/c`), and run `./prreview setup`.
+   Answer `y` at the background service step, or run `./prreview start`
+   after setup. Step 4 keeps that service running, so it needs one.
 4. **Keep WSL running.** WSL shuts Ubuntu down about 15 seconds after the last
    Windows program using it closes, and a running service does not count.
    Two changes keep the reviewer alive while you are logged in to Windows:
