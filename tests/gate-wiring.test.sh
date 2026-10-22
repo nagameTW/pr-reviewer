@@ -143,6 +143,9 @@ before 'the gh version is checked before the lock' 'gh_version_check "$GH" || ex
 is     'no moving gh pr diff call is left in the gate or its libs' "$(grep -n 'pr diff' pr-autoreview.sh lib/*.sh | tr '\n' ' ')" ''
 pin    'the PR info read carries changedFiles and the base commit, from one read with the head' 'headRefOid,isDraft,reviews,comments,title,body,additions,deletions,changedFiles,autoMergeRequest,baseRefName,baseRefOid,number,author,isCrossRepository)"' pr-autoreview.sh
 pin    'the diff is fetched for the SHA the key was made from, with the file count of the same read' 'pr_diff_pinned "$REPO" "$MERGE_BASE" "$SHA" "$DIFF" "$(jq -r '"'"'.changedFiles // ""'"'"' <<<"$INFO")"' pr-autoreview.sh
+before 'the convention files are copied from the default branch after the diff is applied' 'DIFF_APPLIED=1' 'tree_force_convention_files "$REPO_DIR"' pr-autoreview.sh
+before '...and after the PR'"'"'s own convention files are reverted' 'tree_revert_convention_files "$REPO_DIR"' 'tree_force_convention_files "$REPO_DIR"' pr-autoreview.sh
+before '...and before the symlink check that follows the apply' 'tree_force_convention_files "$REPO_DIR"' 'a symlink appeared in the tree after the diff was applied' pr-autoreview.sh
 before 'the merge base is resolved from the two commit IDs, before the diff is fetched' 'MERGE_BASE="$(merge_base_sha "$REPO" "$PR_BASE_OID" "$SHA")"' 'pr_diff_pinned "$REPO"' pr-autoreview.sh
 before 'the diff is fetched before it is applied to the tree' 'pr_diff_pinned "$REPO"' 'APPLY_ERR="$(git -C "$REPO_DIR" apply' pr-autoreview.sh
 before 'the file list exists before anything reads it' 'pr_diff_pinned "$REPO"' 'REVIEW_CHECKS="$(review_checks_render' pr-autoreview.sh
