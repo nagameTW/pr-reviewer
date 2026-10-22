@@ -95,7 +95,8 @@ echo "2.1.305 (Claude Code)"
 STUB_EOF
 # A gh that answers from files in \$T and writes every call to gh.calls.
 # list.json answers the open PR list, view-N.json answers `pr view N` (a
-# draft when there is no file), and list.rc is the exit code of the list.
+# draft when there is no file), list.rc is the exit code of the list, and
+# merged.json answers the list of merged PRs (empty when there is no file).
 cat > "$T/bin/gh" <<STUB_EOF
 #!/usr/bin/env bash
 echo "\$*" >> "$T/gh.calls"
@@ -108,11 +109,14 @@ case "\$1 \$2" in
   "repo view") echo main ;;
   "pr list")
     case "\$*" in
-      *"--state merged"*) echo '[]' ;;
+      *"--state merged"*) if [ -f "$T/merged.json" ]; then cat "$T/merged.json"; else echo '[]'; fi ;;
       *) [ ! -s "$T/list.rc" ] || exit "\$(cat "$T/list.rc")"; emit "\$(cat "$T/list.json")" ;;
     esac ;;
   "pr view")
     if [ -f "$T/view-\$3.json" ]; then emit "\$(cat "$T/view-\$3.json")"; else emit '{"isDraft":true}'; fi ;;
+  "pr comment") echo ok ;;
+  "issue list") echo '[]' ;;
+  "issue create") echo https://github.com/owner/repo/issues/99 ;;
   *) echo "unexpected gh \$*" >&2; exit 1 ;;
 esac
 STUB_EOF
@@ -196,10 +200,62 @@ JSON_EOF
 OUT="$(run_gate)"
 has 'a stale list: the job sees the fork and stops'   "$OUT" 'PR #3: not reviewed, a fork PR whose author is not trusted'
 is '...before any model call'                          "$(grep -vc '^--version$' "$T/claude.calls")" 0
+is '...before the diff fetch'                          "$(grep -c '^api ' "$T/gh.calls")" 0
+is '...and with no post, review or issue'              "$(grep -cE '^(pr comment|pr review|issue )' "$T/gh.calls")" 0
+is '...after two read-only reads of the PR, the dispatcher and the job' "$(viewed 3)" 2
 has '...and the round ends well'                       "$OUT" 'rc=0'
 OUT="$(run_gate PRREVIEW_GATE_TRUSTED_AUTHORS=mallory)"
 lacks 'the same PR with its author listed passes the job check' "$OUT" 'not reviewed, a fork PR'
 rm -f "$T/view-3.json"
+
+# ── the post-merge scan ───────────────────────────────────────────────────
+# The scan reads the merged PRs of the last 48 hours. It comments on a merged
+# PR, fork or not, only when the reviewer's own last comment there is a blocking
+# verdict. A comment by anyone else does not count.
+# Trade-off: the merged list has no trust filter. The reviewer made the
+# earlier verdict, so the alert goes to the same thread.
+NOW="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+VERDICT='<!-- pr-reviewer 1111111111111111111111111111111111111111-abcdef012345 -->
+
+> **Automated review: ❌ Changes requested**'
+set_list '[]'
+# #20: a merged fork PR, the reviewer's last verdict is a blocker.
+# #21: a merged fork PR, only a stranger wrote a verdict-like comment.
+# #22: a merged PR from the repository itself, the same blocker as #20.
+jq -n --arg v "$VERDICT" '{number:20,isCrossRepository:true,author:{login:"mallory"},reviews:[],
+  comments:[{author:{login:"owner"},body:$v,createdAt:"2026-01-01T00:00:00Z"}]}' > "$T/view-20.json"
+jq -n --arg v "$VERDICT" '{number:21,isCrossRepository:true,author:{login:"mallory"},reviews:[],
+  comments:[{author:{login:"mallory"},body:$v,createdAt:"2026-01-01T00:00:00Z"}]}' > "$T/view-21.json"
+jq -n --arg v "$VERDICT" '{number:22,isCrossRepository:false,author:{login:"alice"},reviews:[],
+  comments:[{author:{login:"owner"},body:$v,createdAt:"2026-01-01T00:00:00Z"}]}' > "$T/view-22.json"
+merged() { # NUMBER...: the merged list holds these PRs, merged just now
+  local n out="[]"
+  for n in "$@"; do out="$(jq -c --argjson n "$n" --arg t "$NOW" '. + [{number:$n,mergedAt:$t}]' <<<"$out")"; done
+  printf '%s\n' "$out" > "$T/merged.json"
+}
+posted() { grep -c "^pr comment $1 " "$T/gh.calls" | tr -d ' '; }
+filed()  { grep -c '^issue create ' "$T/gh.calls" | tr -d ' '; }
+
+merged 21
+OUT="$(run_gate PRREVIEW_GATE_TICKETS=1)"
+is 'a merged fork PR with no verdict by the reviewer gets no comment' "$(posted 21)" 0
+is '...and no follow-up ticket'                                        "$(filed)" 0
+has '...and the round ends well'                                       "$OUT" 'rc=0'
+
+merged 20 22
+OUT="$(run_gate PRREVIEW_GATE_TICKETS=1)"
+is 'a merged fork PR with a blocking verdict by the reviewer gets the comment' "$(posted 20)" 1
+is '...as a merged PR from the repository itself does'                          "$(posted 22)" 1
+is '...and each of them gets a follow-up ticket'                                "$(filed)" 2
+has '...and the log says so'                                                    "$OUT" 'PR #20: merged with an unresolved blocking verdict'
+
+merged 20
+OUT="$(run_gate PRREVIEW_GATE_TICKETS=1 PRREVIEW_ONCE_PR=owner/repo#2)"
+is 'a round for a named PR does not list merged PRs' "$(grep -c -e '--state merged' "$T/gh.calls")" 0
+is '...does not read one'                             "$(viewed 20)" 0
+is '...and posts no comment'                          "$(posted 20)" 0
+is '...and files no ticket'                           "$(filed)" 0
+rm -f "$T/merged.json" "$T/view-20.json" "$T/view-21.json" "$T/view-22.json"
 
 # ── the lock: once --pr waits, and fails when it cannot get it ─────────────
 set_list '[{"number":2,"author":{"login":"mallory"},"isCrossRepository":true,"labels":[]}]'
