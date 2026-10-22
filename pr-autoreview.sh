@@ -334,17 +334,20 @@ GATE_ISSUE_NOTE="${PRREVIEW_GATE_ISSUE_NOTE:-0}"
 # (lib/merge.sh disarm_unreviewed_auto_merge). Opt-in too
 # (PRREVIEW_GATE_DISARM_AUTO_MERGE): by default auto-merge is left alone.
 GATE_DISARM_AUTO_MERGE="${PRREVIEW_GATE_DISARM_AUTO_MERGE:-0}"
+# The tool lib comes first: the checks below use what it resolves.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/lib/tools.sh" || { echo "lib/tools.sh missing — refusing to run"; exit 1; }
+tools_resolve
 command -v jq >/dev/null || { echo "jq missing"; exit 1; }
-command -v sha256sum >/dev/null || { echo "sha256sum missing"; exit 1; }
+[ -n "$SHA256_BIN" ] || { echo "sha256sum missing (also tried gsha256sum and shasum) — refusing to run"; exit 1; }
 command -v curl >/dev/null || { echo "curl missing"; exit 1; }
 command -v openssl >/dev/null || { echo "openssl missing"; exit 1; }
 command -v git >/dev/null || { echo "git missing"; exit 1; }
 command -v flock >/dev/null || { echo "flock missing"; exit 1; }
-command -v timeout >/dev/null || { echo "timeout(1) missing — refusing to run (per-review budget cannot be enforced)"; exit 1; }
+[ -n "$TIMEOUT_BIN" ] || { echo "timeout(1) missing (also tried gtimeout) — refusing to run (per-review budget cannot be enforced)"; exit 1; }
 [ -x "$CLAUDE_BIN" ] || { echo "claude missing"; exit 1; }
 # Sourced here, before the lock and before the other libs: the version check
 # must stop a round on a Claude Code that is too old for the tool limits.
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/lib/claude-call.sh" || { echo "lib/claude-call.sh missing, refusing to run"; exit 1; }
 claude_version_check || exit 1
 gh_version_check "$GH" || exit 1
@@ -422,7 +425,7 @@ ensure_gate_clone() {
 
 # Pure logic lives in lib/ so tests can source it without the
 # token-minting preamble below. Guarded: set -u alone won't stop the
-# script on a failed source. SCRIPT_DIR is set above, next to the version check.
+# script on a failed source. SCRIPT_DIR is set above, before the tool checks.
 # The severity ladder and the output contract: shared so the three prompts here
 # cannot drift apart.
 . "$SCRIPT_DIR/lib/review-spec.sh" || { echo "lib/review-spec.sh missing — refusing to run"; exit 1; }
@@ -2325,9 +2328,13 @@ $SLICE_CLEAN"
           # review_one_pr may use that keyword — it runs as a job, and a
           # `continue` meant for the PR loop would silently mean something
           # else here. tests/parallel-discipline.test.sh enforces it.
-          case "$f" in /*|*..*) f="" ;; esac
-          # Stripped the SAME way FINDINGS_LINE_JQ strips a finding's own
-          # .file before the lookup: a counts key left as "./a.sh" while the
+          # Bash 3.2 finds the end of this command substitution by counting
+          # parentheses and quotes, in comments too. So the pattern below
+          # keeps its leading parenthesis, and no comment here may hold a
+          # single quote or an unpaired parenthesis.
+          case "$f" in (/*|*..*) f="" ;; esac
+          # Stripped the SAME way FINDINGS_LINE_JQ strips the .file of a
+          # finding before the lookup: a counts key left as "./a.sh" while the
           # filter looks up "a.sh" never matches, so a model that writes the
           # ./ prefix would always read as "unmeasured" (kept — safe, but
           # silently un-checked).

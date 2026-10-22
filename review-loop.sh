@@ -9,6 +9,10 @@ set -uo pipefail
 GATE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$GATE_DIR" || { echo "no gate repo at $GATE_DIR"; exit 1; }
 . ./lib/loop.sh || { echo "lib/loop.sh missing — refusing to run"; exit 1; }
+. ./lib/tools.sh || { echo "lib/tools.sh missing — refusing to run"; exit 1; }
+# The round below runs under a deadline, so the loop needs a timeout command.
+tools_resolve
+[ -n "$TIMEOUT_BIN" ] || { echo "timeout(1) missing (also tried gtimeout) — refusing to run" >&2; exit 1; }
 # Once, up front: a repo list that cannot be read here (PRREVIEW_GATE_REPOS
 # unset or empty) makes every round below fail the same way, once a minute,
 # for as long as nobody looks.
@@ -159,7 +163,7 @@ while true; do
     env LC_ALL=C.UTF-8 LANG=C.UTF-8 \
         PATH="$LOOP_PATH" \
         CLAUDE_BIN="$LOOP_CLAUDE" GH_BIN="$GH" \
-        timeout -k "$ROUND_KILL_AFTER" "$ROUND_TIMEOUT" "$BASH_BIN" "$RUN_SH" > "$LOG" 2>&1 || rc=$?
+        "$TIMEOUT_BIN" -k "$ROUND_KILL_AFTER" "$ROUND_TIMEOUT" "$BASH_BIN" "$RUN_SH" > "$LOG" 2>&1 || rc=$?
     # The round above has already finished — the line is synchronous — so this
     # is cleanup, not a race. A copy outliving a KILLED driver is swept by the
     # next snapshot (loop_script_snapshot, siblings older than two hours).

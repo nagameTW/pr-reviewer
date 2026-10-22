@@ -32,6 +32,10 @@ for h in ok bad is has; do command -v "$h" >/dev/null 2>&1 || { echo "  FAIL hel
 
 . lib/prompt.sh || { echo "FAIL: could not source lib/prompt.sh"; exit 1; }
 . lib/merge.sh  || { echo "FAIL: could not source lib/merge.sh"; exit 1; }
+. lib/tools.sh  || { echo "FAIL: could not source lib/tools.sh"; exit 1; }
+# macOS without the coreutils gnubin directory has gsha256sum and no sha256sum.
+# Find the command the way the scripts do.
+tools_resolve || { echo "FAIL: no timeout command or no SHA-256 command on PATH"; exit 1; }
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -41,8 +45,10 @@ REAL_JQ="$(command -v jq)"
 # runs, so a case whose stub never ran cannot pass by doing nothing.
 STUBS="$TMP/stubs"
 mkdir -p "$STUBS/sha-exit1" "$STUBS/sha-silent" "$STUBS/jq-digest" "$STUBS/jq-head-exit1" "$STUBS/jq-head-silent"
-printf '#!/bin/bash\n: > "$STUB_FIRED"\ncat >/dev/null\nexit 1\n' > "$STUBS/sha-exit1/sha256sum"
-printf '#!/bin/bash\n: > "$STUB_FIRED"\ncat >/dev/null\nexit 0\n' > "$STUBS/sha-silent/sha256sum"
+# The stubs take the name of the hash command the scripts resolved: sha256sum
+# on Linux, gsha256sum on a Mac with coreutils but no gnubin on PATH.
+printf '#!/bin/bash\n: > "$STUB_FIRED"\ncat >/dev/null\nexit 1\n' > "$STUBS/sha-exit1/${SHA256_BIN%% *}"
+printf '#!/bin/bash\n: > "$STUB_FIRED"\ncat >/dev/null\nexit 0\n' > "$STUBS/sha-silent/${SHA256_BIN%% *}"
 # Fails only the digest call, the one that takes `--arg extra`.
 printf '#!/bin/bash\ncase "$*" in *"--arg extra"*) : > "$STUB_FIRED"; exit 5 ;; esac\nexec %q "$@"\n' "$REAL_JQ" > "$STUBS/jq-digest/jq"
 # Fails only the read of the head, `jq -r .headRefOid`: with a status, and
@@ -169,5 +175,99 @@ for head in null '' HEAD "${H40%?}"; do
   is "head '$head': gh is never called" "$([ -e "$TMP/gh-called" ] && echo yes || echo no)" no
 done
 is "head null: the merge base is not looked up either" "$(merge_base_sha owner/repo "$B40" null; echo "rc=$?")" 'rc=1'
+
+# ── golden keys: the exact key for edge-case input, through every hash tool ─
+# Each value below came from prompt_review_key as it is now. The input JSON is
+# in the test, so a reader can check a value by hand: the digest is the first
+# 12 hex digits of SHA-256 over `title \n body \n base branch \n`. A PR whose
+# base is not the default branch adds `base commit \n`. jq -r adds the last
+# newline. A change of the key shows up here as a changed value, not as a
+# silent drift.
+# Each case runs once per hash tool, with a PATH that holds only that tool,
+# jq and cut, as tests/tool-fallbacks.test.sh does.
+SHA2_BASE="$(tools_resolve >/dev/null 2>&1; [ -n "$SHA256_BIN" ] && printf '%s%s' "$(command -v "${SHA256_BIN%% *}")" "${SHA256_BIN#"${SHA256_BIN%% *}"}")"
+[ -n "$SHA2_BASE" ] || { echo "  FAIL this machine has no SHA-256 command"; echo "FAIL: review key digest"; exit 1; }
+HASHES="sha256sum gsha256sum shasum"
+for t in $HASHES; do
+  mkdir -p "$TMP/hash-$t"
+  # shasum needs -a 256 first. A call that drops it fails, as on a real Mac.
+  case "$t" in shasum) pre='[ "$1 $2" = "-a 256" ] || exit 2; shift 2; ' ;; *) pre='' ;; esac
+  printf '#!/bin/bash\n%sexec %s "$@"\n' "$pre" "$SHA2_BASE" > "$TMP/hash-$t/$t"
+  printf '#!/bin/bash\nexec %q "$@"\n' "$REAL_JQ" > "$TMP/hash-$t/jq"
+  printf '#!/bin/bash\nexec %q "$@"\n' "$(command -v cut)" > "$TMP/hash-$t/cut"
+  chmod +x "$TMP/hash-$t"/*
+done
+B2=fedcba9876543210fedcba9876543210fedcba98
+key_rc() { local out rc; tools_resolve >/dev/null 2>&1; out="$(prompt_review_key "$1" main)"; rc=$?; printf '%s:%s' "$rc" "$out"; }
+# golden NAME JSON DIGEST: @HEAD@, @BASE@ and @BASE2@ in JSON stand for full
+# SHAs. DIGEST is the 12 hex digits after the head, or empty when the key is
+# no key (status 1, nothing printed).
+golden() {
+  local t j want
+  j="${2//@HEAD@/$H40}"; j="${j//@BASE@/$B40}"; j="${j//@BASE2@/$B2}"
+  if [ -n "$3" ]; then want="0:$H40-$3"; else want='1:'; fi
+  for t in $HASHES; do
+    # hash -r: the shell must not reuse a path it learned from the full PATH.
+    # shellcheck disable=SC2123  # the PATH of this case holds one hash tool
+    is "$t alone: $1" "$(PATH="$TMP/hash-$t"; hash -r; key_rc "$j")" "$want"
+  done
+}
+
+# No base commit, or a title jq cannot join to a string: no key.
+golden 'baseRefOid missing: no key' \
+  '{"headRefOid":"@HEAD@","title":"t","body":"b","baseRefName":"main"}' ''
+golden 'baseRefOid null: no key' \
+  '{"headRefOid":"@HEAD@","title":"t","body":"b","baseRefName":"main","baseRefOid":null}' ''
+golden 'title is a number: no key' \
+  '{"headRefOid":"@HEAD@","title":42,"body":"b","baseRefName":"main","baseRefOid":"@BASE@"}' ''
+
+# An empty body, a null body and a missing body are one key.
+golden 'empty body' \
+  '{"headRefOid":"@HEAD@","title":"t","body":"","baseRefName":"main","baseRefOid":"@BASE@"}' cf0da5c8a2cf
+golden 'null body' \
+  '{"headRefOid":"@HEAD@","title":"t","body":null,"baseRefName":"main","baseRefOid":"@BASE@"}' cf0da5c8a2cf
+golden 'body missing' \
+  '{"headRefOid":"@HEAD@","title":"t","baseRefName":"main","baseRefOid":"@BASE@"}' cf0da5c8a2cf
+
+# Multi-byte characters: accented letters, math symbols and an emoji, in title
+# and body.
+golden 'accented letters, math symbols and emoji in title and body' \
+  '{"headRefOid":"@HEAD@","title":"café naïve façade 🚀","body":"∑ ∂ →\ncafé façade 🎉.","baseRefName":"main","baseRefOid":"@BASE@"}' 3fcaebfdcedb
+# The key hashes the decoded text, so the escaped and the literal emoji agree.
+golden 'emoji as a JSON surrogate pair escape' \
+  '{"headRefOid":"@HEAD@","title":"\ud83d\ude80","body":"","baseRefName":"main","baseRefOid":"@BASE@"}' 7f56826e7820
+golden 'the same emoji as literal UTF-8' \
+  '{"headRefOid":"@HEAD@","title":"🚀","body":"","baseRefName":"main","baseRefOid":"@BASE@"}' 7f56826e7820
+
+# Newlines and carriage returns reach the digest as they are.
+golden 'CRLF and LF in title and body' \
+  '{"headRefOid":"@HEAD@","title":"a\r\nb","body":"x\r\ny\nz\r","baseRefName":"main","baseRefOid":"@BASE@"}' a2aa832f6921
+# Trade-off: the digest joins title, body and base branch with a newline and
+# escapes nothing, so a newline that moves from the title into the body gives
+# the same key. Both inputs below have the digest input "a\nb\nc\nmain\n".
+golden 'title "a\nb", body "c"' \
+  '{"headRefOid":"@HEAD@","title":"a\nb","body":"c","baseRefName":"main","baseRefOid":"@BASE@"}' 5e57c96dfe27
+golden 'title "a", body "b\nc": the same key' \
+  '{"headRefOid":"@HEAD@","title":"a","body":"b\nc","baseRefName":"main","baseRefOid":"@BASE@"}' 5e57c96dfe27
+
+# Only the base changes. The base branch name is part of every digest, so a
+# PR into feat/parent has another key than a PR into main. For a stacked PR
+# the base commit is part of the digest too. For a PR into the default branch
+# it is not: that key is the same for any base commit.
+golden 'base main' \
+  '{"headRefOid":"@HEAD@","title":"t","body":"b","baseRefName":"main","baseRefOid":"@BASE@"}' 7ed1dd102b1d
+golden 'base main, another base commit: the same key' \
+  '{"headRefOid":"@HEAD@","title":"t","body":"b","baseRefName":"main","baseRefOid":"@BASE2@"}' 7ed1dd102b1d
+golden 'base feat/parent: another key than base main' \
+  '{"headRefOid":"@HEAD@","title":"t","body":"b","baseRefName":"feat/parent","baseRefOid":"@BASE@"}' ca2a8f32c314
+golden 'base feat/parent, another base commit: another key' \
+  '{"headRefOid":"@HEAD@","title":"t","body":"b","baseRefName":"feat/parent","baseRefOid":"@BASE2@"}' a657e15ac910
+
+# Only whitespace in the body changes. The body is hashed byte for byte: no
+# trimming and no folding of spaces, so a whitespace edit asks for a new review.
+golden 'body "Line one.\nLine two."' \
+  '{"headRefOid":"@HEAD@","title":"t","body":"Line one.\nLine two.","baseRefName":"main","baseRefOid":"@BASE@"}' fc7f3f63baf2
+golden 'body with two spaces before "two": another key' \
+  '{"headRefOid":"@HEAD@","title":"t","body":"Line one.\nLine  two.","baseRefName":"main","baseRefOid":"@BASE@"}' 55766796b4b3
 
 if [ "$FAILED" -eq 0 ]; then echo "PASS: review key digest"; else echo "FAIL: review key digest"; exit 1; fi

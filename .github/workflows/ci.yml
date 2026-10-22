@@ -23,3 +23,23 @@ jobs:
           shellcheck --version | sed -n 2p
           jq --version
       - run: bash tests/run-all.sh
+
+  test-macos:
+    # /bin/bash on macOS is bash 3.2, and sed, date, stat and the other tools
+    # are the BSD ones. The suite runs with that bash. The coreutils gnubin
+    # directory stays off PATH: the scripts find gtimeout and gsha256sum.
+    runs-on: macos-latest
+    # A hung test would hold the runner for the 6 hour default.
+    timeout-minutes: 20
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: 1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install tools
+        run: brew install jq gh flock shellcheck coreutils
+      - name: Tool versions
+        run: |
+          /bin/bash --version | head -1
+          shellcheck --version | sed -n 2p
+          jq --version
+      - run: /bin/bash tests/run-all.sh

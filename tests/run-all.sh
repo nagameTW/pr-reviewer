@@ -10,6 +10,30 @@ set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 
 FAILED=0
+
+# Tests and scripts start `bash` by name or by `#!/usr/bin/env bash`. Put the
+# bash that runs this file first on PATH, so that bash is the one under test
+# everywhere. On macOS a Homebrew bash can come before /bin/bash on PATH, and
+# the suite would then test that bash and not the system's 3.2.
+BASH_DIR="$(mktemp -d)" || exit 1
+ln -s "$BASH" "$BASH_DIR/bash" || exit 1
+PATH="$BASH_DIR:$PATH"
+
+# Versions first, so a failure log shows which tools produced it. A missing
+# tool is not an error here: the tests stub gh and flock, and the checks below
+# report anything a test needs and lacks.
+tool_version() {
+  local label="$1" line; shift
+  if ! command -v "$1" >/dev/null 2>&1; then printf '%-10s not found\n' "$label"; return 0; fi
+  line="$("$@" 2>&1 | head -1)"
+  printf '%-10s %s\n' "$label" "${line:-no version output}"
+}
+tool_version bash "$BASH" --version
+tool_version gh gh --version
+tool_version git git --version
+tool_version jq jq --version
+tool_version flock flock --version
+
 run() {
   printf '%-28s ' "$1"
   shift
@@ -32,7 +56,7 @@ run() {
 # is invisible to `set -e` and to pipefail, so a git that dies part way through
 # leaves a non-empty but TRUNCATED list — this runner then lints a subset and
 # prints ALL PASS. Same class as the mapfile bug above, same lesson.
-LISTF="$(mktemp)"; trap 'rm -f "$LISTF"' EXIT
+LISTF="$(mktemp)"; trap 'rm -rf "$LISTF" "$BASH_DIR"' EXIT
 git ls-files --cached --others --exclude-standard '*.sh' prreview > "$LISTF" || { echo "git ls-files failed — refusing to report a pass"; exit 1; }
 SH=()
 while IFS= read -r f; do SH+=("$f"); done < "$LISTF"
@@ -44,17 +68,18 @@ while IFS= read -r f; do SH+=("$f"); done < "$LISTF"
 # error to a script and watching this file still print ALL PASS.
 syntax_all() {
   local f rc=0
-  for f in "${SH[@]}"; do bash -n "$f" || rc=1; done
+  for f in "${SH[@]}"; do "$BASH" -n "$f" || rc=1; done
   return "$rc"
 }
 run "bash -n (${#SH[@]} scripts)" syntax_all
 
-# Lint, if the tool is present — not a hard requirement, the box may not have
-# it. (Do NOT start this comment with the linter's own name: a comment
-# beginning `# shellcheck ...` is parsed as a DIRECTIVE, and this one made the
-# file unparseable — which the tool reports as two errors against this file
-# rather than as "your comment is the problem". Found the first time the
-# linter was actually installed on the machine running this.)
+# Lint. A missing shellcheck is a failure, not a skip: a run without lint
+# looks the same as a run with clean lint, and a CI job that lost the tool
+# would stay green. (Do NOT start this comment with the linter's own name: a
+# comment beginning `# shellcheck ...` is parsed as a DIRECTIVE, and this one
+# made the file unparseable — which the tool reports as two errors against
+# this file rather than as "your comment is the problem". Found the first time
+# the linter was actually installed on the machine running this.)
 #
 # -S warning, not the default: the repo carries style/info findings
 # (SC2015's A && B || C, SC2006 backticks, SC2001 sed-vs-expansion) that are
@@ -65,11 +90,12 @@ run "bash -n (${#SH[@]} scripts)" syntax_all
 if command -v shellcheck >/dev/null; then
   run "shellcheck" shellcheck -S warning -e SC1091 "${SH[@]}"
 else
-  printf '%-28s skipped (not installed)\n' "shellcheck"
+  printf '%-28s FAIL (not installed)\n' "shellcheck"
+  FAILED=1
 fi
 
 for t in tests/*.test.sh; do
-  run "$(basename "$t")" bash "$t"
+  run "$(basename "$t")" "$BASH" "$t"
 done
 
 if [ "$FAILED" -eq 0 ]; then

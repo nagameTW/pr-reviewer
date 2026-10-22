@@ -69,7 +69,7 @@ claude_call() {
   [ "${#dirs[@]}" -gt 0 ] && dirs=(--add-dir "${dirs[@]}")
   GH_TOKEN='' GITHUB_TOKEN='' GH_ENTERPRISE_TOKEN='' GITHUB_ENTERPRISE_TOKEN='' \
   CLAUDE_CODE_DISABLE_AUTO_MEMORY=1 ENABLE_CLAUDEAI_MCP_SERVERS=false \
-    timeout "$secs" "$CLAUDE_BIN" -p --model "$model" --setting-sources "" \
+    "${TIMEOUT_BIN:-timeout}" "$secs" "$CLAUDE_BIN" -p --model "$model" --setting-sources "" \
       --tools "$tools" --strict-mcp-config --disallowedTools "mcp__*" \
       --disable-slash-commands --restricted ${dirs[@]+"${dirs[@]}"} \
       --allowedTools "$@" --output-format json
@@ -117,7 +117,7 @@ gh_version_ok() {
 # prints the version it found and the version it needs, and returns 1.
 claude_version_check() {
   local out
-  out="$(timeout "$CLAUDE_VERSION_TIMEOUT" "${CLAUDE_BIN:-claude}" --version </dev/null 2>/dev/null)"
+  out="$("${TIMEOUT_BIN:-timeout}" "$CLAUDE_VERSION_TIMEOUT" "${CLAUDE_BIN:-claude}" --version </dev/null 2>/dev/null)"
   claude_version_ok "$out" && return 0
   echo "Claude Code $CLAUDE_MIN_VERSION or later is required, and '${CLAUDE_BIN:-claude} --version' printed '${out:-nothing}'. Update it with 'claude update', then try again."
   return 1
@@ -128,7 +128,7 @@ claude_version_check() {
 # the binary (default: $GH_BIN, then gh).
 gh_version_check() {
   local gh="${1:-${GH_BIN:-gh}}" out
-  out="$(timeout "$CLAUDE_VERSION_TIMEOUT" "$gh" --version </dev/null 2>/dev/null)"
+  out="$("${TIMEOUT_BIN:-timeout}" "$CLAUDE_VERSION_TIMEOUT" "$gh" --version </dev/null 2>/dev/null)"
   gh_version_ok "$out" && return 0
   out="${out%%$'\n'*}"
   echo "gh $GH_MIN_VERSION or later is required, because older versions cannot report baseRefOid. '$gh --version' printed '${out:-nothing}'. Update gh (https://github.com/cli/cli#installation), then try again."

@@ -6,6 +6,10 @@ cd "$(dirname "$0")/.." || exit 1
 . lib/prompt.sh || { echo "FAIL: cannot source lib/prompt.sh"; exit 1; }
 # The review key needs the stacked-PR predicate and the SHA check.
 . lib/merge.sh || { echo "FAIL: cannot source lib/merge.sh"; exit 1; }
+. lib/tools.sh || { echo "FAIL: cannot source lib/tools.sh"; exit 1; }
+# macOS without the coreutils gnubin directory has gtimeout and no timeout.
+# Find the commands the way the scripts do.
+tools_resolve || { echo "FAIL: no timeout command or no SHA-256 command on PATH"; exit 1; }
 
 M="pr-reviewer"
 GATE_AUTHORS="review-bot owner"
@@ -515,8 +519,12 @@ is '...also when its base commit moves' \
    "$(prompt_review_key "$(jq -c --arg o "$B40N" '.baseRefOid = $o' <<<"$PRJ")" main)" "$V020_KEY"
 # A stacked PR: the base is not the default branch.
 STK="$(jq -c '.baseRefName = "feat/parent"' <<<"$PRJ")"
+# The v0.2.0 digest of a PR: title, body and base branch through SHA-256.
+# SHA256_BIN can hold more than one word, so it stays unquoted.
+# shellcheck disable=SC2086
+v020_digest() { jq -r '(.title // "") + "\n" + (.body // "") + "\n" + (.baseRefName // "")' <<<"$1" | $SHA256_BIN | cut -c1-12; }
 STK_KEY="$(prompt_review_key "$STK" main)"
-STK_V020="$H40-$(jq -r '(.title // "") + "\n" + (.body // "") + "\n" + (.baseRefName // "")' <<<"$STK" | sha256sum | cut -c1-12)"
+STK_V020="$H40-$(v020_digest "$STK")"
 is 'a stacked PR key keeps the <head>-<12 hex> shape' \
    "$(grep -cE "^$H40-[0-9a-f]{12}\$" <<<"$STK_KEY")" '1'
 is 'a stacked PR key is the same for the same inputs' "$(prompt_review_key "$STK" main)" "$STK_KEY"
@@ -528,7 +536,7 @@ is 'a stacked PR key changes when only its base commit moves' \
 is '...and the head part stays the head SHA' "${STK_MOVED_KEY%%-*}" "$H40"
 # The same PR read with another default branch is the other kind of PR.
 is 'the default branch decides which PR is stacked' "$(prompt_review_key "$STK" feat/parent)" \
-   "$H40-$(jq -r '(.title // "") + "\n" + (.body // "") + "\n" + (.baseRefName // "")' <<<"$STK" | sha256sum | cut -c1-12)"
+   "$H40-$(v020_digest "$STK")"
 is 'an unknown default branch counts as stacked (fail closed)' "$(prompt_review_key "$PRJ" '')" \
    "$(prompt_review_key "$(jq -c '.baseRefName = "main"' <<<"$PRJ")" '' )"
 is '...so its key is not the ordinary one' "$([ "$(prompt_review_key "$PRJ" '')" != "$V020_KEY" ] && echo differs)" 'differs'

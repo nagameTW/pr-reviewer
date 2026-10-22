@@ -160,8 +160,8 @@ run_case() {
     MODEL=""
     for w in "$@"; do export "${w?}"; done
     case "${MODEL-}" in
-      refutes) claude_call() { claude_refutes; } ;;
-      raises)  claude_call() { claude_raises; } ;;
+      (refutes) claude_call() { claude_refutes; } ;;
+      (raises)  claude_call() { claude_raises; } ;;
     esac
     "$fn" 2>&1 ) )"
 }
@@ -178,6 +178,15 @@ has 'no failure: the red team candidate is merged'          "red team raised 1 c
 has '...and counts as a second finding'                     "reached tally=1 n=2 ok=y" "$OUT"
 run_case chain "$REVIEW_BLOCK" PRREVIEW_GATE_VERIFY_LINES=1 DIFF_APPLIED=1
 has 'no failure: the line check runs and keeps a real line' "reached tally=1 n=1 ok=y" "$OUT"
+
+# bash 3.2 finds the end of "$( )" by counting parentheses and quotes. It counts
+# comments too, and a case pattern ends in a parenthesis. The run above passes
+# on bash 4 and later whatever the text is, so pin the text. Without these two
+# rules the line-count loop breaks on macOS, where the system bash is 3.2.
+LC_BLOCK="$(sed -n '/LINE_COUNTS="\$(/,/2>\/dev\/null)"$/p' pr-autoreview.sh)"
+has   'the line-count loop is found' 'LINE_COUNTS="$(' "$LC_BLOCK"
+has   'its case pattern opens with a parenthesis' 'case "$f" in (/*|*..*)' "$LC_BLOCK"
+is    'no comment inside it holds a single quote' "$(grep -c "^[[:space:]]*#.*'" <<<"$LC_BLOCK")" 0
 
 # A step with no check of its own: CLEANED is left empty, the PR is skipped.
 skipped() { # $1 label, then the case already ran

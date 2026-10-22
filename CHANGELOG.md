@@ -6,7 +6,37 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
-## [0.2.2] - 2026-10-21
+### Added
+
+- CI runs the test suite on macOS with `/bin/bash`, which is bash 3.2. The
+  job installs jq, gh, flock, shellcheck and coreutils with Homebrew and does
+  not put the coreutils `gnubin` directory on `PATH`.
+
+### Changed
+
+- `tests/run-all.sh` fails when `shellcheck` is not installed. It used to
+  skip the lint step. It prints the versions of bash, gh, git, jq and flock
+  first, and it runs every test with the bash that runs it.
+
+- The reviewer finds `gtimeout` and `gsha256sum` on its own. At startup it uses
+  `timeout` or `gtimeout` for deadlines. It uses `sha256sum`, `gsha256sum` or
+  `shasum -a 256` for the review key digest, whichever it finds first. When only
+  Homebrew's `g` names are on `PATH`, `prreview setup` on macOS no longer asks
+  you to put the coreutils `gnubin` directory on `PATH`. A machine with
+  coreutils missing but `shasum` present now passes the check too. The review
+  key is the same through all three hash commands, so no open PR is reviewed
+  again. If no timeout command or no hash command is found, the reviewer stops
+  at startup and names the missing tool.
+
+### Fixed
+
+- With `PRREVIEW_GATE_VERIFY_LINES=1`, the line-number check failed on bash
+  3.2, the bash that macOS ships. Bash 3.2 ended a command substitution at the
+  `)` of a `case` pattern and printed a syntax error. The loop that counts the
+  lines of each cited file now writes the pattern with a leading `(`. The check
+  is off by default.
+
+## [0.2.2] - 2026-10-22
 
 ### Security
 

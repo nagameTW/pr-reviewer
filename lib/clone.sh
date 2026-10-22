@@ -12,9 +12,10 @@
 # a read with nothing to wake it. The driving loop's round timeout can only
 # kill the whole round, every repo's reviews with it, so each network call
 # still gets its own bound here.
-# Every caller already refuses to start without timeout(1), so this needs no
-# fallback. -k: TERM first so git can unwind its lockfiles, KILL if it will not.
-clone_net_run() { timeout -k 10 "${PRREVIEW_CLONE_NET_TIMEOUT:-600}" "$@"; }
+# Every caller already refuses to start without a timeout command (see
+# lib/tools.sh), so this needs no fallback. -k: TERM first so git can unwind
+# its lockfiles, KILL if it will not.
+clone_net_run() { "${TIMEOUT_BIN:-timeout}" -k 10 "${PRREVIEW_CLONE_NET_TIMEOUT:-600}" "$@"; }
 
 # A git transport call under the same deadline, authenticated by gh's own
 # login. `gh repo clone` authenticates the clone, but a later plain `git fetch`
