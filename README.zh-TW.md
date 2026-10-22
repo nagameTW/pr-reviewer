@@ -12,7 +12,7 @@
 
 pr-reviewer 在使用者自己的機器上審查 pull request（請求把修改合併進專案的申請，簡稱 PR），審查時沿用使用者本人的 Claude Code（Anthropic 的 AI 寫程式工具）登入。pr-reviewer 不需要在 GitHub 上設定任何自動化功能（Action、App、webhook），也不需要 repo 的管理員權限。
 
-pr-reviewer 監看使用者列出的 repo（存放專案程式碼的位置）。每檢查這些 repo 一次，稱為一輪。一輪之中，pr-reviewer 檢查[受信任作者](docs/operations.md#whose-prs-it-reviews)開啟的 PR。PR 每出現新的 head，就以無介面模式（不開啟互動介面）呼叫 [Claude Code](https://code.claude.com/docs/en/overview) 執行審查。head 指 PR 最新的 commit（一筆程式碼修改紀錄）。審查完成後，pr-reviewer 貼出一則留言，內含審查結果（核准或要求修改）與問題清單。
+pr-reviewer 監看使用者列出的 repo（存放專案程式碼的位置）。一輪指一次完整的處理：挑出要審查的 PR，並貼出留言。一輪之中，pr-reviewer 檢查[受信任作者](docs/operations.md#whose-prs-it-reviews)開啟的 PR。PR 每出現新的 head，就以無介面模式（不開啟互動介面）呼叫 [Claude Code](https://code.claude.com/docs/en/overview) 執行審查。head 指 PR 最新的 commit（一筆程式碼修改紀錄）。審查完成後，pr-reviewer 貼出一則留言，內含審查結果（核准或要求修改）與問題清單。
 
 留言以使用者自己的 `gh`（GitHub 的命令列工具）帳號發出。若已設定 [GitHub App](docs/github-app.md)，改由該 App 發出。pr-reviewer 是一組呼叫 `gh`、`git`、`jq` 與 `claude` 的 bash（一種命令列腳本語言）腳本。真實的執行過程與留言見[展示頁](docs/demo.md)。
 
@@ -52,7 +52,7 @@ mkdir -p ~/.local/bin && ln -s ~/pr-reviewer/prreview ~/.local/bin/prreview
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc   # bash 改用 ~/.bashrc
 ```
 
-若 `~/.local/bin` 已在 `PATH` 內，略過最後一行。否則開啟新的終端機。不建立連結時，把本頁的 `prreview` 換成 `~/pr-reviewer/prreview`。在 macOS 上，不要把 clone 放在 `~/Documents` 或 iCloud Drive，背景服務無法讀取這些資料夾。
+若 `~/.local/bin` 已在 `PATH` 內，略過最後一行。否則開啟新的終端機。不建立連結時，把本頁的 `prreview` 換成 `~/pr-reviewer/prreview`。在 macOS 上，不要把 clone 放在 `~/Documents`、`~/Desktop`、`~/Downloads` 或 iCloud Drive，背景服務無法讀取這些資料夾。
 
 **2. 執行 setup。**至少列入一個自己擁有的 repo。在 **Background service** 一項回答 `n`。
 

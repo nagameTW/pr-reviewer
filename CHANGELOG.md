@@ -143,16 +143,12 @@ All notable changes to this project are recorded here. The format follows
   `docs/windows.md` hold the App and WSL2 steps. `docs/comparison.md` is new.
   The diagrams are light and dark SVGs that follow the reader's theme. They
   live in `docs/how-it-reviews.md`. A table of the 13 checklist items replaces
-  `docs/images/checks.svg`.
+  `docs/images/checks.svg`. The install details moved to `docs/install.md`.
+  `docs/operations.md` has a new section, Command rules.
 - An Approved comment has a second banner line: "Automated review, not a
   GitHub approval." A Changes requested banner is unchanged.
 - `README.zh-TW.md` uses plain wording. The body text of every diagram is
   justified.
-- The README is about 150 lines. It keeps what a new user needs to decide,
-  install and use the tool. The diagrams moved to `docs/how-it-reviews.md`,
-  and the install details moved to `docs/install.md`. `docs/operations.md`
-  has a new section, Command rules. `README.zh-TW.md` has the same structure
-  as `README.md`.
 
 ### Fixed
 
