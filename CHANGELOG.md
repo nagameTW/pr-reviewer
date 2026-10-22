@@ -6,6 +6,59 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-21
+
+### Security
+
+- A failed or partial `cat` while the reviewer built a slice could drop the
+  hunks of one file. A large diff is split into slices, and each slice is
+  built by joining part files. If `cat` failed to read or write one part,
+  for example because the disk was full, the slice was shorter but not
+  empty. The reviewer then reviewed a slice that lacked a file and gave a
+  verdict on the whole diff. This needs a failed read or write of a scratch
+  file. Now the reviewer keeps a slice only when every part is joined. If
+  one slice is lost, it reviews the whole diff in one pass.
+- A failed `jq` call could turn `request_changes` into `approve`. The
+  reviewer counts blocking findings with `jq` before the citation check,
+  before the line check and before the verdict rule. If one of those calls
+  failed, the count was empty, and the shell reads an empty count as 0. A
+  blocker that was dropped or not counted was then not seen, and a review
+  with a blocker could be approved. This needs a `jq` failure at one of
+  those steps. Now an empty count before the citation check counts as a
+  dropped blocker. An empty count before the line check skips that check.
+  An empty count in the final tally skips the PR and posts no review.
+- A failed digest step could give a review key that matched earlier
+  markers. The key is the head SHA, a dash and a 12-digit digest of the
+  title, description and base branch. If `jq`, `sha256sum` or `cut` failed
+  in the digest step, the key was the head SHA and a dash with no digest.
+  The handled check matches the key as a fixed string, so it matched every
+  marker posted for that head. The reviewer could then skip a PR whose
+  title or description had changed. This needs a tool failure in the digest
+  step. Now the reviewer prints no key unless the digest is 12 hex digits,
+  and it skips the PR when there is no key.
+- A slice plan or a part list that was cut short could drop part of a large
+  diff from the review. The reviewer packs the parts of a large diff into
+  slices, and it builds each slice from the part files its plan names. It
+  did not check whether the packing step had failed. A packer that printed
+  the first rows of the plan and then failed gave fewer slices, and those
+  slices agreed with each other, so the count check passed. A part selector
+  that printed some rows and then failed dropped a part in the same way. The
+  reviewer then gave a verdict on the whole diff after it had read a part of
+  it. This needs a failure of the packing step or of the awk call that
+  selects the parts of a slice. Now the reviewer checks the status of both.
+  It also checks that the plan holds every part of the diff once, in order.
+  On any failure it reviews the whole diff in one pass.
+- A review key without its head SHA could mark a later head as handled. The
+  key is the head SHA, a dash and a 12-digit digest. A separate `jq` call
+  reads the head SHA. If that call failed, the key was a dash and the
+  digest. If the PR had no head field, the key began with the text `null`.
+  The handled check does not match such a key against the marker of a head
+  that has its SHA. It does match a marker the reviewer posted under the
+  same fault, and a later head with the same title, description and base
+  branch was then not reviewed. This needs a failed or empty read of the head
+  in two rounds. Now the reviewer prints no key unless the head is 40
+  lowercase hex digits, and it skips the PR when there is no key.
+
 ## [0.2.1] - 2026-10-21
 
 ### Changed
@@ -166,6 +219,7 @@ All notable changes to this project are recorded here. The format follows
   maintainers. A doc finding on any other file keeps the reader the model
   gave it.
 
-[Unreleased]: https://github.com/nagameTW/pr-reviewer/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/nagameTW/pr-reviewer/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/nagameTW/pr-reviewer/releases/tag/v0.2.2
 [0.2.1]: https://github.com/nagameTW/pr-reviewer/releases/tag/v0.2.1
 [0.2.0]: https://github.com/nagameTW/pr-reviewer/releases/tag/v0.2.0

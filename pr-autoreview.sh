@@ -887,9 +887,11 @@ review_one_pr() { # $1 = PR number, $2 = the worktree the dispatcher made
   # For a stacked PR the base commit is in the hash too: a push to the parent
   # branch changes this PR's diff, so it asks for a new review. A PR into the
   # default branch keeps the v0.2.0 key (SECURITY.md, Known limits). No key
-  # means no base commit that is a full SHA, and then there is no merge base.
+  # means the head or the base commit is not a full SHA, or the digest step
+  # failed. Then there is no merge base, or the key would match a marker of
+  # another head.
   KEY="$(prompt_review_key "$INFO" "$DEFAULT_BRANCH")" \
-    || { note_skip "the base commit is missing or is not a full commit SHA, skipping (fail closed)"; return 0; }
+    || { note_skip "no review key: the head or the base commit is missing or is not a full commit SHA, or the digest step failed, skipping (fail closed)"; return 0; }
 
   HOLD_F="$(holdoff_path "$REPO" "$PR" "$KEY")" || HOLD_F=""
 
@@ -1501,7 +1503,21 @@ $SPLIT_TEXT"
   if [ "$SIZE" -gt "$CHUNK_MIN_LINES" ]; then
     SLICE_DIR="$(mktemp -d "$GATE_SCRATCH/prreview-slice-XXXX")"
     if SPLIT="$(chunk_split "$DIFF" "$SLICE_DIR")" && [ -n "$SPLIT" ]; then
-      PLAN="$(printf '%s\n' "$SPLIT" | chunk_plan "$CHUNK_TARGET_LINES" "$CHUNK_MAX")"
+      # A planner that prints a prefix and then fails gives a shorter plan,
+      # and the slices built from it match each other, so the count check
+      # below passes. Two tests close that. The planner must succeed. Its
+      # rows, with the slice column cut off, must be the rows of the split:
+      # every part once, in order. Anything else is one pass over the diff.
+      PLAN_OK=0
+      PLAN="$(printf '%s\n' "$SPLIT" | chunk_plan "$CHUNK_TARGET_LINES" "$CHUNK_MAX")" \
+        && [ "$(cut -f2- <<<"$PLAN")" = "$SPLIT" ] && PLAN_OK=1
+      # The rows of one slice go to a file, so that the status of the
+      # selector is seen. A mktemp that fails is the same as a bad plan.
+      ROWS_F="$(mktemp "$GATE_SCRATCH/prreview-slice-rows-XXXXXX")" && TMPFILES+=("$ROWS_F") || PLAN_OK=0
+      if [ "$PLAN_OK" != 1 ]; then
+        echo "PR #$PR: the slice plan is missing or does not cover every changed file — reviewing the whole diff in one pass instead"
+        PLAN=""
+      fi
       N_SLICES="$(cut -f1 <<<"$PLAN" | sort -u | grep -c .)"
       if [ "${N_SLICES:-1}" -gt 1 ]; then
         for s in $(cut -f1 <<<"$PLAN" | sort -un); do
@@ -1517,15 +1533,22 @@ $SPLIT_TEXT"
           # keeping one habit for both is how the wrong one does not get the
           # careless treatment later.
           : > "$SD"
-          while IFS= read -r part; do
-            [ -n "$part" ] && cat "$part" >> "$SD"
-          done < <(awk -F'\t' -v s="$s" '$1 == s { print $3 }' <<<"$PLAN")
-          if [ -s "$SD" ]; then
+          # A part that cannot be read or written leaves a shorter slice, and
+          # -s alone cannot tell it from a whole one. The same holds for a
+          # selector that prints some rows and then fails.
+          SD_OK=1
+          awk -F'\t' -v s="$s" '$1 == s' <<<"$PLAN" > "$ROWS_F" || SD_OK=0
+          # Newline-separated, not space-joined: a file name may contain a
+          # space, and the list is shown to the model as a fenced block
+          # where one name per line is the only unambiguous form.
+          SD_NAMES=""
+          while IFS=$'\t' read -r _ _ part name; do
+            [ -z "$part" ] || cat "$part" >> "$SD" || SD_OK=0
+            SD_NAMES="${SD_NAMES:+$SD_NAMES$'\n'}$name"
+          done < "$ROWS_F"
+          if [ "$SD_OK" = 1 ] && [ -s "$SD" ]; then
             SLICE_DIFFS+=("$SD")
-            # Newline-separated, not space-joined: a file name may contain a
-            # space, and the list is shown to the model as a fenced block
-            # where one name per line is the only unambiguous form.
-            SLICE_FILES+=("$(awk -F'\t' -v s="$s" '$1 == s { print $4 }' <<<"$PLAN")")
+            SLICE_FILES+=("$SD_NAMES")
           fi
         done
         # All or nothing. A partial slice list would review some of the diff
@@ -2250,6 +2273,13 @@ $SLICE_CLEAN"
     CLEANED="$(findings_cite "$KNOWN_F" <<<"$CLEANED")"
     N_POST="$(jq -r "$FINDINGS_BLOCKING_COUNT_JQ" <<<"$CLEANED")"
     N_ALL_POST="$(jq -r '[.findings[]?] | length' <<<"$CLEANED")"
+    # A count whose jq failed is empty, and empty reads as 0 in the sums below:
+    # a dropped blocker would go uncounted and the flip guard would be off.
+    case "$N_PRE:$N_ALL_PRE:$N_POST:$N_ALL_POST" in
+      *[!0-9:]*|:*|*::*|*:)
+        N_PRE=1; N_POST=0; N_ALL_PRE=0; N_ALL_POST=0
+        echo "PR #$PR: WARNING — could not count the findings around the citation check; treated as a dropped blocker" ;;
+    esac
     N_DROPPED_CITE=$((N_PRE - N_POST))
     N_DROPPED_ANY=$((N_ALL_PRE - N_ALL_POST))
     [ "$N_DROPPED_ANY" -gt 0 ] \
@@ -2313,6 +2343,9 @@ $SLICE_CLEAN"
       # Assigned through a temp: a jq failure here must leave the findings
       # alone, never empty them. Same direction as the caps below.
       LINE_FILTERED="$(jq -c --argjson counts "$LINE_COUNTS" "$FINDINGS_LINE_JQ" <<<"$CLEANED" 2>/dev/null)"
+      # An empty count (its jq failed) reads as 0 below and hides a dropped
+      # blocker from the flip guard: treat the check as not run.
+      case "$N_PRE_LINE:$N_ALL_PRE_LINE" in *[!0-9:]*|:*|*:) LINE_FILTERED="" ;; esac
       if [ -n "$LINE_FILTERED" ]; then
         CLEANED="$LINE_FILTERED"
         N_DROPPED_LINE=$(( N_ALL_PRE_LINE - $(jq -r '[.findings[]?] | length' <<<"$CLEANED") ))
@@ -2737,6 +2770,16 @@ $SLICE_CLEAN"
   # closed. Matching ignores case and surrounding whitespace.
   N_BLOCKING="$(jq -r "$FINDINGS_BLOCKING_COUNT_JQ" <<<"$CLEANED")"
   N_FINDINGS="$(jq -r '[.findings[]?] | length' <<<"$CLEANED")"
+  # The check above proved CLEANED is a review, not that these two jq calls
+  # worked. An empty count reads as 0 blockers below, and the verdict rule
+  # turns a request_changes whose blocker went uncounted into an approve.
+  case "$N_BLOCKING:$N_FINDINGS" in
+    *[!0-9:]*|:*|*:)
+      note_skip "the blocking tally (jq) failed — no action (fail closed)"
+      [ -n "${HOLD_F:-}" ] && holdoff_set "$HOLD_F" failed "$(date +%s)"
+      rm -f "$DIFF"
+      return 0 ;;
+  esac
   # A repaired reply counts as "we are not holding the whole list" for the flip
   # guard, exactly like a citation drop: the usual reason a review needs
   # repairing is that it was cut off mid-JSON, so the findings that survived
