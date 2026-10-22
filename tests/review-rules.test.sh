@@ -47,4 +47,12 @@ needs 'verify: a framework default alone does not refute a security-rule finding
 needs 'verify: it checks output context, allowlist matching and before-and-after behavior' lib/findings.sh \
   'Check the actual output context, what the allowlist matches, and what the protection'
 
+# ── noise list agrees with the security rules ─────────────────────────────
+needs 'noise: defence-in-depth exclusion needs an adequate primary defence' lib/review-spec.sh \
+  'defence-in-depth suggestions where the primary defence is already adequate'
+needs 'noise: a loosened protection is not defence in depth and not speculation' lib/review-spec.sh \
+  'worked before this diff, does not work after it and has no equal control left is not defence in depth and not speculation'
+needs 'noise: the loosened-protection case points at the security trace' lib/review-spec.sh \
+  'report it under the security trace'
+
 if [ "$FAILED" -eq 0 ]; then echo "PASS: review rules"; else echo "FAIL: review rules"; exit 1; fi
