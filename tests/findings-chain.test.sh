@@ -160,8 +160,8 @@ run_case() {
     MODEL=""
     for w in "$@"; do export "${w?}"; done
     case "${MODEL-}" in
-      refutes) claude_call() { claude_refutes; } ;;
-      raises)  claude_call() { claude_raises; } ;;
+      (refutes) claude_call() { claude_refutes; } ;;
+      (raises)  claude_call() { claude_raises; } ;;
     esac
     "$fn" 2>&1 ) )"
 }
