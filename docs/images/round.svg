@@ -1,141 +1,119 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 376" width="980" height="376" role="img" aria-labelledby="t d">
-  <title id="t">One review round</title>
-  <desc id="d">Seven steps: pick PRs whose head has not been reviewed, scan the title and description, build a disposable review tree, slice large diffs, review each slice with Claude, verify the findings and try to refute every blocker, then post one comment after an outbound sensitive-data scan. Anything that cannot be parsed, verified or scanned is not posted.</desc>
-  <style>
-    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #3B4252; }
-    .num { font-size: 12px; font-weight: 700; fill: #FFFFFF; }
-    .step { font-size: 15px; font-weight: 700; fill: #2E3440; }
-    .cap { font-size: 12px; fill: #4C566A; }
-    .foot { font-size: 13px; fill: #3B4252; }
-    .track { stroke: #81A1C1; stroke-width: 2; stroke-dasharray: 2 6; stroke-linecap: round; }
-    .tile { fill: #ECEFF4; stroke: #81A1C1; stroke-width: 1.2; }
-    .paper { fill: #FFFFFF; stroke: #81A1C1; stroke-width: 1.4; }
-    .l1 { fill: #81A1C1; }
-    .l2 { fill: #5E81AC; }
-    .l3 { fill: #4C566A; }
-    .acc { fill: #BF616A; }
-    .acc-s { stroke: #BF616A; fill: none; stroke-width: 2.2; }
-    .badge { fill: #4C566A; }
-  </style>
-  <rect x="1" y="1" width="978" height="374" rx="14" fill="#FFFFFF" stroke="#D8DEE9" stroke-width="2"/>
-
-  <!-- dotted track behind the icon row -->
-  <line class="track" x1="70" y1="104" x2="910" y2="104"/>
-
-  <!-- 1 Pick: rows of PRs, one with a new head -->
-  <g transform="translate(22,56)">
-    <rect class="tile" x="0" y="0" width="96" height="96" rx="14"/>
-    <rect class="paper" x="14" y="14" width="68" height="14" rx="4"/><circle class="l2" cx="23" cy="21" r="4"/>
-    <rect class="paper" x="14" y="33" width="68" height="14" rx="4"/><circle class="acc" cx="23" cy="40" r="5"/>
-    <rect class="paper" x="14" y="52" width="68" height="14" rx="4"/><circle class="l2" cx="23" cy="59" r="4"/>
-    <rect class="paper" x="14" y="71" width="68" height="14" rx="4"/><circle class="l2" cx="23" cy="78" r="4"/>
-  </g>
-  <circle class="badge" cx="34" cy="206" r="10"/><text class="num" x="30" y="210">1</text>
-  <text class="step" x="50" y="211">Pick</text>
-  <text class="cap" x="22" y="236">open PRs whose</text>
-  <text class="cap" x="22" y="252">current head it has</text>
-  <text class="cap" x="22" y="268">not commented on</text>
-
-  <!-- 2 Scan: a document with one line that would stop it -->
-  <g transform="translate(158,56)">
-    <rect class="tile" x="0" y="0" width="96" height="96" rx="14"/>
-    <rect class="paper" x="20" y="10" width="56" height="76" rx="5"/>
-    <rect class="l1" x="28" y="22" width="40" height="4" rx="2"/>
-    <rect class="l1" x="28" y="32" width="32" height="4" rx="2"/>
-    <rect class="l1" x="28" y="42" width="40" height="4" rx="2"/>
-    <rect class="acc" x="28" y="52" width="36" height="5" rx="2"/>
-    <rect class="l1" x="28" y="63" width="28" height="4" rx="2"/>
-    <rect class="l1" x="28" y="73" width="38" height="4" rx="2"/>
-  </g>
-  <circle class="badge" cx="170" cy="206" r="10"/><text class="num" x="166" y="210">2</text>
-  <text class="step" x="186" y="211">Scan</text>
-  <text class="cap" x="158" y="236">title and description</text>
-  <text class="cap" x="158" y="252">against your</text>
-  <text class="cap" x="158" y="268">sensitive-patterns</text>
-
-  <!-- 3 Build: base tree with the PR diff laid on top -->
-  <g transform="translate(294,56)">
-    <rect class="tile" x="0" y="0" width="96" height="96" rx="14"/>
-    <rect class="l1" x="14" y="62" width="60" height="12" rx="3"/>
-    <rect class="l2" x="14" y="46" width="60" height="12" rx="3"/>
-    <rect class="l3" x="14" y="30" width="60" height="12" rx="3"/>
-    <rect x="44" y="16" width="38" height="30" rx="4" fill="#FFFFFF" stroke="#BF616A" stroke-width="2.2"/>
-    <rect class="acc" x="50" y="24" width="20" height="3" rx="1.5"/>
-    <rect class="acc" x="50" y="32" width="26" height="3" rx="1.5"/>
-  </g>
-  <circle class="badge" cx="306" cy="206" r="10"/><text class="num" x="302" y="210">3</text>
-  <text class="step" x="322" y="211">Build</text>
-  <text class="cap" x="294" y="236">merge base plus the</text>
-  <text class="cap" x="294" y="252">PR diff, in a</text>
-  <text class="cap" x="294" y="268">disposable clone</text>
-
-  <!-- 4 Slice: a long diff cut into slices, one lifted out -->
-  <g transform="translate(430,56)">
-    <rect class="tile" x="0" y="0" width="96" height="96" rx="14"/>
-    <rect class="l2" x="18" y="12" width="22" height="16" rx="3"/>
-    <rect class="l2" x="18" y="32" width="22" height="16" rx="3"/>
-    <rect class="l2" x="18" y="68" width="22" height="16" rx="3"/>
-    <rect x="52" y="44" width="26" height="20" rx="3" fill="#FFFFFF" stroke="#BF616A" stroke-width="2.2"/>
-    <rect x="18" y="50" width="22" height="16" rx="3" fill="none" stroke="#81A1C1" stroke-width="1.5" stroke-dasharray="3 3"/>
-  </g>
-  <circle class="badge" cx="442" cy="206" r="10"/><text class="num" x="438" y="210">4</text>
-  <text class="step" x="458" y="211">Slice</text>
-  <text class="cap" x="430" y="236">over 300 lines: about</text>
-  <text class="cap" x="430" y="252">250 lines a slice,</text>
-  <text class="cap" x="430" y="268">up to 8, in parallel</text>
-
-  <!-- 5 Review: stacked sample sheets, one finding marked -->
-  <g transform="translate(566,56)">
-    <rect class="tile" x="0" y="0" width="96" height="96" rx="14"/>
-    <rect class="paper" x="28" y="10" width="52" height="64" rx="5" style="fill:#ECEFF4"/>
-    <rect class="paper" x="22" y="16" width="52" height="64" rx="5"/>
-    <rect class="l1" x="30" y="28" width="34" height="4" rx="2"/>
-    <rect class="l1" x="30" y="38" width="26" height="4" rx="2"/>
-    <rect class="l3" x="30" y="48" width="34" height="4" rx="2"/>
-    <circle class="acc" cx="68" cy="50" r="4.5"/>
-    <rect class="l1" x="30" y="58" width="22" height="4" rx="2"/>
-    <rect class="l1" x="30" y="68" width="30" height="4" rx="2"/>
-  </g>
-  <circle class="badge" cx="578" cy="206" r="10"/><text class="num" x="574" y="210">5</text>
-  <text class="step" x="594" y="211">Review</text>
-  <text class="cap" x="566" y="236">Claude reads the tree;</text>
-  <text class="cap" x="566" y="252">the full checklist</text>
-  <text class="cap" x="566" y="268">on every slice</text>
-
-  <!-- 6 Verify: findings list, one refuted -->
-  <g transform="translate(702,56)">
-    <rect class="tile" x="0" y="0" width="96" height="96" rx="14"/>
-    <rect class="paper" x="14" y="14" width="68" height="14" rx="4"/><rect class="l3" x="20" y="19" width="10" height="4" rx="2"/><rect class="l1" x="34" y="19" width="40" height="4" rx="2"/>
-    <rect class="paper" x="14" y="33" width="68" height="14" rx="4" style="opacity:.55"/><rect class="l1" x="20" y="38" width="54" height="4" rx="2" style="opacity:.55"/>
-    <line x1="10" y1="40" x2="86" y2="40" stroke="#BF616A" stroke-width="2.4" stroke-linecap="round"/>
-    <rect class="paper" x="14" y="52" width="68" height="14" rx="4"/><rect class="l3" x="20" y="57" width="10" height="4" rx="2"/><rect class="l1" x="34" y="57" width="34" height="4" rx="2"/>
-    <rect class="paper" x="14" y="71" width="68" height="14" rx="4"/><rect class="l2" x="20" y="76" width="10" height="4" rx="2"/><rect class="l1" x="34" y="76" width="40" height="4" rx="2"/>
-  </g>
-  <circle class="badge" cx="714" cy="206" r="10"/><text class="num" x="710" y="210">6</text>
-  <text class="step" x="730" y="211">Verify</text>
-  <text class="cap" x="702" y="236">cited files must exist;</text>
-  <text class="cap" x="702" y="252">one call per blocker</text>
-  <text class="cap" x="702" y="268">tries to refute it</text>
-
-  <!-- 7 Post: one comment with its verdict banner -->
-  <g transform="translate(838,56)">
-    <rect class="tile" x="0" y="0" width="96" height="96" rx="14"/>
-    <path d="M14 14 h68 a5 5 0 0 1 5 5 v46 a5 5 0 0 1 -5 5 h-44 l-12 11 v-11 h-12 a5 5 0 0 1 -5 -5 v-46 a5 5 0 0 1 5 -5 z" fill="#FFFFFF" stroke="#81A1C1" stroke-width="1.4"/>
-    <rect class="acc" x="18" y="22" width="4" height="14" rx="1.5"/>
-    <rect class="l3" x="26" y="25" width="44" height="4" rx="2"/>
-    <rect class="l1" x="26" y="31" width="30" height="3" rx="1.5"/>
-    <rect class="l1" x="18" y="44" width="56" height="4" rx="2"/>
-    <rect class="l1" x="18" y="54" width="48" height="4" rx="2"/>
-  </g>
-  <circle class="badge" cx="850" cy="206" r="10"/><text class="num" x="846" y="210">7</text>
-  <text class="step" x="866" y="211">Post</text>
-  <text class="cap" x="838" y="236">one comment, after</text>
-  <text class="cap" x="838" y="252">the same scan on</text>
-  <text class="cap" x="838" y="268">what goes out</text>
-
-  <!-- fail-closed footer -->
-  <rect x="22" y="296" width="936" height="60" rx="10" fill="#ECEFF4" stroke="#81A1C1" stroke-width="1.2"/>
-  <rect class="acc" x="34" y="308" width="5" height="36" rx="2.5"/>
-  <text class="foot" x="52" y="321"><tspan font-weight="700">Fails closed.</tspan> Output it cannot parse, or a sensitive-data scan that cannot run, means nothing is posted this round.</text>
-  <text class="foot" x="52" y="340">The PR is tried again later. A verdict whose post failed is kept and re-sent, without paying for a new review.</text>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 880 836" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="round-github-title round-github-desc" id="round-github-root">
+<title id="round-github-title">How one review round runs</title>
+<desc id="round-github-desc">A review round has seven steps: pick, scan, build, slice, review, verify and post. Steps 1 to 4 make no model call. A match in the scan, or a scan that cannot run, posts a Review withheld notice and the PR is not reviewed. Output that cannot be parsed is not posted.</desc>
+<defs>
+      <style>#round-github-root { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; color: #1F2328; }
+      #round-github-root .page { max-width: 1000px; width: 100%; }
+      #round-github-root .diagram-container { width: 100%; overflow-x: auto; }
+      #round-github-root .diagram-container { overflow-x: visible; }
+      #round-github-root .bg { fill: #FFFFFF; }
+      #round-github-root .edge-frame { fill: none; stroke: #818B98; stroke-width: 2; }
+      #round-github-root text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #1F2328; font-size: 12px; }
+      #round-github-root .t-name { font-size: 14px; font-weight: 600; }
+      #round-github-root .t-name-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; font-weight: 700; }
+      #round-github-root .t-sub { fill: #59636E; }
+      #round-github-root .t-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+      #round-github-root .t-eye { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; letter-spacing: .12em; fill: #59636E; }
+      #round-github-root .t-arrow { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; letter-spacing: .06em; fill: #59636E; }
+      #round-github-root .t-alert { fill: #D1242F; font-weight: 700; }
+      #round-github-root .t-chip { fill: #FFFFFF; font-weight: 700; }
+      #round-github-root .t-title { font-size: 14px; font-weight: 700; }
+      #round-github-root .mask { fill: #FFFFFF; }
+      #round-github-root .node { fill: #F6F8FA; stroke: #818B98; stroke-width: 1.2; }
+      #round-github-root .raised { fill: #FFFFFF; stroke: #818B98; stroke-width: 1; }
+      #round-github-root .hero { fill: #DDF4FF; stroke: #0969DA; stroke-width: 2.4; }
+      #round-github-root .optional { fill: none; stroke: #818B98; stroke-width: 1.2; stroke-dasharray: 5 4; }
+      #round-github-root .zone { fill: none; stroke: #818B98; stroke-width: 1; stroke-dasharray: 4 4; }
+      #round-github-root .strip { fill: #F6F8FA; stroke: #818B98; stroke-width: 1.2; }
+      #round-github-root .bar { fill: #CF222E; }
+      #round-github-root .alert-node { fill: #FFFFFF; stroke: #CF222E; stroke-width: 2; stroke-dasharray: 6 4; }
+      #round-github-root .edge { fill: none; stroke: #0969DA; stroke-width: 1.6; }
+      #round-github-root .edge-dash { fill: none; stroke: #0969DA; stroke-width: 1.4; stroke-dasharray: 5 4; }
+      #round-github-root .edge-alert { fill: none; stroke: #CF222E; stroke-width: 1.6; }
+      #round-github-root .mk { fill: #0969DA; }
+      #round-github-root .mk-alert { fill: #CF222E; }
+      #round-github-root .chip { fill: #25292E; }
+      #round-github-root .dot { fill: #1F2328; }
+      #round-github-root .bullet { fill: #59636E; }
+      #round-github-root .diamond { fill: #FFFFFF; stroke: #818B98; stroke-width: 1.4; }</style>
+<marker id="round-github-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon class="mk" points="0 0, 8 3, 0 6"/></marker>
+<marker id="round-github-arrow-alert" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon class="mk-alert" points="0 0, 8 3, 0 6"/></marker>
+</defs>
+<rect class="bg" width="880" height="836"/>
+<rect class="edge-frame" x="1" y="1" width="878" height="834" rx="8"/>
+<g transform="translate(0,-0)">
+<rect class="zone" x="24" y="24" width="832" height="402" rx="8"/>
+<text class="t-eye" x="840" y="46" text-anchor="end">NO MODEL CALL</text>
+<rect class="zone" x="24" y="450" width="832" height="178" rx="8"/>
+<text class="t-eye" x="840" y="472" text-anchor="end">MODEL CALLS</text>
+<path class="edge" d="M56,164 V180" marker-end="url(#round-github-arrow)"/>
+<path class="edge" d="M56,252 V268" marker-end="url(#round-github-arrow)"/>
+<path class="edge" d="M56,340 V356" marker-end="url(#round-github-arrow)"/>
+<path class="edge" d="M56,412 V486" marker-end="url(#round-github-arrow)"/>
+<path class="edge" d="M56,542 V558" marker-end="url(#round-github-arrow)"/>
+<path class="edge" d="M56,614 V660" marker-end="url(#round-github-arrow)"/>
+<g data-box="32 60 816 104" data-left="170">
+<rect class="raised" x="32" y="60" width="816" height="104" rx="6"/>
+<circle class="chip" cx="56" cy="82" r="12"/>
+<text class="t-chip" x="56" y="86" text-anchor="middle">1</text>
+<text class="t-name" x="80" y="87">Pick</text>
+<text class="t-sub" x="192" y="87">Open PRs that are not drafts and have no comment for the current head.</text>
+<text class="t-sub" x="192" y="103">Skips fork PRs from authors you do not trust.</text>
+<text class="t-sub" x="192" y="119">Waits if the head is unchanged and the reviewer's last comment is under 10 minutes old.</text>
+<text class="t-sub" x="192" y="135">Cause: a title, description or base edit, or a push to the parent branch of a stacked PR.</text>
+<text class="t-sub" x="192" y="151">A push to the PR branch never waits. Setting: <tspan class="t-code">PRREVIEW_GATE_PR_COOLDOWN_MIN</tspan>.</text>
+</g>
+<g data-box="32 180 816 72" data-left="170">
+<rect class="raised" x="32" y="180" width="816" height="72" rx="6"/>
+<circle class="chip" cx="56" cy="202" r="12"/>
+<text class="t-chip" x="56" y="206" text-anchor="middle">2</text>
+<text class="t-name" x="80" y="207">Scan</text>
+<text class="t-sub" x="192" y="207">Matches the title, description and linked issue text against your sensitive-patterns file.</text>
+<text class="t-sub" x="192" y="223">On a match, or if the scan cannot run, posts a "Review withheld" notice that does not</text>
+<text class="t-sub" x="192" y="239">quote the value. The PR is not reviewed and no model call is made.</text>
+</g>
+<g data-box="32 268 816 72" data-left="170">
+<rect class="raised" x="32" y="268" width="816" height="72" rx="6"/>
+<circle class="chip" cx="56" cy="290" r="12"/>
+<text class="t-chip" x="56" y="294" text-anchor="middle">3</text>
+<text class="t-name" x="80" y="295">Build</text>
+<text class="t-sub" x="192" y="295">Checks out the merge base and applies the PR diff.</text>
+<text class="t-sub" x="192" y="311">Then copies convention files (CLAUDE.md, AGENTS.md, README, CONTRIBUTING) from the default branch.</text>
+<text class="t-sub" x="192" y="327">Over 2000 changed lines or 40 files: a split request, not a review, unless exempt.</text>
+</g>
+<g data-box="32 356 816 56" data-left="170">
+<rect class="raised" x="32" y="356" width="816" height="56" rx="6"/>
+<circle class="chip" cx="56" cy="378" r="12"/>
+<text class="t-chip" x="56" y="382" text-anchor="middle">4</text>
+<text class="t-name" x="80" y="383">Slice</text>
+<text class="t-sub" x="192" y="383">Over 300 changed lines: slices of about 250 lines, up to 8, reviewed in parallel.</text>
+<text class="t-sub" x="192" y="399">300 lines or fewer: one slice.</text>
+</g>
+<g class="focal" data-box="32 486 816 56" data-left="170">
+<rect class="hero focal-r" x="32" y="486" width="816" height="56" rx="6"/>
+<circle class="chip" cx="56" cy="508" r="12"/>
+<text class="t-chip" x="56" y="512" text-anchor="middle">5</text>
+<text class="t-name" x="80" y="513">Review</text>
+<text class="t-sub" x="192" y="513">Claude Code reads the worktree with Read, Grep and Glob. It has no shell and no web tools.</text>
+<text class="t-sub" x="192" y="529">Every slice gets the checklist items that apply to the diff.</text>
+</g>
+<g data-box="32 558 816 56" data-left="170">
+<rect class="raised" x="32" y="558" width="816" height="56" rx="6"/>
+<circle class="chip" cx="56" cy="580" r="12"/>
+<text class="t-chip" x="56" y="584" text-anchor="middle">6</text>
+<text class="t-name" x="80" y="585">Verify</text>
+<text class="t-sub" x="192" y="585">Drops findings that cite a file in neither the diff nor the tree.</text>
+<text class="t-sub" x="192" y="601">One call per blocking finding, up to 6, tries to refute it. Confidence 0.8 or more is needed.</text>
+</g>
+<g data-box="32 660 816 56" data-left="170">
+<rect class="raised" x="32" y="660" width="816" height="56" rx="6"/>
+<circle class="chip" cx="56" cy="682" r="12"/>
+<text class="t-chip" x="56" y="686" text-anchor="middle">7</text>
+<text class="t-name" x="80" y="687">Post</text>
+<text class="t-sub" x="192" y="687">Escapes HTML tags, @mentions, bot commands and lookalike finding lines in model text.</text>
+<text class="t-sub" x="192" y="703">Matches the comment against your sensitive-patterns file, then posts one comment per new head.</text>
+</g>
+<g data-box="24 740 832 72"><rect class="strip" x="24" y="740" width="832" height="72" rx="6"/><rect class="bar" x="24" y="740" width="6" height="72" rx="2"/><text class="t-title" x="44" y="764">Fails closed.</text><text class="t-sub" x="44" y="784">Output that cannot be parsed means nothing is posted this round.</text><text class="t-sub" x="44" y="800">The PR is tried again later. A verdict whose post failed is kept and sent again with no new review.</text></g>
+</g>
 </svg>
