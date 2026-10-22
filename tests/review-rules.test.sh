@@ -29,6 +29,8 @@ needs 'trace: a loosened-protection finding names the responses and the new beha
   'name the affected (responses|requests).*new behavio'
 needs 'trace: loosened protection is not defence in depth' $SEC \
   'not a defen[cs]e-in-depth'
+needs 'trace: a new control that does not stop its attack is reported' $SEC \
+  '(new|added) (control|protection)[^.]*does not stop[^.]*report'
 needs 'trace: attacker path to an unparameterized query or command is CRITICAL' $SEC \
   '(attacker|untrusted).*(query|command).*not parameterized.*CRITICAL'
 needs 'trace: an admin-only value is a data or correctness finding unless the admin is a threat' $SEC \
@@ -60,6 +62,8 @@ needs 'noise: a loosened protection is not defence in depth and not speculation'
   'worked before.*no equal control.*not defen[cs]e in depth.*not speculation'
 needs 'noise: the loosened-protection case points at the security trace' lib/review-spec.sh \
   'report it under the security trace'
+needs 'noise: a new control that does not stop its attack is reported' lib/review-spec.sh \
+  '(new|added) (control|protection)[^.]*does not stop[^.]*report'
 
 # ── scope rule ────────────────────────────────────────────────────────────
 needs 'scope: moved or reformatted lines are in scope for defects the move causes' pr-autoreview.sh \
