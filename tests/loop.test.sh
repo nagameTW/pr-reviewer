@@ -193,6 +193,14 @@ stub_list "[{\"number\":1,\"author\":{\"login\":\"maint\"},\"isCrossRepository\"
 is 'a PR the round reviews counts 1 once, armed or not' \
    "$( export PRREVIEW_GATE_DISARM_AUTO_MERGE=1; count )" '3'
 
+# The round does not filter drafts before it disarms, so a skipped draft fork PR
+# with armed auto-merge is work too.
+stub_list "[{\"number\":2,\"author\":{\"login\":\"stranger\"},\"isCrossRepository\":true,\"isDraft\":true,\"autoMergeRequest\":$ARMED}]"
+is 'a skipped draft fork PR with armed auto-merge counts 1 per repo when disarm is 1' \
+   "$( export PRREVIEW_GATE_DISARM_AUTO_MERGE=1; count )" '3'
+is '...and counts 0 when disarm is 0' \
+   "$( export PRREVIEW_GATE_DISARM_AUTO_MERGE=0; count )" '0'
+
 # One list call for each repo, and it carries what the rule reads. The default
 # limit of gh is 30; the round asks for 1000, and so does the count, or a
 # trusted PR behind 30 forks would not be seen.
