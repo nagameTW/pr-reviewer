@@ -2768,8 +2768,8 @@ $SLICE_CLEAN"
         # section after it; escaped like every other model text.
         V_REFUTED_TAG="refuted (confidence $V_CONF): "
         VERIFIED_OUT="$VERIFIED_OUT
-- ~~**$(findings_escape_markup "$V_LABEL")** $(findings_escape_markup "$(one_line "${VERIFY_ISSUE[$i]:0:100}" | sed 's/[[:space:]]*$//')")~~
-  → $V_REFUTED_TAG$(findings_escape_markup "$V_REASON")"
+- ~~**$(findings_escape_markup "$V_LABEL")** $(findings_escape_prose "$(one_line "${VERIFY_ISSUE[$i]:0:100}" | sed 's/[[:space:]]*$//')")~~
+  → $V_REFUTED_TAG$(findings_escape_prose "$V_REASON")"
       elif [ -n "$V_ANS" ]; then
         # The confidence is part of the answer, not decoration: "tried to
         # refute it and failed" and "refuted it at 0.7, just under the bar"
@@ -2812,7 +2812,7 @@ $SLICE_CLEAN"
   # "MEDIUM/LOW go into a <details> fold" to appear — a literal tag there opens a
   # fold that swallows the findings, the real fold, the unverified list and
   # every notice after it.
-  SUMMARY="$(findings_escape_markup "$(jq -r '.summary // ""' <<<"$CLEANED")")"
+  SUMMARY="$(findings_escape_prose "$(jq -r '.summary // ""' <<<"$CLEANED")")"
   # Only the first sentence stays in the open; the rest of the paragraph goes
   # into a fold under it (FINDINGS_HEAD_SPLIT_JQ, the same split the findings
   # use), so the verdict and the blockers are what a reader sees first.
@@ -2833,7 +2833,7 @@ $SLICE_CLEAN"
   # Residual risk, always stated: a read-only review cannot exercise live
   # services or anything that only shows at runtime. Surfacing this keeps an
   # approve from reading as "everything was verified".
-  UNVERIFIED="$(jq -r "$FINDINGS_ESCAPE_DETAILS_JQ"' (.unverified // [])[]? | select(type == "string") | "- " + (. | esc)' <<<"$CLEANED")"
+  UNVERIFIED="$(jq -r "$FINDINGS_ESCAPE_DETAILS_JQ"' (.unverified // [])[]? | select(type == "string") | "- " + (. | prose)' <<<"$CLEANED")"
   # Blockers stay in the open; MEDIUM/LOW go behind a <details> further down.
   # Both halves come from the same CLEANED list through the same renderer, so
   # nothing is dropped and the two cannot drift — see FINDINGS_PARTITION_JQ for

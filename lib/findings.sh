@@ -1159,7 +1159,26 @@ EOF
 # shellcheck disable=SC2034  # read by the scripts that source this lib
 FINDINGS_ESCAPE_DETAILS_JQ='def esc: tostring
   | gsub("<(?<s>/?)(?<t>[Dd][Ee][Tt][Aa][Ii][Ll][Ss])"; "&lt;\(.s)\(.t)")
-  | gsub("<!--"; "&lt;!--");'
+  | gsub("<!--"; "&lt;!--");
+def prose_line: gsub("^(?<w>[[:space:]]*)/(?=[A-Za-z])"; "\(.w)\u200b/")
+  | gsub("^(?<w>[[:space:]]*)(?<b>[Bb][Oo][Rr][Ss])(?=[ \t\r:]|$)"; "\(.w)\(.b)\u200b")
+  | gsub("Automated review(?=:[ \t]*(?:✅|❌|⛔|ℹ))"; "Automated review\u200b")
+  | gsub("^(?<w>[[:space:]]*)-(?= ~~\\*\\*| \\*\\*(?:CRITICAL|HIGH|MEDIUM|LOW)\\*\\*)"; "\(.w)-\u200b");
+def prose_at: gsub("(?<![A-Za-z0-9_])@(?=[A-Za-z0-9])"; "@\u200b");
+def prose_code_lines: . as $ls
+  | (reduce range(0; $ls | length) as $i ({open: null, start: 0, code: []};
+      $ls[$i] as $l
+      | if .open == null then
+          if $i > 0 and ($l | test("^(?:`{3,}[^`]*|~{3,}.*)$"))
+          then .open = ($l | capture("^(?<f>`{3,}|~{3,})").f) | .start = $i | .code += [false]
+          else .code += [false] end
+        elif (.open as $o | $l | test("^" + (if $o[0:1] == "~" then "~" else "`" end) + "{" + ($o | length | tostring) + ",}[ \t\r]*$"))
+        then .open = null | .code += [false]
+        else .code += [true] end))
+  | if .open != null then .code[.start + 1:] |= map(false) else . end
+  | .code;
+def prose: esc | split("\n") | . as $ls | ($ls | prose_code_lines) as $code
+  | [range(0; $ls | length) as $i | $ls[$i] | prose_line | if $code[$i] then . else prose_at end] | join("\n");'
 
 # The severity shown is the NORMALISED one, so the label matches the ladder
 # that actually decided this finding's fate. Printing the raw field instead
@@ -1208,12 +1227,12 @@ FINDINGS_HEAD_SPLIT_JQ='def head_split: tostring as $t
           ($t | capture("^(?<h>[^\\n]*)\\n?(?<r>[\\s\\S]*)\\z")));
 def fold($lbl): if . == "" then "" else "\n  <details><summary>\($lbl)</summary>\n\n  " + gsub("\n"; "\n  ") + "\n  </details>" end;'
 FINDINGS_REPEAT3_NOTE='third round in a row with a blocker on this file'
-FINDINGS_RENDER_JQ="$FINDINGS_ESCAPE_DETAILS_JQ $FINDINGS_HEAD_SPLIT_JQ .findings[]? | ((.issue // \"?\") | esc | head_split) as \$s
-  | \"- **\(($FINDINGS_SEVERITY_JQ) | esc)** \((.file // \"?\") | esc):\((.line // \"?\") | esc) — \(\$s.h)$FINDINGS_NOBLOCK_TAIL_JQ\"
-    + ([\$s.r, (\"\(if .confidence then \"model confidence \((.confidence) | esc)\" else \"\" end)$FINDINGS_AREA_TAIL_JQ$FINDINGS_CAP_NOTE_JQ\(if .repeat3 then \" [$FINDINGS_REPEAT3_NOTE]\" else \"\" end)\(if .redteam then \" [raised by the red team]\" else \"\" end)\" | sub(\"^ +\"; \"\"))]
+FINDINGS_RENDER_JQ="$FINDINGS_ESCAPE_DETAILS_JQ $FINDINGS_HEAD_SPLIT_JQ .findings[]? | ((.issue // \"?\") | prose | head_split) as \$s
+  | \"- **\(($FINDINGS_SEVERITY_JQ) | esc)** \((.file // \"?\") | esc):\((.line // \"?\") | prose) — \(\$s.h)$FINDINGS_NOBLOCK_TAIL_JQ\"
+    + ([\$s.r, (\"\(if .confidence then \"model confidence \((.confidence) | prose)\" else \"\" end)$FINDINGS_AREA_TAIL_JQ$FINDINGS_CAP_NOTE_JQ\(if .repeat3 then \" [$FINDINGS_REPEAT3_NOTE]\" else \"\" end)\(if .redteam then \" [raised by the red team]\" else \"\" end)\" | sub(\"^ +\"; \"\"))]
        | map(select(. != \"\")) | join(\"\\n\\n\") | fold(\"Details\"))"
 # shellcheck disable=SC2034  # read by the scripts that source this lib
-FINDINGS_RENDER_MEDIUM_JQ="$FINDINGS_ESCAPE_DETAILS_JQ .[] | \"- **\((.file // \"?\") | esc):\((.line // \"?\") | esc)**\(if .confidence then \" (model confidence \((.confidence) | esc))\" else \"\" end) — \((.issue // \"?\") | esc)$FINDINGS_AREA_TAIL_JQ$FINDINGS_NOBLOCK_TAIL_JQ$FINDINGS_CAP_NOTE_JQ\""
+FINDINGS_RENDER_MEDIUM_JQ="$FINDINGS_ESCAPE_DETAILS_JQ .[] | \"- **\((.file // \"?\") | esc):\((.line // \"?\") | prose)**\(if .confidence then \" (model confidence \((.confidence) | prose))\" else \"\" end) — \((.issue // \"?\") | prose)$FINDINGS_AREA_TAIL_JQ$FINDINGS_NOBLOCK_TAIL_JQ$FINDINGS_CAP_NOTE_JQ\""
 # Same line without the confidence, for a read that decides nothing itself:
 # the red team's list of what round 1 already reported. It lived inline in
 # pr-autoreview.sh as a second hand-copied expression, which is how the
@@ -1253,6 +1272,33 @@ findings_escape_markup() {
     | sed -e 's|</\([Dd][Ee][Tt][Aa][Ii][Ll][Ss]\)|\&lt;/\1|g' \
           -e 's|<\([Dd][Ee][Tt][Aa][Ii][Ll][Ss]\)|\&lt;\1|g' \
           -e 's|<!--|\&lt;!--|g'
+}
+
+# The escape for model prose, as a shell function: the summary, the text of a
+# refuted finding and its reason. It is the `prose` def of
+# FINDINGS_ESCAPE_DETAILS_JQ, so the jq renderers and this function give one
+# answer. The comment holds the text under the operator's login, and a reader
+# or a bot acts on it. Each rule below puts one zero-width space (U+200B) into
+# the text, so the text keeps its look and loses its effect.
+#   - `@name` at the start of a word: GitHub notifies that person or team.
+#     It does not apply inside a closed fenced block, where `@property` is
+#     code. A block with no closing fence, or with a fence on the first line
+#     or one that is indented, counts as prose: GitHub may draw it another way.
+#   - A line that starts with `/word`: a bot reads it as a command.
+#   - A line that starts with `bors`: a merge bot reads it as a command.
+#   - `Automated review:` before a verdict emoji: it looks like the banner.
+#   - A line that starts with `- ~~**` or `- **SEV**`: the readers of a later
+#     round (lib/prompt.sh) take it for a finding of this round.
+# The last three apply inside a fenced block too, because a bot or a reader
+# matches the raw line and does not know about blocks.
+# Trade-off: an @ inside an inline code span gets the space too. The span
+# shows no change, and a copy of it holds the space.
+# Trade-off: the file field is not escaped. The next round reads the path back
+# from the comment. A path that holds @name is posted as it is.
+# Needs jq, as the rest of this library does. The input is not changed in any
+# other way than the tags that findings_escape_markup escapes.
+findings_escape_prose() {
+  printf '%s' "${1-}" | jq -Rrs "$FINDINGS_ESCAPE_DETAILS_JQ"' prose'
 }
 
 # One <details> fold of the comment body, preceded by the blank line that

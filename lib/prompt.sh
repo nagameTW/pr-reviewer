@@ -346,9 +346,11 @@ prompt_last_reviewed_head() {
 # a file whose only prior mention was a refuted finding is still a file the
 # gate has looked at, and a DIFFERENT new blocker on it must not be
 # late-capped for the refutation of the old one. Anything else in a body is
-# ignored. A quoted lookalike inside model prose can slip in; that only
-# ADDS a path to the allow-list, i.e. fails toward the gate's current
-# (uncapped) behaviour.
+# ignored. The gate escapes the model's prose when it posts, so a lookalike
+# line in a comment of this version does not start with `- `
+# (findings_escape_prose). Trade-off: a comment from an earlier version can
+# still hold one. It only ADDS a path to the allow-list, i.e. fails toward the
+# gate's current (uncapped) behaviour.
 prompt_prior_cited_files() {
   # The leading ./ strip mirrors FINDINGS_CONVERGE_JQ's normalisation of
   # the OTHER side of the comparison: a carried blocker whose path the

@@ -64,6 +64,17 @@ is 'the second pattern matches too'     "$(code 'ZEBRA-ABC')" '0'
 is 'multi-line text is scanned whole'   "$(code "$(printf 'clean line\nsecret7\n')")" '0'
 is 'an unreadable patterns file is 2, never 1' "$(scan_text "$WORK/gone" x; echo $?)" '2'
 
+# The escape for model text puts a zero-width space after an @ and before a
+# leading slash. A pattern such as @team-name must still match that text.
+ZW="$(printf '\342\200\213')"
+printf '@team-name\n^/srv/vault\n' > "$SRC"
+scan_patterns_load "$SRC" "$DEST" >/dev/null
+is 'a zero-width space inside a mention does not hide it'  "$(code "ask @${ZW}team-name")" '0'
+is '...nor one before a path at the start of a line'       "$(code "$(printf 'x\n%s/srv/vault' "$ZW")")" '0'
+is '...and clean text with a zero-width space stays clean' "$(code "ask @${ZW}other")" '1'
+printf 'secret[0-9]+\nZEBRA-[A-Z]+\n' > "$SRC"
+scan_patterns_load "$SRC" "$DEST" >/dev/null
+
 # The third answer is the point: seven of the eight call sites this replaced
 # folded grep's error status into "clean", which on an outbound scan means a
 # body nobody could check goes out as if it had been checked.
