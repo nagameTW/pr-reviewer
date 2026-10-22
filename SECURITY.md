@@ -157,6 +157,16 @@ C. The head commit H, the title, the description and the base branch name
 have not changed, so the key stays the same and no new review runs. Version
 0.3.0 will add the merge base commit ID to the key of every PR.
 
+**The cooldown limits edits, not pushes.** An edit of a PR's title,
+description or base branch changes the review key and asks for a new review. When the head
+is the same, the reviewer waits until its last comment on the PR is
+`PRREVIEW_GATE_PR_COOLDOWN_MIN` minutes old (10 by default, 0 turns it off).
+Repeated edits then cost one review per cooldown. A push is never delayed, so
+an account that can push can still start one review per push. `prreview once
+--pr` ignores the cooldown. The wait uses the time of the reviewer's last
+comment on the PR. It keeps no file. If that time cannot be read, the PR is
+reviewed.
+
 ## In scope
 
 - A PR from a fork, by an author who is not trusted, that reaches a model call

@@ -512,6 +512,10 @@ REVIEW_MODEL="${PRREVIEW_REVIEW_MODEL:-$REVIEW_MODEL_DEFAULT}"
 # next one repeats the whole review — see lib/holdoff.sh for what that cost.
 . "$SCRIPT_DIR/lib/holdoff.sh" || { echo "lib/holdoff.sh missing — refusing to run"; exit 1; }
 holdoff_knobs_ok || exit 2
+# The same-head cooldown: the decision for a PR whose title or description
+# changed on a head the reviewer just reviewed.
+. "$SCRIPT_DIR/lib/cooldown.sh" || { echo "lib/cooldown.sh missing — refusing to run"; exit 1; }
+cooldown_knob_ok || exit 2
 
 # The review-followup ticket threshold, resolved ONCE per run so every PR in
 # the round files by the same rule and a bad value is reported once. Default
@@ -3267,6 +3271,9 @@ $(findings_threshold_note "$TICKET_MIN_SEV" "${N_BELOW:-0}" "$REPO" "$PR")"
 # above, says which PR is stacked, so this check and the job compute the same
 # key with no extra call.
 PRE_FIELDS=headRefOid,isDraft,reviews,comments,title,body,baseRefName,baseRefOid
+# The cooldown skip below leaves the head unreviewed, so an armed auto-merge
+# must be readable here, as in the job.
+[ "$GATE_DISARM_AUTO_MERGE" != 1 ] || PRE_FIELDS="$PRE_FIELDS,autoMergeRequest"
 # A list that fails is not an empty repo: read as "no open PRs", a token
 # without pull-request access left every round clean and nothing reviewed.
 # One call also reads who wrote each PR and whether it comes from a fork, so
@@ -3318,7 +3325,8 @@ for PR in $OPEN_PRS; do
   # Nothing is done for a draft or an already-handled head but say so, and finding that out takes one API call, not a checkout: it
   # is decided here, before a job slot or a worktree is spent on the PR. Any
   # doubt (the call fails, the answer does not parse) falls through to the
-  # full job, which makes the same checks and fails closed on its own.
+  # full job, which makes the same checks and fails closed on its own. The
+  # cooldown below is the exception: the job does not repeat it.
   # Trade-off: the list answer is the point where trust is decided. A PR that
   # turns into a fork after the list gets this one read-only `gh pr view`. The
   # job checks trust again before the diff fetch. That PR gets no model call
@@ -3340,6 +3348,30 @@ for PR in $OPEN_PRS; do
         echo "[$REPO_KEY#$PR] PR #$PR: the reviewer has only a notice on this head, no verdict"
       fi
       continue
+    fi
+    # Same head, a changed key (title, description or base branch), and the
+    # reviewer commented a moment ago: wait for the cooldown (lib/cooldown.sh).
+    # A named PR asked for a review and gets one, so the round keeps its rule of
+    # 0 only after a verdict. A time that cannot be read does not skip, and the
+    # log says so.
+    # Trade-off: only this pre-check applies the cooldown. When its read fails,
+    # the job reviews the PR with no cooldown. That is the safe direction: one
+    # extra review, never a PR left unreviewed.
+    if [ -z "$ONCE_NUM" ]; then
+      CD_LAST="$(cooldown_last_gate_comment "$PRE" "$MARKER" "$PRIOR_AUTHORS")"
+      CD_ANSWER="$(cooldown_decide "$(jq -r '.headRefOid // ""' <<<"$PRE" 2>/dev/null)" \
+        "${CD_LAST%% *}" "${CD_LAST#* }" "$(date +%s)" "$COOLDOWN_MIN")"
+      case "$CD_ANSWER" in
+        "skip "*)
+          CD_LEFT="${CD_ANSWER#skip }"
+          echo "[$REPO_KEY#$PR] PR #$PR: same head as the reviewer's last comment, and that comment is $((10#$COOLDOWN_MIN * 60 - CD_LEFT)) s old. Waiting $CD_LEFT s more (PRREVIEW_GATE_PR_COOLDOWN_MIN=$COOLDOWN_MIN, 0 turns it off)"
+          # The head has no verdict for this key, as in the job.
+          disarm_unreviewed_auto_merge "$PRE" "$PR" \
+            || { echo "[$REPO_KEY#$PR] PR #$PR: auto-merge could not be disarmed — skipping (fail closed)"; GATE_DEGRADED=$((GATE_DEGRADED + 1)); }
+          continue ;;
+        "review unreadable-time")
+          echo "[$REPO_KEY#$PR] PR #$PR: could not read when the reviewer commented, so the cooldown does not apply to this PR" ;;
+      esac
     fi
   fi
   # Round budget — admission control for the job pool. The outer round
