@@ -150,7 +150,7 @@ is     'the merge base is looked up once' "$(grep -c 'MERGE_BASE="$(merge_base_s
 
 # Who the reviewer reads (lib/trust.sh). The list call reads the author, the
 # fork flag and the labels, and the filter runs on that one answer before any
-# per-PR call. The job looks again with its own read, and a PR it does not
+# per-PR call for a skipped PR. The job looks again with its own read, and a PR it does not
 # trust ends with `return 0` before the first model call and the first diff
 # fetch.
 pin    'the filter runs on the one list answer' 'PR_PLAN="$(trust_plan_prs "$PR_LIST" "$TRUSTED_AUTHORS" "$GATE_FORK_PRS" "$ONCE_NUM")" \' pr-autoreview.sh

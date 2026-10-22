@@ -3245,6 +3245,10 @@ for PR in $OPEN_PRS; do
   # is decided here, before a job slot or a worktree is spent on the PR. Any
   # doubt (the call fails, the answer does not parse) falls through to the
   # full job, which makes the same checks and fails closed on its own.
+  # Trade-off: the list answer is the point where trust is decided. A PR that
+  # turns into a fork after the list gets this one read-only `gh pr view`. The
+  # job checks trust again before the diff fetch. That PR gets no model call
+  # and no write.
   if PRE="$("$GH" pr view "$PR" --repo "$REPO" --json "$PRE_FIELDS" 2>/dev/null)"; then
     if [ "$(jq -r '.isDraft' <<<"$PRE" 2>/dev/null)" = true ]; then
       # A named PR must not look reviewed.
@@ -3318,6 +3322,9 @@ wait
 # and miss the 48h window; and this scan runs outside the ROUND_BUDGET
 # check, adding 1+N cheap calls after a budget-exhausted round. Both are
 # bounded by --limit 10, which covers up to 10 merges in the 48-hour window.
+# A round for a named PR (`prreview once --pr`) touches that PR only. This
+# scan reads other PRs and can comment on them, so such a round skips it.
+[ -z "$ONCE_NUM" ] || continue
 MERGED_RECENT="$("$GH" pr list --repo "$REPO" --state merged --limit 10 \
     --json number,mergedAt 2>/dev/null \
   | jq -r '.[] | select(.mergedAt > (now - 172800 | todate)) | .number' 2>/dev/null)" \

@@ -181,7 +181,7 @@ Write each login as `gh pr list --json author` prints it. Separate logins with
 spaces or commas. Letter case does not matter. To review every PR, as the
 reviewer did before this rule, set `PRREVIEW_GATE_FORK_PRS=1`.
 
-Three limits apply:
+Four limits apply:
 
 - Do not add an account only because it contributed once. List only accounts
   that you would let push to the repository.
@@ -190,6 +190,10 @@ Three limits apply:
   `pull_request_target`, a branch of the repository can carry outside text.
 - The list is a setting of the machine that runs the reviewer. When several
   maintainers each run a reviewer, each one sets the list.
+- The reviewer decides on the list it reads at the start of the repository's
+  round. If a PR turns into a fork PR after that read, the reviewer reads the
+  PR once with `gh pr view`. The review job then checks the rule again and
+  stops. That PR gets no model call and no write.
 
 ## Terms
 

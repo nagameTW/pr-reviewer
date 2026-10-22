@@ -43,11 +43,11 @@ All notable changes to this project are recorded here. The format follows
   from a fork is skipped otherwise, and nothing is posted on it. The round log
   names a skipped PR by number only. One `gh pr list` call now reads the
   number, the author, the fork flag and the labels, and the filter runs on that
-  answer before any call for a single PR. The review job checks the rule again
-  before any model call. A missing field means the PR is not trusted. Set
-  `PRREVIEW_GATE_FORK_PRS=1` to bring back the old behavior. A fork PR that
-  was open before the upgrade keeps its earlier comment, and its new heads are
-  skipped.
+  answer, so a skipped PR gets no call of its own. The review job checks the
+  rule again before any model call. A missing field means the PR is not
+  trusted. Set `PRREVIEW_GATE_FORK_PRS=1` to bring back the old behavior. A
+  fork PR that was open before the upgrade keeps its earlier comment, and its
+  new heads are skipped.
 - The reviewer finds `gtimeout` and `gsha256sum` on its own. At startup it uses
   `timeout` or `gtimeout` for deadlines. It uses `sha256sum`, `gsha256sum` or
   `shasum -a 256` for the review key digest, whichever it finds first. When only
