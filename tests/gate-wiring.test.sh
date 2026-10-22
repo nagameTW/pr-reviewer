@@ -143,6 +143,43 @@ before 'the gh version is checked before the lock' 'gh_version_check "$GH" || ex
 is     'no moving gh pr diff call is left in the gate or its libs' "$(grep -n 'pr diff' pr-autoreview.sh lib/*.sh | tr '\n' ' ')" ''
 pin    'the PR info read carries changedFiles and the base commit, from one read with the head' 'headRefOid,isDraft,reviews,comments,title,body,additions,deletions,changedFiles,autoMergeRequest,baseRefName,baseRefOid,number,author,isCrossRepository)"' pr-autoreview.sh
 pin    'the diff is fetched for the SHA the key was made from, with the file count of the same read' 'pr_diff_pinned "$REPO" "$MERGE_BASE" "$SHA" "$DIFF" "$(jq -r '"'"'.changedFiles // ""'"'"' <<<"$INFO")"' pr-autoreview.sh
+before 'the convention files are copied from the default branch after the diff is applied' 'DIFF_APPLIED=1' 'tree_force_convention_files "$REPO_DIR"' pr-autoreview.sh
+before '...and after the PR'"'"'s own convention files are reverted' 'tree_revert_convention_files "$REPO_DIR"' 'tree_force_convention_files "$REPO_DIR"' pr-autoreview.sh
+before '...and before the symlink check that follows the apply' 'tree_force_convention_files "$REPO_DIR"' 'a symlink appeared in the tree after the diff was applied' pr-autoreview.sh
+# The note about replaced convention files hangs on one condition. TREE_CONV_RE
+# matches lowercase names only, so the file list is lowercased first. Without
+# that step a PR that edits README.md gets no note, and the model is told the
+# disk holds the PR's version when it holds the default branch's. The real
+# condition runs here, on file lists in several letter cases.
+COND="$(awk '/^    if \[ "\$CONV_RC" -eq 0 \] \\$/ { p = 1 } p { print } p && /; then$/ { exit }' pr-autoreview.sh)"
+conv_note() { # $1 = PR_FILES; prints "note" or "none"
+  # shellcheck disable=SC2034  # read by the lifted condition
+  ( . lib/tree.sh; CONV_RC=0; PR_FILES="$1"
+    eval "$COND"$'\n'"echo note"$'\n'"else"$'\n'"echo none"$'\n'"fi" )
+}
+is     'the lifted condition has both lines' "$(grep -c '' <<<"$COND")" 2
+is     'the note is set for a README.md written in upper case' "$(conv_note $'src.py\nREADME.md')" note
+is     '...for Docs/Claude.MD in mixed case' "$(conv_note 'Docs/Claude.MD')" note
+is     '...for .Claude/Skills/X/SKILL.md' "$(conv_note '.Claude/Skills/X/SKILL.md')" note
+is     '...and not for a file that is no convention file' "$(conv_note $'src.py\ndocs/guide.txt')" none
+pin    'the note says that a path the default branch lacks is absent from the tree' 'a path the default branch does not have is absent from the tree' pr-autoreview.sh
+# A skipped PR must not review on rules the author wrote. Each call that
+# replaces the convention files ends in a skip arm, and the arm ends the job.
+# The real two lines of each call run here with a function that fails.
+n_calls=0
+while IFS=: read -r ln _; do
+  n_calls=$((n_calls + 1))
+  SNIP="$(sed -n "${ln},$((ln + 1))p" pr-autoreview.sh)"
+  # shellcheck disable=SC2034  # read by the lifted call
+  out="$( ( PR=5; TREE_CONV_ERR="boom"; REPO_DIR=x; DEFAULT_BRANCH=main
+            tree_force_convention_files() { return 1; }
+            note_skip() { echo "skip $PR: $1"; }
+            f() { eval "$SNIP"; echo reached; }
+            f; echo "RC=$?" ) 2>&1 )"
+  has    "call at line $ln: the PR is skipped, closed on failure" 'skip 5: boom, skipping (fail closed)' "$out"
+  case "$out" in *reached*) bad "call at line $ln: the review does not go on" "$out";; *) ok "call at line $ln: the review does not go on";; esac
+done < <(grep -n 'tree_force_convention_files "\$REPO_DIR" "origin/\$DEFAULT_BRANCH"' pr-autoreview.sh)
+is     'both calls were checked' "$n_calls" 2
 before 'the merge base is resolved from the two commit IDs, before the diff is fetched' 'MERGE_BASE="$(merge_base_sha "$REPO" "$PR_BASE_OID" "$SHA")"' 'pr_diff_pinned "$REPO"' pr-autoreview.sh
 before 'the diff is fetched before it is applied to the tree' 'pr_diff_pinned "$REPO"' 'APPLY_ERR="$(git -C "$REPO_DIR" apply' pr-autoreview.sh
 before 'the file list exists before anything reads it' 'pr_diff_pinned "$REPO"' 'REVIEW_CHECKS="$(review_checks_render' pr-autoreview.sh
