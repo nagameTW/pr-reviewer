@@ -35,6 +35,8 @@ All notable changes to this project are recorded here. The format follows
   They hold the install steps, the trust, cost and limits text, and the demo
   recording with the example comment. `docs/zh-TW/diagrams.md` holds the
   diagrams for `README.zh-TW.md`.
+- `docs/comparison.md` lists the official options for security review.
+- `tests/review-rules.test.sh` checks the key ideas of the review rules.
 
 ### Changed
 
@@ -157,6 +159,12 @@ All notable changes to this project are recorded here. The format follows
   GitHub approval." A Changes requested banner is unchanged.
 - `README.zh-TW.md` uses plain wording. The body text of every diagram is
   justified.
+- The security checklist has four new trace rules: control placement, whole-value
+  allowlists, loosened protections, and SQL or shell interpolation.
+- The verifier and the noise list no longer drop those findings.
+- Moved or reformatted lines are in scope only for defects the move causes.
+- The correctness checks add a null check rule and a call target rule.
+- One finding is one defect, with every location listed.
 
 ### Fixed
 

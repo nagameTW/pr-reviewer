@@ -1980,14 +1980,14 @@ $REVIEW_CHECKS
 
 Do NOT report (discarded as noise): $REVIEW_NOISE_LIST
 
-Scope: a finding must be about something THIS diff introduces, changes, or leaves broken. In scope, and not an exception to search for reasons to skip: the added and modified lines; an existing caller, test, doc, or config the change breaks or leaves describing the old behaviour; unchanged code cited because the exploit path or the regression runs through it. Out of scope: a pre-existing problem this PR neither touches nor affects — at most one line in the summary, never a finding.
+Scope: a finding must be about something THIS diff introduces, changes, or leaves broken. In scope, and not an exception to search for reasons to skip: the added and modified lines; an existing caller, test, doc, or config the change breaks or leaves describing the old behaviour; unchanged code cited because the exploit path or the regression runs through it. Out of scope: a pre-existing problem this PR neither touches nor affects — at most one line in the summary, never a finding. Added lines that were moved or only reformatted stay in scope only for defects the move causes, such as changed visibility, imports, initialization order, callers or a lost guard. An old defect that the move carries over unchanged is out of scope, like other pre-existing code.
 
 Report every finding you have, at every severity, whatever your confidence — do NOT hold one back to keep the list short or clean. Put your honest number in the confidence field: nothing is filtered by it, and the number is shown to the human who reads the result, so it is how you say \"I am not certain\" without withholding. What the severity does decide: $REVIEW_CRITICAL_RULE; HIGH blocks unless the finding's kind is wording or judgment (the harness caps those to MEDIUM); MEDIUM and LOW never block. Every finding is listed on the PR whatever its severity$REVIEW_TICKET_CLAUSE. A finding you are unsure of costs a line in the review; one you withhold is lost for good. $REVIEW_HALF_SURE
 
 $REVIEW_KIND_SPEC wording, judgment and half_fix never block (except at CRITICAL, which no kind can unblock): the harness caps them at MEDIUM and they stay in the PR comment carrying their original severity.
 
 $REVIEW_AREA_SPEC
-Pattern completeness — when a finding is one instance of a repeated pattern, name EVERY instance in THIS round: one finding whose issue text lists all the file:line sites. A later round must not open a new blocker for another instance of a pattern already reported.
+Pattern completeness — when a finding is one instance of a repeated pattern, name EVERY instance in THIS round: one finding whose issue text lists all the file:line sites. A later round must not open a new blocker for another instance of a pattern already reported. One finding is one defect that one fix removes. List every location of that defect as path:line in that finding. Two defects that need two fixes are two findings.
 Scope discipline — an improvement beyond what the linked issue asked, when this diff did not break the thing, is MEDIUM at most; and a direction an earlier round of THIS gate recommended is in scope by definition — never block it as scope creep.
 
 Every finding must be actionable: name the concrete failure it causes and the direction of the fix, anchored to file:line.
