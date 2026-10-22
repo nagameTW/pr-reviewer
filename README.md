@@ -663,8 +663,11 @@ in. To go back to your own account, run `prreview setup` and pick 1 at "Who post
 Switching from your account to an App changes whose comments count as the
 reviewer's own: the next round finds no comment from the App on any open PR
 and reviews every one of them again. Switching back does the same for the
-heads the App already commented on: the reviewer logs a warning for each of
-them, then reviews it once with your account.
+heads where the App left one comment: the reviewer logs a warning for each of
+them, then reviews it once with your account. A head where the App left two
+comments or more (a verdict and a notice, say) counts as handled. The reviewer
+logs a warning for it every round, and reviews it again after the author
+pushes.
 
 ## Windows
 
@@ -755,7 +758,10 @@ works in place of the loop, and a lock stops two rounds from overlapping.
    description and base branch (for a stacked PR, also the base commit), and
    only comments by the reviewer's own account count. A comment from another
    App that carries the marker gets a `WARNING` line in the log, and the head
-   is reviewed anyway. A PR on hold after a
+   is reviewed anyway. Two such comments on one head mean the list of App
+   logins is probably wrong (`PRREVIEW_REVIEW_APP_SLUG`). The head then counts
+   as handled: no review, no model call, and a `WARNING` line in the log
+   every round. A PR on hold after a
    failure waits out its hold (see [When something fails](#when-something-fails)).
 2. **Scan.** Check the PR's title and description against your
    sensitive-patterns file. A hit stops the review of that PR. The title and

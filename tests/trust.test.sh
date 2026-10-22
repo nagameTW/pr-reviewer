@@ -431,6 +431,70 @@ is '...the job goes on: it asks for the merge base' \
    "$([ "$(grep -c '^api repos/owner/repo/compare/' "$T/gh.calls")" -ge 1 ] && echo yes || echo no)" yes
 rm -f "$T/view-2.json"
 
+# Two such comments make a bound. With a wrong login list, the reviewer cannot
+# know its own comments. Each round would see a marker from "another" App,
+# review again and post again, for as long as the list stays wrong. At two
+# comments the head counts as handled: no review, no model call, one WARNING
+# line that names the setting. The round ends well, as it does for a handled
+# head, and a named round exits 75 because the PR has no verdict.
+ECHO_BOTS="[{\"author\":{\"login\":\"ci-helper[bot]\"},\"body\":\"<!-- pr-reviewer $KEY2 -->\\n\\n> **Automated review: ✅ Approved**\",\"createdAt\":\"2026-01-01T00:00:00Z\"},
+ {\"author\":{\"login\":\"ci-helper[bot]\"},\"body\":\"<!-- pr-reviewer $KEY2 -->\\n\\n> **Automated review: ✅ Approved**\",\"createdAt\":\"2026-01-02T00:00:00Z\"}]"
+view2 "$ECHO_BOTS" false > "$T/view-2.json"
+OUT="$(run_gate PRREVIEW_ONCE_PR=owner/repo#2)"
+has 'two markers from an unlisted App: the log has a WARNING line' "$OUT" 'PR #2: WARNING: 2 comments from ci-helper[bot] carry the marker of this head'
+has '...it says the App login list is probably wrong'        "$OUT" 'probably wrong'
+has '...and names the setting'                               "$OUT" 'PRREVIEW_REVIEW_APP_SLUG'
+is '...with no model call'                                   "$(grep -vc '^--version$' "$T/claude.calls")" 0
+is '...no merge base and no diff fetch'                      "$(grep -c '^api ' "$T/gh.calls")" 0
+is '...and no post, review or issue'                         "$(grep -cE '^(pr comment|pr review|issue )' "$T/gh.calls")" 0
+is '...the dispatcher stops it: one read of the PR'          "$(viewed 2)" 1
+has '...a named round exits 75'                              "$OUT" 'rc=75'
+has '...and says that the PR was not reviewed'               "$OUT" 'owner/repo#2 was not reviewed'
+OUT="$(run_gate PRREVIEW_GATE_TRUSTED_AUTHORS=mallory)"
+has 'the same head in a round with no named PR: the WARNING line is there' "$OUT" 'PR #2: WARNING: 2 comments from ci-helper[bot]'
+has '...and the round ends well'                             "$OUT" 'rc=0'
+is '...with no model call'                                   "$(grep -vc '^--version$' "$T/claude.calls")" 0
+is '...and no worktree: the job does not start'              "$(viewed 2)" 1
+# The job reads the PR again, and a comment can land between the two reads.
+view2 '[]' false > "$T/view-2.1.json"; view2 "$ECHO_BOTS" false > "$T/view-2.2.json"; rm -f "$T/view-2.json"
+OUT="$(run_gate PRREVIEW_GATE_TRUSTED_AUTHORS=mallory)"
+has 'two markers that only the job sees: the job writes the WARNING line' "$OUT" '[owner__repo#2] PR #2: WARNING: 2 comments from ci-helper[bot]'
+is '...with no model call'                                   "$(grep -vc '^--version$' "$T/claude.calls")" 0
+is '...and no merge base'                                    "$(grep -c '^api ' "$T/gh.calls")" 0
+has '...and the round ends well'                             "$OUT" 'rc=0'
+rm -f "$T/view-2.1.json" "$T/view-2.2.json"
+# One marker from each of two Apps is two comments too.
+TWO_APPS="[{\"author\":{\"login\":\"a-bot[bot]\"},\"body\":\"<!-- pr-reviewer $KEY2 -->\",\"createdAt\":\"2026-01-01T00:00:00Z\"},
+ {\"author\":{\"login\":\"app/b-bot\"},\"body\":\"<!-- pr-reviewer $KEY2 -->\",\"createdAt\":\"2026-01-02T00:00:00Z\"}]"
+view2 "$TWO_APPS" false > "$T/view-2.json"
+OUT="$(run_gate PRREVIEW_GATE_TRUSTED_AUTHORS=mallory)"
+has 'two Apps with one marker each: the same bound'          "$OUT" 'PR #2: WARNING: 2 comments from '
+is '...with no model call'                                   "$(grep -vc '^--version$' "$T/claude.calls")" 0
+# Persons are not Apps. Two copies of the marker by a person do not stop a review.
+TWO_PERSONS="[{\"author\":{\"login\":\"mallory\"},\"body\":\"<!-- pr-reviewer $KEY2 -->\",\"createdAt\":\"2026-01-01T00:00:00Z\"},
+ {\"author\":{\"login\":\"mallory\"},\"body\":\"<!-- pr-reviewer $KEY2 -->\",\"createdAt\":\"2026-01-02T00:00:00Z\"}]"
+view2 "$TWO_PERSONS" false > "$T/view-2.json"
+rm -rf "$T/hold2"; mkdir -p "$T/hold2"
+OUT="$(run_gate PRREVIEW_GATE_TRUSTED_AUTHORS=mallory PRREVIEW_GATE_HOLDOFF_DIR="$T/hold2")"
+lacks 'two copies of the marker by a person: no WARNING line'   "$OUT" 'WARNING: '
+is '...and the job goes on: it asks for the merge base' \
+   "$([ "$(grep -c '^api repos/owner/repo/compare/' "$T/gh.calls")" -ge 1 ] && echo yes || echo no)" yes
+# The bound ends the review, not the guard on auto-merge: the head may never
+# have been reviewed by this gate.
+view2 "$ECHO_BOTS" false | jq -c --argjson a "$ARMED" '.autoMergeRequest = $a' > "$T/view-2.json"
+OUT="$(run_gate PRREVIEW_GATE_DISARM_AUTO_MERGE=1 PRREVIEW_GATE_TRUSTED_AUTHORS=mallory)"
+is 'the bound, disarm on: an armed auto-merge is disarmed once' \
+   "$(grep -c '^pr merge 2 --repo owner/repo --disable-auto$' "$T/gh.calls")" 1
+is '...by the dispatcher: one read of the PR'                 "$(viewed 2)" 1
+is '...with no model call'                                   "$(grep -vc '^--version$' "$T/claude.calls")" 0
+OUT="$(run_gate PRREVIEW_GATE_TRUSTED_AUTHORS=mallory)"
+is 'the bound, disarm off: no merge call'                    "$(merges)" 0
+view2 '[]' false > "$T/view-2.1.json"; view2 "$ECHO_BOTS" false | jq -c --argjson a "$ARMED" '.autoMergeRequest = $a' > "$T/view-2.2.json"; rm -f "$T/view-2.json"
+OUT="$(run_gate PRREVIEW_GATE_DISARM_AUTO_MERGE=1 PRREVIEW_GATE_TRUSTED_AUTHORS=mallory)"
+is 'the bound seen only by the job, disarm on: disarmed once' \
+   "$(grep -c '^pr merge 2 --repo owner/repo --disable-auto$' "$T/gh.calls")" 1
+rm -f "$T/view-2.1.json" "$T/view-2.2.json" "$T/view-2.json"
+
 # ── the post-merge scan ───────────────────────────────────────────────────
 # The scan reads the merged PRs of the last 48 hours. It comments on a merged
 # PR, fork or not, only when the reviewer's own last comment there is a blocking

@@ -105,8 +105,14 @@ All notable changes to this project are recorded here. The format follows
   on its first line, stopped the review of that head for good. The marker is
   computed from public fields, and a bot that repeats a command can print it.
   Now the reviewer writes a `WARNING` line to the log and reviews the head.
-  After a switch from a GitHub App back to your own account, each head the
-  App commented on gets one new review, and the log has a warning for it.
+  After a switch from a GitHub App back to your own account, each head with
+  one App comment gets one new review, and the log has a warning for it.
+  A wrong App login list would repeat that review every round. So two such
+  comments on one head are a bound. The reviewer then treats the head as
+  handled until the next push: no review, no model call, no job, and one
+  `WARNING` line that says the list of App logins is probably wrong and names
+  `PRREVIEW_REVIEW_APP_SLUG`. The guard on an armed auto-merge still runs. A
+  comment from a person never counts toward the bound.
 
 ### Security
 
@@ -139,8 +145,7 @@ All notable changes to this project are recorded here. The format follows
 - The reviewer escapes the model's words before it posts them. A pull request
   can steer those words, and they go out under the reviewer's login. In the
   summary, the findings, the follow-up tickets and the refutation notes, the
-  reviewer now puts a zero-width space into an `@name` (so it does not
-  notify), a line that starts with `/command` or `bors` (so a bot does not
+  reviewer now puts a zero-width space into an `@name` (so it does not notify), a line that starts with `/command` or `bors` (so a bot does not
   read a command), the words `Automated review:` before a verdict emoji (so
   they do not look like the banner), and a line that starts with `- **HIGH**`
   or `- ~~**` (so a later round does not read it as a finding). An `@` in a

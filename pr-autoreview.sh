@@ -1004,12 +1004,22 @@ review_one_pr() { # $1 = PR number, $2 = the worktree the dispatcher made
   # The key comes from public fields, and a bot can repeat text that a person
   # wrote, so the marker does not prove that the reviewer posted it. Write a
   # warning and review the head. If the App is the reviewer's own and the login
-  # list is wrong, the head is reviewed again each round until the list is
-  # right.
-  # Trade-off: a wrong REVIEW_APP_SLUG costs one review per round for each such
-  # head. The old rule skipped the head and let a bot stop its review.
+  # list is wrong, the reviewer cannot know its own comments. Each round would
+  # then review and post again. At PROMPT_FOREIGN_APP_LIMIT such comments the
+  # head counts as handled instead: no review, no model call, one WARNING line.
+  # The auto-merge guard above has already run. The dispatcher asks the same
+  # question (prompt_foreign_app_bound), so a round does not start a job.
+  # Trade-off: a wrong REVIEW_APP_SLUG costs one review for each such head,
+  # then the bound stops it. The old rule skipped the head after one comment
+  # and let a bot stop its review.
+  # Trade-off: that many comments from Apps that are not the reviewer also stop
+  # the review of a head.
   FOREIGN_APPS="$(prompt_foreign_app_authors "$INFO" "$MARKER $KEY" "$PRIOR_AUTHORS")"
   if [ -n "$FOREIGN_APPS" ]; then
+    if prompt_foreign_app_bound "$INFO" "$MARKER $KEY" "$PRIOR_AUTHORS"; then
+      echo "PR #$PR: $(prompt_foreign_app_warning "$(prompt_foreign_app_count "$INFO" "$MARKER $KEY" "$PRIOR_AUTHORS")" "$FOREIGN_APPS" "$PRIOR_AUTHORS")"
+      return 0
+    fi
     echo "PR #$PR: WARNING: a comment from $FOREIGN_APPS carries the marker of this head. $FOREIGN_APPS is not in the list of reviewer logins ($PRIOR_AUTHORS). The reviewer ignores that comment and reviews the head. If $FOREIGN_APPS is your own App, check PRREVIEW_REVIEW_APP_SLUG."
   fi
 
@@ -3270,7 +3280,7 @@ $(findings_threshold_note "$TICKET_MIN_SEV" "${N_BELOW:-0}" "$REPO" "$PR")"
 # because a stacked PR's key holds it. DEFAULT_BRANCH, read once for this repo
 # above, says which PR is stacked, so this check and the job compute the same
 # key with no extra call.
-PRE_FIELDS=headRefOid,isDraft,reviews,comments,title,body,baseRefName,baseRefOid
+PRE_FIELDS=headRefOid,isDraft,reviews,comments,title,body,baseRefName,baseRefOid,autoMergeRequest
 # A list that fails is not an empty repo: read as "no open PRs", a token
 # without pull-request access left every round clean and nothing reviewed.
 # One call also reads who wrote each PR and whether it comes from a fork, so
@@ -3343,6 +3353,17 @@ for PR in $OPEN_PRS; do
       else
         echo "[$REPO_KEY#$PR] PR #$PR: the reviewer has only a notice on this head, no verdict"
       fi
+      continue
+    fi
+    # The same bound as the job (see review_one_pr): a head with this many
+    # comments from Apps outside the reviewer's list is not reviewed, so no
+    # job and no worktree is made for it. The job still guards auto-merge on a
+    # head it did not review, so this does the same.
+    if PRE_KEY="$(prompt_review_key "$PRE" "$DEFAULT_BRANCH")" \
+       && prompt_foreign_app_bound "$PRE" "$MARKER $PRE_KEY" "$PRIOR_AUTHORS"; then
+      echo "[$REPO_KEY#$PR] PR #$PR: $(prompt_foreign_app_warning "$(prompt_foreign_app_count "$PRE" "$MARKER $PRE_KEY" "$PRIOR_AUTHORS")" "$(prompt_foreign_app_authors "$PRE" "$MARKER $PRE_KEY" "$PRIOR_AUTHORS")" "$PRIOR_AUTHORS")"
+      disarm_unreviewed_auto_merge "$PRE" "$PR" \
+        || note_skip "auto-merge could not be disarmed — skipping (fail closed)"
       continue
     fi
   fi

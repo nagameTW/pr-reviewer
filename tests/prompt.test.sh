@@ -343,6 +343,26 @@ is 'foreign apps: a person copying the marker is not an App' \
    "$(prompt_foreign_app_authors '{"comments":[{"author":{"login":"mallory"},"body":"<!-- pr-reviewer k1 -->"}]}' 'pr-reviewer k1' "$GATE_AUTHORS")" ''
 is 'foreign apps: unparseable input yields nothing' \
    "$(prompt_foreign_app_authors 'not json' 'pr-reviewer k1' "$GATE_AUTHORS")" ''
+# The count is of comments, not of logins: a reviewer with a wrong login list
+# posts each round from one login, and the bound must still be reached.
+is 'foreign count: two comments from one App count 2' \
+   "$(prompt_foreign_app_count "$FOREIGN_MIX" 'pr-reviewer k1' "$GATE_AUTHORS")" 2
+is 'foreign count: one comment counts 1' \
+   "$(prompt_foreign_app_count '{"comments":[{"author":{"login":"x[bot]"},"body":"<!-- pr-reviewer k1 -->"}]}' 'pr-reviewer k1' "$GATE_AUTHORS")" 1
+is 'foreign count: a review and a comment both count' \
+   "$(prompt_foreign_app_count '{"reviews":[{"author":{"login":"app/x"},"body":"<!-- pr-reviewer k1 -->"}],"comments":[{"author":{"login":"x[bot]"},"body":"<!-- pr-reviewer k1 -->"}]}' 'pr-reviewer k1' "$GATE_AUTHORS")" 2
+is 'foreign count: a listed App adds nothing' \
+   "$(prompt_foreign_app_count "$FOREIGN_MIX" 'pr-reviewer k1' "$GATE_AUTHORS newreview-bot")" 0
+is 'foreign count: persons and other keys add nothing' \
+   "$(prompt_foreign_app_count '{"comments":[{"author":{"login":"mallory"},"body":"<!-- pr-reviewer k1 -->"},{"author":{"login":"mallory"},"body":"<!-- pr-reviewer k1 -->"},{"author":{"login":"y[bot]"},"body":"<!-- pr-reviewer k0 -->"}]}' 'pr-reviewer k1' "$GATE_AUTHORS")" 0
+is 'foreign count: unparseable input counts 0' \
+   "$(prompt_foreign_app_count 'not json' 'pr-reviewer k1' "$GATE_AUTHORS")" 0
+is 'foreign bound: two comments reach it' \
+   "$(prompt_foreign_app_bound "$FOREIGN_MIX" 'pr-reviewer k1' "$GATE_AUTHORS" && echo hit || echo miss)" hit
+is 'foreign bound: one comment does not' \
+   "$(prompt_foreign_app_bound '{"comments":[{"author":{"login":"x[bot]"},"body":"<!-- pr-reviewer k1 -->"}]}' 'pr-reviewer k1' "$GATE_AUTHORS" && echo hit || echo miss)" miss
+is 'foreign bound: unparseable input does not' \
+   "$(prompt_foreign_app_bound 'not json' 'pr-reviewer k1' "$GATE_AUTHORS" && echo hit || echo miss)" miss
 
 is 'prior incomplete: an ordinary verdict body is not' \
    "$(prompt_prior_incomplete 'summary and findings, all in order' && echo hit || echo miss)" 'miss'

@@ -146,6 +146,14 @@ that repeats text can print it. The reviewer writes a warning to the log and
 reviews the head. Only comments from the reviewer's own login count as its
 earlier reviews.
 
+If a wrong list of App logins (`PRREVIEW_REVIEW_APP_SLUG`) hides the
+reviewer's own comments, the same review would repeat every round. So the
+reviewer stops at two such comments on one head. It treats the head as
+handled: no review, no model call, and one `WARNING:` line in the log that
+names the setting. A person cannot reach this bound, because only comments
+from App logins count. Two comments from an App that is not the reviewer therefore stop the
+review of that head, until its author pushes again. The guard on an armed auto-merge still runs for such a head.
+
 **The App token is for one repository.** When the reviewer posts as a GitHub
 App, it asks for an installation token for the repository of the PR only, and
 not for every repository the App is installed on.
