@@ -28,9 +28,14 @@ All notable changes to this project are recorded here. The format follows
   skips PRs prints one `WARNING:` line with the count.
 - `README.zh-TW.md` is a translation of `README.md`. It states the same
   facts.
+- `docs/how-it-reviews.md` lists the 13 checklist items with their default
+  severities, the security standards they cite, and what the reviewer does not
+  cover.
 
 ### Changed
 
+- `checks/02-security.md` states CC BY 3.0 for the OWASP Top 10:2025 page. It
+  said CC BY-SA 4.0.
 - `tests/run-all.sh` fails when `shellcheck` is not installed. It used to
   skip the lint step. It prints the versions of bash, gh, git, jq and flock
   first, and it runs every test with the bash that runs it.

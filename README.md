@@ -312,6 +312,8 @@ CRITICAL and HIGH findings block. MEDIUM and LOW findings are listed and do not
 block. "Block" only decides the verdict text. You can
 [add, remove or change items](docs/configuration.md#adding-your-own-checks).
 The [checks/](checks/) folder has the full text of each item.
+[What pr-reviewer looks at](docs/how-it-reviews.md) explains each item,
+the security standards it cites, and what it does not cover.
 
 One round has seven steps. The first four steps make no model call.
 

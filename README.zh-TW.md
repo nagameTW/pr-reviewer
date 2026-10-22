@@ -248,7 +248,7 @@ pr-reviewer 不回報以下項目：
 - linter（程式碼風格檢查工具）已強制規範的風格問題。
 - 讚美。
 
-CRITICAL 與 HIGH 的問題會擋下核准。MEDIUM 與 LOW 的問題只列出，不擋下核准。「擋下核准」只決定審查結果的文字。使用者可以[新增、移除或修改項目](docs/configuration.md#adding-your-own-checks)。每個項目的完整內容見 [checks/](checks/) 資料夾。
+CRITICAL 與 HIGH 的問題會擋下核准。MEDIUM 與 LOW 的問題只列出，不擋下核准。「擋下核准」只決定審查結果的文字。使用者可以[新增、移除或修改項目](docs/configuration.md#adding-your-own-checks)。每個項目的完整內容見 [checks/](checks/) 資料夾。[pr-reviewer 的審查內容](docs/how-it-reviews.md)說明每個項目、各項引用的安全標準，以及不審查的範圍。
 
 一輪有七個步驟，前四個步驟不呼叫模型。
 
