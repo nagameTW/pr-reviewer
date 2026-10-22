@@ -152,7 +152,7 @@ case "$1 $2" in
   "repo view") r="${3#https://github.com/}"; [ "$r" != me/old ] || r=me/new
                case "$r" in me/*|acme/*) echo "$r" ;; *) exit 1 ;; esac ;;
   "config get") echo "${FAKE_GH_PROTOCOL:-https}" ;;
-  "config set") echo "$*" >> "${FAKE_GH_SET_LOG:-/dev/null}" ;;
+  "config set") echo "$*" >> "${FAKE_GH_SET_LOG:-/dev/null}"; echo "gh config set" >> "${FAKE_ORDER_LOG:-/dev/null}" ;;
   *) exit 1 ;;
 esac
 EOF
@@ -352,13 +352,13 @@ prreview set checks "$MYCHECKS" >/dev/null
 D2="$T/d2"; mkdir -p "$D2"
 # With FAKE_SYSTEMCTL_STOPPED set, is-active fails, so an installed service
 # reads as stopped.
-printf '#!/bin/sh\necho "$*" >> "%s"\ncase "$*" in *is-active*) [ -z "$FAKE_SYSTEMCTL_STOPPED" ] || exit 3 ;; esac\n' "$D2/systemctl.log" > "$D2/systemctl"; chmod +x "$D2/systemctl"
+printf '#!/bin/sh\necho "$*" >> "%s"\necho "systemctl $*" >> "${FAKE_ORDER_LOG:-/dev/null}"\ncase "$*" in *is-active*) [ -z "$FAKE_SYSTEMCTL_STOPPED" ] || exit 3 ;; esac\n' "$D2/systemctl.log" > "$D2/systemctl"; chmod +x "$D2/systemctl"
 UNIT_FILE="$H/.config/systemd/user/$PRREVIEW_SERVICE_NAME.service"
 # d2_via <runner> <gh git_protocol> <prreview arguments>: on Linux; gh records
 # config set. The runner (a command name, or empty) starts the command.
 d2_via() {
   local run="$1" proto="$2"; shift 2
-  $run "${PRREVIEW_ENV[@]}" PRREVIEW_PLATFORM=linux PATH="$D2:$FAKE:$PATH" FAKE_GH_PROTOCOL="$proto" FAKE_GH_SET_LOG="$D2/ghset.log" bash "$ROOT/prreview" "$@"
+  $run "${PRREVIEW_ENV[@]}" PRREVIEW_PLATFORM=linux PATH="$D2:$FAKE:$PATH" FAKE_GH_PROTOCOL="$proto" FAKE_GH_SET_LOG="$D2/ghset.log" FAKE_ORDER_LOG="$D2/order.log" bash "$ROOT/prreview" "$@"
 }
 d2() { d2_via "" "$@"; }
 # pty_run <command...>: runs the command with a terminal on stdin and stdout.
@@ -373,7 +373,7 @@ pty_run() {
   fi
 }
 d2_tty() { d2_via pty_run "$@"; }
-d2_reset() { rm -f "$UNIT_FILE" "$D2/ghset.log"; : > "$D2/systemctl.log"; }
+d2_reset() { rm -f "$UNIT_FILE" "$D2/ghset.log" "$D2/order.log"; : > "$D2/systemctl.log"; }
 # Five answers for the steps before the service question: Enter for the
 # repositories, who posts, parallel and model; n for the patterns file.
 D2_STEPS='\n\n\n\nn\n'
@@ -398,7 +398,8 @@ d2_reset
 OUT="$(printf "${D2_STEPS}y\ny\n" | d2 ssh setup 2>&1)"
 has 'y to the service question: setup warns when gh clones over ssh' "$OUT" 'no ssh-agent'
 is '...and switches gh to https on yes' "$(cat "$D2/ghset.log" 2>/dev/null)" 'config set git_protocol https -h github.com'
-is '...before it installs the service' "$([ -e "$UNIT_FILE" ] && echo installed || echo none)" installed
+is '...and installs the service' "$([ -e "$UNIT_FILE" ] && echo installed || echo none)" installed
+is '...and gh config set comes before the first systemctl call' "$(head -n1 "$D2/order.log")" 'gh config set'
 
 d2_reset
 printf "${D2_STEPS}y\nn\n" | d2 ssh setup >/dev/null 2>&1
