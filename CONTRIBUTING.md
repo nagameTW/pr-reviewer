@@ -36,7 +36,8 @@ It must end with `ALL PASS`. It prints the versions of bash, gh, git, jq and
 flock, then runs `bash -n` on every script, `shellcheck -S warning`, and every
 `tests/*.test.sh`. Each test runs with the bash that runs `run-all.sh`. It
 finds the scripts with `git ls-files`, so `git add` a new script before you
-run it.
+run it. A ZIP download of the repo fails at that step, so run the command in a
+`git clone`.
 
 CI runs the command on Ubuntu, and on macOS with `/bin/bash`, which is bash
 3.2. A script that works on a newer bash can fail there. Bash 3.2 has no

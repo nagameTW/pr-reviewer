@@ -231,7 +231,7 @@ one step that looks for a defect that the review missed. It runs only on a
 round that is about to post ✅ Approved.
 
 It is off by default, because it adds cost and time to every approval. On a
-small clean test PR (Run C in the README), the review cost $0.34 and the
+small clean test PR (Run C in [Cost](trust-cost-limits.md#cost)), the review cost $0.34 and the
 red-team call cost $0.23. These figures come from a test PR in September and
 October 2026, before v0.2.0 changed the default models. Current costs can
 differ. Each candidate that it raises adds one refutation call. So at most
@@ -342,6 +342,15 @@ The service got there first. If it prints
 a round. `prreview logs -f` shows that round. To try `once` on its own, run
 `prreview stop` first. Then run `prreview start` afterwards. A stopped service
 stays stopped.
+
+
+## Command rules
+
+These rules hold for every `prreview` command.
+
+- `prreview <command> --help` prints the usage of that command and does nothing else. `prreview --version` works like `prreview version`.
+- A command rejects an argument that it does not take. It prints `unknown argument:` and the usage of the command, and it exits with code 2. It changes nothing: the service and the settings stay as they were. `prreview set` accepts any value, so only its first argument can be rejected.
+- A command that changes a setting restarts the service when the service runs. The loop keeps its old settings until it restarts. `prreview repos add`, `prreview repos remove`, `prreview set` and `prreview unset` are such commands.
 
 
 ## Where to run it
