@@ -435,7 +435,12 @@ cd_comment_at() { # SHA TIME: the same, with the time as given
 }
 view2 "$(cd_comment "$HEAD40" 60)" false > "$T/view-2.json"
 OUT="$(run_gate PRREVIEW_GATE_FORK_PRS=1)"
-has 'cooldown: the log says the PR waits and why'      "$OUT" "PR #2: same head as the reviewer's last comment, and that comment is 60 s old. Waiting 540 s more"
+# The test builds the comment, then the gate reads the clock a moment later, and
+# the build rounds down to a whole second. On a slow runner the comment is 61 s
+# or 62 s old, not 60 s. The two numbers in the log must still add up to 600 s.
+has 'cooldown: the log says the PR waits and why'      "$OUT" "PR #2: same head as the reviewer's last comment, and that comment is "
+CD_LOG="$(printf '%s\n' "$OUT" | sed -n 's/.*that comment is \([0-9]*\) s old\. Waiting \([0-9]*\) s more.*/\1 \2/p')"
+is  '...the age is about 60 s and age plus wait is 600 s' "$(set -- $CD_LOG; [ "$#" -eq 2 ] && [ "$1" -ge 60 ] && [ "$1" -le 70 ] && [ $(($1 + $2)) -eq 600 ] && echo yes)" yes
 has '...and the setting that changes it'               "$OUT" 'PRREVIEW_GATE_PR_COOLDOWN_MIN=10'
 is  '...and the job did not start (the check and one re-read of the head)' "$(viewed 2)" 2
 has '...and the round ends well'                       "$OUT" 'rc=0'
