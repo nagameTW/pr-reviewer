@@ -10,9 +10,9 @@ All notable changes to this project are recorded here. The format follows
 
 - The reviewer finds `gtimeout` and `gsha256sum` on its own. At startup it uses
   `timeout` or `gtimeout` for deadlines. It uses `sha256sum`, `gsha256sum` or
-  `shasum -a 256` for the review key digest, whichever it finds first. Homebrew's
-  coreutils installs only the `g` names, so on macOS `prreview setup` no longer
-  asks you to put the coreutils `gnubin` directory on `PATH`. A machine with
+  `shasum -a 256` for the review key digest, whichever it finds first. When only
+  Homebrew's `g` names are on `PATH`, `prreview setup` on macOS no longer asks
+  you to put the coreutils `gnubin` directory on `PATH`. A machine with
   coreutils missing but `shasum` present now passes the check too. The review
   key is the same through all three hash commands, so no open PR is reviewed
   again. If no timeout command or no hash command is found, the reviewer stops
