@@ -18,6 +18,14 @@ All notable changes to this project are recorded here. The format follows
   again. If no timeout command or no hash command is found, the reviewer stops
   at startup and names the missing tool.
 
+### Fixed
+
+- With `PRREVIEW_GATE_VERIFY_LINES=1`, the line-number check failed on bash
+  3.2, the bash that macOS ships. Bash 3.2 ended a command substitution at the
+  `)` of a `case` pattern and printed a syntax error. The loop that counts the
+  lines of each cited file now writes the pattern with a leading `(`. The check
+  is off by default.
+
 ## [0.2.2] - 2026-10-21
 
 ### Security

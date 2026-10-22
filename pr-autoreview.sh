@@ -2328,9 +2328,13 @@ $SLICE_CLEAN"
           # review_one_pr may use that keyword — it runs as a job, and a
           # `continue` meant for the PR loop would silently mean something
           # else here. tests/parallel-discipline.test.sh enforces it.
-          case "$f" in /*|*..*) f="" ;; esac
-          # Stripped the SAME way FINDINGS_LINE_JQ strips a finding's own
-          # .file before the lookup: a counts key left as "./a.sh" while the
+          # Bash 3.2 finds the end of this command substitution by counting
+          # parentheses and quotes, in comments too. So the pattern below
+          # keeps its leading parenthesis, and no comment here may hold a
+          # single quote or an unpaired parenthesis.
+          case "$f" in (/*|*..*) f="" ;; esac
+          # Stripped the SAME way FINDINGS_LINE_JQ strips the .file of a
+          # finding before the lookup: a counts key left as "./a.sh" while the
           # filter looks up "a.sh" never matches, so a model that writes the
           # ./ prefix would always read as "unmeasured" (kept — safe, but
           # silently un-checked).
