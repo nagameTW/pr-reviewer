@@ -55,12 +55,22 @@ REVIEW_SCHEMA='{"verdict":"approve"|"request_changes","summary":"<2-4 sentences>
 # What `line` means, said once. Every prompt whose schema has a `line` field
 # prints this after the schema: the review, the structural repair and the red
 # team. Without it a model that Read the diff file cites that file's line
-# numbers, and the comment points at the wrong code. The number comes from the
-# hunk header, not from Read: the file on disk is the pre-change one when the
-# diff did not apply, and for a convention file the harness restored.
+# numbers, and the comment points at the wrong code. The harness gives the
+# model a display copy of the diff (lib/diffview.sh) where every line starts
+# with a label, and the number inside NEW[...] is the answer. The hunk header
+# rule stays for the case where the copy could not be made. The file on disk
+# is the pre-change one when the diff did not apply, and for a convention file
+# the harness restored.
 # 0 is the value for "no line" (lib/findings.sh).
 # shellcheck disable=SC2034  # read by the scripts that source this lib
-REVIEW_LINE_SPEC='line: the line number on the new (after-change) side of the cited file. For a file in the diff, take it from the hunk header "@@ -a,b +c,d @@". The first line of that hunk is line c. Each context line and each added line adds one. A removed line adds nothing. Never use a line number of the diff file itself. Use the number that Read shows only when the file on disk holds the version after this change. For a deleted line, use the nearest line that still exists on the new side. Use 0 when the new side has no reliable line, for example for a deleted file.'
+REVIEW_LINE_SPEC='line: the line number on the new (after-change) side of the cited file. Each line of the diff file starts with a label. Use the number inside NEW[...] of the line you cite. Never use the line number that Read prints in front of a diff line. Never use a line number of the diff file itself. NEW[-] marks a removed line: it has no new-side number, so use the number of the nearest NEW[n] line that still exists, or 0. If the diff file has no labels, take the number from the hunk header "@@ -a,b +c,d @@". The first line of that hunk is line c. Each context line and each added line adds one. A removed line adds nothing. Use the number that Read shows only when the file on disk holds the version after this change. For a deleted line, use the nearest line that still exists on the new side. Use 0 when the new side has no reliable line, for example for a deleted file.'
+
+# The short form of the same rule. The review prompt prints it beside the
+# first "Read it first" instruction, so the model has it before it opens the
+# diff. It holds for both diff forms: the labelled copy and, when the copy
+# could not be made, the raw diff.
+# shellcheck disable=SC2034  # read by the scripts that source this lib
+REVIEW_DIFF_READ_RULE='Line numbers: the line field of a finding is the new-side line number. If the diff lines start with labels, use the number inside NEW[...], never the number that Read prints in front of the line. If the lines have no labels, count from the hunk header.'
 
 # The kind definitions, shared by every prompt that hands out REVIEW_SCHEMA:
 # the schema requires the field, so a prompt that ships the schema without

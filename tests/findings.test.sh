@@ -11,6 +11,7 @@
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 . lib/findings.sh || { echo "FAIL: cannot source lib/findings.sh"; exit 1; }
+. lib/tree.sh || { echo "FAIL: cannot source lib/tree.sh"; exit 1; }
 
 FAILED=0
 ok()  { printf '  ok   %s\n' "$1"; }
@@ -993,6 +994,10 @@ has 'the verify prompt is adversarial, not confirmatory' 'try to REFUTE' "$VP"
 has 'the verify prompt states the asymmetry' "$FINDINGS_MERGE_STAKES" "$VP"
 has 'the verify prompt forbids refuting on a line-number mismatch alone' \
     'Never refute on a line-number mismatch alone' "$VP"
+has 'the verify prompt explains the NEW[...] labels of the diff it reads' \
+    'A diff line that starts with NEW[n] is line n of the file after this change' "$VP"
+has '...and says the number Read prints is not a file line' 'not the number that Read prints in front of the line' "$VP"
+has '...and gives the hunk header rule for a diff without labels' 'If the diff lines have no labels, count the new-side line from the hunk header' "$VP"
 has 'the finding text is fenced as DATA' 'FINDING BEGINS' "$VP"
 # The reason's language clause is hand-copied here rather than sourced from
 # REVIEW_LANGUAGE_SPEC (this lib has to load without lib/review-spec.sh), so
@@ -1608,6 +1613,62 @@ is 'a finding with no file is kept' \
 is 'exactly the two impossible ones went (900 past end-of-file, both path forms)' \
    "$(jq -r '.findings | length' <<<"$LINE_OUT")" '8'
 
+# ── findings_clamp_lines: a line past the end of the file becomes 0 ───────
+#
+# The backstop for a model that still cites a number the file cannot have.
+# It never drops a finding and never guesses an offset: a blocker keeps its
+# severity and loses only an anchor that cannot be right.
+CL_REPO="$(mktemp -d)"
+printf '1\n2\n3\n4\n5\n6\n7\n8\n9\nten no newline' > "$CL_REPO/a.sh"
+mkdir "$CL_REPO/sub"; printf 'x\ny\n' > "$CL_REPO/sub/b.sh"
+CL_IN='{"verdict":"request_changes","findings":[
+  {"file":"a.sh","line":900,"severity":"CRITICAL","issue":"past the end"},
+  {"file":"./a.sh","line":11,"severity":"HIGH","issue":"one past the end"},
+  {"file":"a.sh","line":10,"severity":"HIGH","issue":"last line"},
+  {"file":"a.sh","line":1,"severity":"LOW","issue":"first line"},
+  {"file":"a.sh","line":0,"severity":"LOW","issue":"no line"},
+  {"file":"sub/b.sh","line":3,"severity":"MEDIUM","issue":"b past the end"},
+  {"file":"missing.sh","line":900,"severity":"HIGH","issue":"unmeasured file"},
+  {"file":"../a.sh","line":900,"severity":"HIGH","issue":"outside the tree"},
+  {"file":"/etc/hostname","line":900,"severity":"HIGH","issue":"absolute path"},
+  {"file":"a.sh","line":"900","severity":"HIGH","issue":"not a number"},
+  {"file":"a.sh","severity":"HIGH","issue":"no line field"}
+]}'
+CL_OUT="$(findings_clamp_lines "$CL_REPO" "PR #7" <<<"$CL_IN" 2>"$CL_REPO/err")"
+cl() { jq -r --arg i "$1" '.findings[] | select(.issue == $i) | .line' <<<"$CL_OUT"; }
+is 'clamp: every finding is kept' "$(jq -r '.findings | length' <<<"$CL_OUT")" '11'
+is 'clamp: a line far past the end becomes 0' "$(cl 'past the end')" '0'
+is 'clamp: a blocker keeps its severity' "$(jq -r '.findings[] | select(.issue == "past the end") | .severity' <<<"$CL_OUT")" 'CRITICAL'
+is 'clamp: the blocking count does not change' \
+   "$(jq -r "$FINDINGS_BLOCKING_COUNT_JQ" <<<"$CL_OUT")" "$(jq -r "$FINDINGS_BLOCKING_COUNT_JQ" <<<"$CL_IN")"
+is 'clamp: one line past the end becomes 0, ./ prefix measured' "$(cl 'one past the end')" '0'
+is 'clamp: the last line is kept, a missing final newline counted' "$(cl 'last line')" '10'
+is 'clamp: the first line is kept' "$(cl 'first line')" '1'
+is 'clamp: line 0 stays 0' "$(cl 'no line')" '0'
+is 'clamp: a file in a subdirectory is measured' "$(cl 'b past the end')" '0'
+is 'clamp: a file that cannot be measured keeps its line' "$(cl 'unmeasured file')" '900'
+is 'clamp: a path that leaves the tree is not measured' "$(cl 'outside the tree')" '900'
+is 'clamp: an absolute path is not measured' "$(cl 'absolute path')" '900'
+is 'clamp: a non-numeric line is kept' "$(cl 'not a number')" '900'
+is 'clamp: a finding with no line field gets none' "$(jq -r '.findings[] | select(.issue == "no line field") | has("line")' <<<"$CL_OUT")" 'false'
+CL_LOG="$(cat "$CL_REPO/err")"
+case "$CL_LOG" in *'PR #7'*'a.sh'*'900'*'set to 0'*) ok 'clamp: the log names the file and the original line' ;; *) bad 'clamp: the log names the file and the original line' 'a line with PR #7, a.sh, 900, set to 0' "$CL_LOG" ;; esac
+is 'clamp: the log has one line per changed finding' "$(grep -c . "$CL_REPO/err")" '3'
+is 'clamp: input that is not JSON comes back unchanged' "$(findings_clamp_lines "$CL_REPO" x <<<'not json' 2>/dev/null)" 'not json'
+is 'clamp: input with no findings comes back unchanged' "$(findings_clamp_lines "$CL_REPO" x <<<'{"findings":[]}' 2>/dev/null)" '{"findings":[]}'
+rm -rf "$CL_REPO"
+
+# A convention file on disk is the base copy, so a PR that grows it must keep
+# its lines. Other files of the same tree are still measured.
+CV_REPO="$(mktemp -d)"
+printf 'a\nb\n' > "$CV_REPO/CLAUDE.md"; printf 'a\nb\n' > "$CV_REPO/ReadMe.Txt"; printf 'a\nb\n' > "$CV_REPO/c.sh"
+CV_OUT="$(findings_clamp_lines "$CV_REPO" "PR #7" 2>/dev/null <<<'{"findings":[{"file":"CLAUDE.md","line":40,"issue":"conv"},{"file":"./ReadMe.Txt","line":40,"issue":"conv lower"},{"file":"c.sh","line":40,"issue":"plain"}]}')"
+cv() { jq -r --arg i "$1" '.findings[] | select(.issue == $i) | .line' <<<"$CV_OUT"; }
+is 'clamp: a convention file keeps its line' "$(cv conv)" '40'
+is 'clamp: a convention file is matched in any letter case' "$(cv 'conv lower')" '40'
+is 'clamp: a file that is not a convention file is still measured' "$(cv plain)" '0'
+rm -rf "$CV_REPO"
+
 # ── the wiring in pr-autoreview.sh ────────────────────────────────────────
 SRC_LINE="$(cat pr-autoreview.sh)"
 grep -qF 'FINDINGS_LINE_JQ' <<<"$SRC_LINE" || bad 'the filter is wired' 'a call site' 'none'
@@ -1645,5 +1706,19 @@ ok 'wired, defaulted off, guarded by DIFF_APPLIED, and feeding the no-flip guard
 grep -qF 'f="${f#./}"' <<<"$SRC_LINE" \
   || bad 'LINE_COUNTS keys are normalised the same way the filter normalises .file' 'f="${f#./}"' 'not found'
 ok 'LINE_COUNTS keys strip the same ./ prefix the filter strips from .file'
+
+# The clamp runs whenever the diff was applied, on its own condition. It is
+# not the dropping filter above and does not wait for the knob.
+CLAMP_CALL="$(grep -n 'findings_clamp_lines' pr-autoreview.sh | grep -v '^[0-9]*:[[:space:]]*#')"
+case "$CLAMP_CALL" in *'findings_clamp_lines "$REPO_DIR"'*) ok 'the clamp is wired in pr-autoreview.sh' ;; *) bad 'the clamp is wired in pr-autoreview.sh' 'a call' "$CLAMP_CALL" ;; esac
+# The condition is the line directly above the call, so the check does not
+# depend on how many comment lines sit higher up.
+CLAMP_WIN="$(grep -B1 'findings_clamp_lines "$REPO_DIR"' pr-autoreview.sh | head -1)"
+case "$CLAMP_WIN" in *'if '*'DIFF_APPLIED'*) ok '...only when the diff was applied' ;; *) bad '...only when the diff was applied' 'an if on DIFF_APPLIED directly above the call' "$CLAMP_WIN" ;; esac
+case "$CLAMP_WIN" in *PRREVIEW_GATE_VERIFY_LINES*) bad '...and not behind the line-validation knob' 'no VERIFY_LINES test' "$CLAMP_WIN" ;; *) ok '...and not behind the line-validation knob' ;; esac
+CL_AT="$(grep -n 'findings_clamp_lines "$REPO_DIR"' pr-autoreview.sh | head -1 | cut -d: -f1)"
+VF_AT="$(grep -n '^  VERIFIED_OUT=""' pr-autoreview.sh | head -1 | cut -d: -f1)"
+RT_AT="$(grep -n 'RT_MERGED="$(jq' pr-autoreview.sh | head -1 | cut -d: -f1)"
+if [ -n "$CL_AT" ] && [ -n "$VF_AT" ] && [ -n "$RT_AT" ] && [ "$RT_AT" -lt "$CL_AT" ] && [ "$CL_AT" -lt "$VF_AT" ]; then ok '...after the red team merge and before the second-round verification'; else bad '...after the red team merge and before the second-round verification' 'red team < clamp < verify' "rt=$RT_AT clamp=$CL_AT verify=$VF_AT"; fi
 
 if [ "$FAILED" -eq 0 ]; then echo "PASS: lib/findings.sh"; else echo "FAIL: lib/findings.sh"; exit 1; fi

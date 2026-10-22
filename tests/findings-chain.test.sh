@@ -150,7 +150,7 @@ run_case() {
   OUT="$( (
     PATH="$STUBS:$PATH"
     PR=7; REPO_KEY=o__r; REPO=o/r; REPO_DIR="$d/tree"; PR_FILES=a.sh; GATE_SCRATCH="$d/scratch"; QUOTA_DIR="$d/quota"
-    DIFF="$d/diff"; DIFF_DIR="$d"; export JQ_COUNT_F="$d/count"; TMPFILES=(); SIZE=50; GATE_COACH_MAX_LINES=100; GATE_FILE_CAP=8
+    DIFF="$d/diff"; DIFF_VIEW="$d/diff"; DIFF_DIR="$d"; export JQ_COUNT_F="$d/count"; TMPFILES=(); SIZE=50; GATE_COACH_MAX_LINES=100; GATE_FILE_CAP=8
     PARSED="$parsed"; OUT=""; REVIEW_STATUS=OK; HOLD_F="$d/hold"; REVIEW_ERR=/dev/null; REPAIR_ERR=/dev/null
     VERDICT=""; REPAIRED=0; SLICE_INCOMPLETE=0; PRIOR_CITED=""; DELTA_FILES=""; ROUND=1
     MAIN_PRIOR=""; INFO='{}'; MARKER=m; PRIOR_AUTHORS=""; VERIFY_MAX=3; VERIFY_TIMEOUT=60; REVIEW_MODEL=m
@@ -178,6 +178,16 @@ has 'no failure: the red team candidate is merged'          "red team raised 1 c
 has '...and counts as a second finding'                     "reached tally=1 n=2 ok=y" "$OUT"
 run_case chain "$REVIEW_BLOCK" PRREVIEW_GATE_VERIFY_LINES=1 DIFF_APPLIED=1
 has 'no failure: the line check runs and keeps a real line' "reached tally=1 n=1 ok=y" "$OUT"
+
+# The line backstop runs on its own condition, with the knob off. The blocker
+# that cites line 99 of a three-line file is kept with line 0, so the tally
+# still counts it (n=2, one blocker), and the log names the original line.
+run_case chain "$REVIEW_FAR" DIFF_APPLIED=1
+has 'the line backstop keeps the blocker (knob off, diff applied)' "reached tally=1 n=2 ok=y" "$OUT"
+has '...and logs the original line' "a.sh:99 is past the end of the file, set to 0" "$OUT"
+run_case chain "$REVIEW_FAR"
+has 'the line backstop does nothing when the diff was not applied' "reached tally=1 n=2 ok=y" "$OUT"
+lacks '...and logs nothing' "set to 0" "$OUT"
 
 # bash 3.2 finds the end of "$( )" by counting parentheses and quotes. It counts
 # comments too, and a case pattern ends in a parenthesis. The run above passes

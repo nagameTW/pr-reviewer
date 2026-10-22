@@ -164,8 +164,21 @@ chunk_plan() {
 # findings: deduped on file+line+issue text. Slices are told to report only
 # about their own files, so exact duplicates should be rare — except for the
 # one case where they are guaranteed and wanted: a carried finding from a
-# prior round, which the prompt requires be copied VERBATIM, so two slices
-# that both think they own it collapse to one here.
+# prior round, which the prompt requires be copied with its issue text, so two
+# slices that both think they own it collapse to one here.
+# A carried finding is keyed on file+issue and not on its line, because the
+# round task lets a slice move a wrong line to the right one. Two slices can
+# then give two lines for one finding.
+# Entries that share a key may still disagree on severity, area, audience or
+# kind. The merge merges only entries with an identical profile: the same
+# severity as written, area, audience (only read on a doc) and kind cap. It
+# keeps every distinct profile, and it does not rank or drop an entry by how
+# much it blocks. The real convergence caps run after the merge and in later
+# rounds they depend on the round, so no rank made here is safe. A variant
+# that is a minor one in round 1 can be the only blocker after the late cap.
+# Trade-off: one finding can appear twice, once per profile. Between identical
+# entries the first slice in the input wins, and the line of a kept entry is
+# the line its own slice gave.
 #
 # unverified: unioned and capped at 3, matching the single-pass contract. Six
 # slices each declaring three residual risks would otherwise bury the reader
@@ -175,10 +188,9 @@ chunk_plan() {
 # SORTS, so deduping by file+line+issue silently reorders the array by file
 # path — and the renderer downstream prints the array in order, which would
 # put a LOW above a CRITICAL in the comment a person skims. The ladder is
-# spelled out here rather than sourced from lib/findings.sh because this lib
-# has to load on its own (tests/chunk.test.sh sources only this file);
-# anything unrecognised sorts with HIGH, the same fail-closed direction the
-# blocking tally takes.
+# spelled out here, and not taken from lib/findings.sh, because it only orders
+# the output. Anything unrecognised sorts with HIGH, the same fail-closed
+# direction the blocking tally takes.
 # The truncation mark is the one string in this merge a reader sees;
 # everything else here is structure.
 CHUNK_SUMMARY_CUT=' (summary too long, truncated)'
@@ -190,15 +202,23 @@ CHUNK_MERGE_JQ='
       elif $s == "MEDIUM"   then 2
       elif $s == "LOW"      then 3
       else 1 end;
+  def txt(f): f | if type == "string" then (gsub("^\\s+|\\s+$"; "") | ascii_downcase) else "" end;
+  def profile:
+    txt(.area) as $a | txt(.kind) as $k
+    | [txt(.severity), $a,
+       (if $a == "doc" then txt(.audience) else "" end),
+       (if (["wording", "judgment", "half_fix"] | index($k)) != null then "capped" else "" end)];
   { verdict: (if any(.[]; (.verdict // "") == "request_changes")
               then "request_changes" else "approve" end),
     summary: ([.[].summary // empty | select(type == "string")] | join(" ")
               | if length > 1200 then .[0:1200] + "'"$CHUNK_SUMMARY_CUT"'" else . end),
     unverified: ([.[].unverified[]? | select(type == "string")] | unique | .[0:3]),
     findings: ([.[].findings[]? | select(type == "object")]
-               | unique_by([(.file // "" | tostring),
-                            (.line // 0 | tostring),
-                            (.issue // "" | tostring)])
+               | group_by([(.file // "" | tostring),
+                           (if ((.issue // "" | tostring) | test("^\\s*carried[ -]over"; "i"))
+                            then "carried" else (.line // 0 | tostring) end),
+                           (.issue // "" | tostring)])
+               | map(unique_by(profile)) | add // []
                | sort_by(sev_rank)) }'
 
 # How many independent review passes a round gets.
