@@ -1,6 +1,6 @@
 # Operating the reviewer
 
-This page holds the details behind the [README](../README.md): who gets reviewed, what one round does, what happens when something fails, and where the files live.
+This page holds the details behind the [README](../README.md). It covers who gets reviewed, what one round does, what happens when something fails, and where the files live.
 
 ## Whose PRs it reviews
 
@@ -11,23 +11,28 @@ The reviewer reads a PR in three cases:
 - You named the PR with `prreview once --pr owner/repo#N`.
 
 It skips every other PR. In practice, a skipped PR comes from a fork, and its
-author is not on the list. Anyone can open a fork PR, and each push to it would
+author is not on the list. Anyone can open a fork PR. Each push to it would
 start a new model call on your account.
 
-The reviewer posts nothing on a skipped PR. One exception exists. With
+The reviewer posts nothing on a skipped PR. There is one exception. With
 `PRREVIEW_GATE_DISARM_AUTO_MERGE=1`, the reviewer turns off an auto-merge that
-is armed on a skipped PR. That is one `gh pr merge --disable-auto` call, and
-the skipped PR gets nothing else. Only a user with write access to the
-repository can arm auto-merge. The loop that starts the rounds
-applies the same rule to its check, with the same two settings. A skipped PR
-then does not start a round each minute, and the loop keeps its idle schedule.
-The exception is `PRREVIEW_GATE_DISARM_AUTO_MERGE=1` with auto-merge armed on
-the PR: the loop counts that PR as work, draft or not, so the disarm runs
-within one interval. The loop does not count any other draft PR, because the
-round skips it.
+is armed on a skipped PR. That is one `gh pr merge --disable-auto` call. The
+skipped PR gets nothing else. Only a user with write access to the repository
+can arm auto-merge.
+
+The loop that starts the rounds applies the same rule to its check, with the
+same two settings. So a skipped PR does not start a round each minute. The loop
+keeps its idle schedule.
+
+One case differs. `PRREVIEW_GATE_DISARM_AUTO_MERGE=1` is set, and auto-merge is
+armed on the PR. Then the loop counts that PR as work, draft or not. The disarm
+runs within one interval. The loop does not count any other draft PR, because
+the round skips it.
+
 The scan of merged PRs does not look at the author. The round log names a
-skipped PR by number and never by title. A round that skips PRs prints one `WARNING:` line with the
-count, and `prreview status` shows the count for the last round.
+skipped PR by number and never by title. A round that skips PRs prints one
+`WARNING:` line with the count. `prreview status` shows the count for the last
+round.
 
 To review one outside PR, name it:
 
@@ -36,29 +41,30 @@ To review one outside PR, name it:
 ```
 
 The command reviews the current head of that PR and no other PR. When the
-author pushes again, the new head is skipped until you run the command again.
-If a round is running, the command waits for it up to `PRREVIEW_GATE_ONCE_WAIT`
-seconds (300 by default). A value of `0` means do not wait. If the command
-cannot get the lock in that time, it prints the reason and exits with code 75,
-so you know the PR was not reviewed. It rejects
-anything that is not `owner/repo#N` for a repository you review.
+author pushes again, the reviewer skips the new head until you run the command
+again. If a round is running, the command waits for it for up to
+`PRREVIEW_GATE_ONCE_WAIT` seconds (300 by default). A value of `0` means do not
+wait. If the command cannot get the lock in that time, it prints the reason and
+exits with code 75. Then you know the reviewer did not review the PR. The
+command rejects anything that is not `owner/repo#N` for a repository you
+review.
 
-The exit code says if the reviewer has posted a verdict on the PR:
+The exit code says whether the reviewer has posted a verdict on the PR:
 
 - `0`: the reviewer has a verdict comment on the current head, from this run
-  or an earlier one. A verdict is an approve or a request for changes.
+  or an earlier one. A verdict is an approval or a request for changes.
 - `75`: the reviewer has no verdict on the current head, and nothing failed.
   The PR can be a draft, or a check can have skipped it. The command prints the
   reason.
 - `1`: the PR is not open, or the reviewer could not read it.
 
 A notice is not a verdict. The title format reminder and the sensitive-data
-notice are notices. A check that posts a notice and stops gives `75` on the
-first run, and `75` on every later run, until the title or description is
-fixed and the reviewer posts a verdict. The loop still posts a notice once per
-head.
+notice are notices. Suppose a check posts a notice and stops. Then the command
+gives `75` on the first run. It gives `75` on every later run, until someone
+fixes the title or description and the reviewer posts a verdict. The loop still
+posts a notice once for each head.
 
-To review the PRs of one fork author each time, put the login in
+To review the PRs of one fork author every time, put the login in
 `PRREVIEW_GATE_TRUSTED_AUTHORS`:
 
 ```bash
@@ -73,15 +79,15 @@ Four limits apply:
 
 - Do not add an account only because it contributed once. List only accounts
   that you would let push to the repository.
-- The rule treats everyone who can push to the repository as trusted. If a
+- The rule treats everyone who can push to the repository as trusted. Suppose a
   workflow of yours builds branches from outside input, for example with
-  `pull_request_target`, a branch of the repository can carry outside text.
+  `pull_request_target`. Then a branch of the repository can carry outside text.
 - The list is a setting of the machine that runs the reviewer. When several
   maintainers each run a reviewer, each one sets the list.
-- The reviewer decides on the list it reads at the start of the repository's
-  round. If a PR turns into a fork PR after that read, the reviewer reads the
-  PR once with `gh pr view`. The review job then checks the rule again and
-  stops. That PR gets no model call and no post. With
+- The reviewer decides on the list that it reads at the start of the round of
+  the repository. A PR can turn into a fork PR after that read. Then the
+  reviewer reads the PR once with `gh pr view`. The review job checks the rule
+  again and stops. That PR gets no model call and no post. With
   `PRREVIEW_GATE_DISARM_AUTO_MERGE=1`, the job also turns off its auto-merge.
 
 
@@ -91,180 +97,200 @@ This page and the README use these words in one sense each.
 
 | Term | Meaning |
 | --- | --- |
-| **Gate** | The name the code and its settings use for the reviewer: `pr-autoreview.sh`, the `PRREVIEW_GATE_*` settings, `gate.log`. It only comments; it does not block or merge anything, which is why its log calls the comment a review-only verdict. |
-| **Head** | The latest commit on a PR's branch. The reviewer reviews heads, not branches. |
-| **Trusted author** | The author of a PR that comes from a branch of the repository itself, or a login in `PRREVIEW_GATE_TRUSTED_AUTHORS`. A PR that `prreview once --pr` names is reviewed as if its author were trusted. |
-| **Round** | One run of `pr-autoreview.sh`. It goes over every listed repo and reviews each PR from a trusted author whose head has no comment yet. The loop checks once a minute for open PRs that the reviewer would read (see [Whose PRs it reviews](#whose-prs-it-reviews)) and starts a round when it finds any. A fork PR that the reviewer skips does not count, unless `PRREVIEW_GATE_DISARM_AUTO_MERGE=1` and auto-merge is armed on it. A draft PR does not count, with the same exception. With none to review, the loop starts a round only on every 15th check. The loop's log counts checks, so `[round 12]` there is the 12th check, whether or not a round ran. For a single PR, "round 2" means the second verdict comment on it: a push, an edited title, description or base branch, or (for a stacked PR) a push to its parent branch leads to the next one. An edit that leaves the head unchanged waits for the cooldown first (`PRREVIEW_GATE_PR_COOLDOWN_MIN`). So can a push to the parent branch of a stacked PR. |
-| **Slice** | Part of a large diff, reviewed by its own model call (`PRREVIEW_GATE_CHUNK_*`). |
-| **Verdict** | The first line of the comment: ✅ Approved or ❌ Changes requested. It is text in a comment, not a GitHub review state. |
-| **Blocking finding** | A CRITICAL or HIGH finding that counts toward ❌ Changes requested. MEDIUM and LOW are listed without changing the verdict. |
-| **Refutation** | A second model call on one blocking finding that tries to prove it wrong. A refuted finding is dropped. |
+| **Gate** | The name that the code and its settings use for the reviewer: `pr-autoreview.sh`, the `PRREVIEW_GATE_*` settings and `gate.log`. It only comments. It does not block or merge anything. So its log calls the comment a review-only verdict. |
+| **Head** | The latest commit on the branch of a PR. The reviewer reviews heads, not branches. |
+| **Trusted author** | The author of a PR that comes from a branch of the repository itself, or a login in `PRREVIEW_GATE_TRUSTED_AUTHORS`. The reviewer reviews a PR that `prreview once --pr` names as if its author were trusted. |
+| **Round** | One run of `pr-autoreview.sh`. It goes over every listed repo. It reviews each PR from a trusted author whose head has no comment yet. The loop checks once a minute for open PRs that the reviewer would read (see [Whose PRs it reviews](#whose-prs-it-reviews)). It starts a round when it finds any. A fork PR that the reviewer skips does not count. The exception is `PRREVIEW_GATE_DISARM_AUTO_MERGE=1` with auto-merge armed on it. A draft PR does not count, with the same exception. With none to review, the loop starts a round on only every 15th check. The log of the loop counts checks. So `[round 12]` there is the 12th check, whether or not a round ran. For a single PR, "round 2" means the second verdict comment on it. The next verdict follows a push, an edited title, description or base branch, or a push to the parent branch of a stacked PR. An edit that leaves the head unchanged waits for the cooldown first (`PRREVIEW_GATE_PR_COOLDOWN_MIN`). A push to the parent branch of a stacked PR waits for it too. |
+| **Slice** | Part of a large diff. Its own model call reviews it (`PRREVIEW_GATE_CHUNK_*`). |
+| **Verdict** | The first line of the comment: ✅ Approved or ❌ Changes requested. It is text in a comment. It is not a GitHub review state. |
+| **Blocking finding** | A CRITICAL or HIGH finding that counts toward ❌ Changes requested. MEDIUM and LOW findings are listed and do not change the verdict. |
+| **Refutation** | A second model call on one blocking finding that tries to prove it wrong. The reviewer drops a refuted finding. |
 | **Hold** | A wait before the reviewer tries the same head again after a failed attempt (see [When something fails](#when-something-fails)). |
 | **Owner login** | The account whose comments the reviewer treats as its own earlier verdicts (`PRREVIEW_OWNER_LOGIN`, or the App). |
 
-Settings named `PRREVIEW_GATE_*` are read by `pr-autoreview.sh`, and `PRREVIEW_LOOP_*`
-by `review-loop.sh`, which starts the rounds.
+`pr-autoreview.sh` reads the settings named `PRREVIEW_GATE_*`. `review-loop.sh`
+reads the settings named `PRREVIEW_LOOP_*`. It starts the rounds.
 
 
 ## How one round works
 
 1. **Pick.** For each repo, list the open PRs with their authors in one call.
-   Keep the PRs from a trusted author that are not drafts and whose current
-   head has no comment from this reviewer yet. The job checks the author
-   again, with its own read of the PR, before any model call. The comment
-   carries a hidden marker with the head SHA and a hash of the title,
-   description and base branch (for a stacked PR, also the base commit), and
-   only comments by the reviewer's own account count. A PR on hold after a
-   failure waits out its hold (see [When something fails](#when-something-fails)).
-2. **Scan.** Check the PR's title and description against your
-   sensitive-patterns file. A hit stops the review of that PR. The title and
-   body of the issue the PR links get the same check when the round reads
-   them, before any model call.
-3. **Build.** Update the local clone of the repo, add a per-PR worktree, check
-   out the merge base of the PR in it, and apply the PR's diff on top. The
-   author's branch is never checked out. Then, for every PR, the convention
-   files are copied from the newest commit of the default branch, matched
-   without regard to file name case. A file the tree has and the default
-   branch lacks is removed. A file only the default branch has is added. The
-   copy comes after the diff, so a convention file that is newer on the default
-   branch cannot make the diff fail to apply. If a step of the copy fails, the
-   round skips that PR and tries again next round.
-   The diff is fetched once, for the exact head commit the verdict will name,
-   and the list of changed files is read from that same diff. A push that
-   lands during the round cannot swap in another head. If the merge base
-   cannot be found, if the diff cannot be fetched, or if it holds a different
-   number of files than GitHub reports for the PR, the round skips that PR and
-   tries again next round.
-   A symlink to a regular file inside the clone, such as
-   `AGENTS.md -> CLAUDE.md`, is fine. Any other symlink stops the review: one
-   that points outside the clone, into `.git` or nowhere; one to a folder,
-   since a path through a folder link can climb out with `..`; and one from a
-   convention file (`CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, `.mcp.json`,
-   anything under `.claude/`, a README or CONTRIBUTING file,
-   `.github/review-checks.md`) to anything but another convention file that git
-   tracks, since the PR could edit any other file and so write the rules it is
-   judged by. The model's
-   read access is limited by path, and a link can lead it past that limit. A
-   symlink the PR adds gets a comment asking the author to fix or remove it. One already on the
-   base branch stops every PR against that branch with no comment: the round
-   log names the link, and the round counts as failed (see
+   Keep a PR when it meets all three conditions:
+   - Its author is trusted.
+   - It is not a draft.
+   - Its current head has no comment from this reviewer yet.
+
+   Before any model call, the job checks the author again with its own read of
+   the PR. The comment carries a hidden marker. The marker holds the head SHA
+   and a hash of the title, description and base branch. For a stacked PR, it
+   also holds the base commit. Only comments by the own account of the reviewer
+   count. A PR on hold after a failure waits out its hold (see
    [When something fails](#when-something-fails)).
-4. **Slice.** A diff of more than 300 lines is cut by file into slices of about
-   250 lines, at most 8. A PR over 2000 changed lines or 40 files gets a
-   "please split" comment instead of a review, unless at least 90% of its
-   changed lines are deletions, it touches only lock files, generated code,
-   snapshots or migrations, or its description has a paragraph starting with
-   `split-exempt:` that says why it cannot be split. Those are reviewed in
-   full, with two passes over each slice in the first round.
-5. **Review.** Claude Code reads the tree and the diff and answers with JSON:
-   a verdict, findings with severity, file, line and fix, and what it could not
-   verify. The slices run in parallel.
-6. **Verify.** Findings that do not have the expected shape, or cite a file
-   that does not exist, are dropped. Each blocking finding then gets its own
-   call that tries to refute it, up to `PRREVIEW_GATE_VERIFY_MAX` (6) a round; a
-   refuted finding is dropped, and any beyond the cap stand.
-7. **Post.** Render one comment, scan it against your patterns, and post it.
-   Each round's model usage and cost is printed at the end.
+2. **Scan.** Check the title and description of the PR against your
+   sensitive-patterns file. A match stops the review of that PR. The round reads
+   the title and body of the issue that the PR links. It runs the same check on
+   them, before any model call.
+3. **Build.** Prepare the tree in these steps:
+   - Update the local clone of the repo. Add a worktree for the PR. Check out
+     the merge base of the PR in it. Apply the diff of the PR on top. The
+     reviewer never checks out the branch of the author.
+   - Then, for every PR, copy the convention files from the newest commit of the
+     default branch. The match ignores file name case. The copy removes a file
+     that the tree has and the default branch lacks. It adds a file that only the
+     default branch has.
+   - The copy comes after the diff. So a convention file that is newer on the
+     default branch cannot make the diff fail to apply. If a step of the copy
+     fails, the round skips that PR and tries again next round.
+   - The reviewer fetches the diff once, for the exact head commit that the
+     verdict will name. It reads the list of changed files from that same diff.
+     A push that lands during the round cannot swap in another head.
+   - The round skips the PR and tries again next round in three cases. It cannot
+     find the merge base. Or it cannot fetch the diff. Or the diff holds a
+     different number of files than GitHub reports for the PR.
+   - A symlink to a regular file inside the clone is fine. An example is
+     `AGENTS.md -> CLAUDE.md`. Any other symlink stops the review. These
+     symlinks stop it:
+     - A link that points outside the clone, into `.git` or nowhere.
+     - A link to a folder, because a path through a folder link can climb out
+       with `..`.
+     - A link from a convention file to anything but another convention file
+       that git tracks. The convention files are `CLAUDE.md`,
+       `CLAUDE.local.md`, `AGENTS.md`, `.mcp.json`, anything under `.claude/`,
+       a README or CONTRIBUTING file, and `.github/review-checks.md`. The PR
+       could edit any other file, and so write the rules that judge it.
+   - The read access of the model is limited by path, and a link can lead it
+     past that limit. A symlink that the PR adds gets a comment that asks the
+     author to fix or remove it. A symlink already on the base branch stops
+     every PR against that branch, with no comment. The round log names the
+     link. The round counts as failed (see
+     [When something fails](#when-something-fails)).
+4. **Slice.** Cut a diff of more than 300 lines by file into slices of about 250
+   lines. A round has at most 8 slices. A PR over 2000 changed lines or 40 files
+   gets a "please split" comment and no review. Three exceptions apply:
+   - At least 90% of the changed lines are deletions.
+   - The PR touches only lock files, generated code, snapshots or migrations.
+   - Its description has a paragraph that starts with `split-exempt:` and says
+     why the PR cannot be split.
 
-CRITICAL and HIGH findings block; MEDIUM and LOW are listed under the verdict
-without blocking. Two kinds of HIGH are listed without blocking:
+   The reviewer reviews these PRs in full. In the first round, each slice gets
+   two passes.
+5. **Review.** Claude Code reads the tree and the diff. It answers with JSON.
+   The JSON holds a verdict, findings with severity, file, line and fix, and
+   what it could not verify. The slices run in parallel.
+6. **Verify.** The reviewer drops findings that do not have the expected shape.
+   It drops findings that cite a file that does not exist. Each blocking finding
+   then gets its own call that tries to refute it. The limit is
+   `PRREVIEW_GATE_VERIFY_MAX` (6) in a round. The reviewer drops a refuted
+   finding. Any finding beyond the cap stands.
+7. **Post.** Render one comment. Scan it against your patterns. Post it. The end
+   of the round prints the model usage and the cost of the round.
 
-- On a PR of 300 changed lines or more (`PRREVIEW_GATE_COACH_MAX_LINES`), a HIGH
-  about tests, conventions, wording or process, or about a doc or code comment
-  that only maintainers read. It is still shown as HIGH, marked not blocking.
-  On a smaller PR it blocks like any other HIGH, and the prompt tells the
-  model which of the two applies.
-- On any PR, a HIGH the model tags as wording, judgment or a half-finished
-  fix. It is shown as MEDIUM with its original severity next to it.
+CRITICAL and HIGH findings block. MEDIUM and LOW findings are listed under the
+verdict and do not block. Two kinds of HIGH finding are listed and do not block:
 
-"Block" here only decides the verdict: the reviewer itself never stops a
-merge.
+- On a PR of 300 changed lines or more (`PRREVIEW_GATE_COACH_MAX_LINES`), some
+  HIGH findings do not block. They are findings about tests, conventions,
+  wording or process. They also include findings about a doc or code comment that
+  only maintainers read. The comment still shows them as HIGH, marked not
+  blocking. On a smaller PR they block like any other HIGH. The prompt tells the
+  model which of the two cases applies.
+- On any PR, a HIGH finding that the model tags as wording, judgment or a
+  half-finished fix. The comment shows it as MEDIUM, with its original severity
+  next to it.
+
+"Block" here only decides the verdict. The reviewer itself never stops a merge.
 
 ### Optional: a red team before an approval
 
 The refutation calls in step 6 can only remove findings. The red team is the
-one step that looks for a defect the review missed, and it runs only on a
+one step that looks for a defect that the review missed. It runs only on a
 round that is about to post ✅ Approved.
 
-It is off by default because it adds cost and time to every approval. On
-a small clean test PR (Run C in the README), the review cost $0.34 and the
-red-team call $0.23. These figures come from a test PR in September and
+It is off by default, because it adds cost and time to every approval. On a
+small clean test PR (Run C in the README), the review cost $0.34 and the
+red-team call cost $0.23. These figures come from a test PR in September and
 October 2026, before v0.2.0 changed the default models. Current costs can
-differ. Each candidate it raises adds one refutation call, so at most three
-more. The red-team call runs after the review, and the refutation calls run
-together after it, so an approval can take up to twice
+differ. Each candidate that it raises adds one refutation call. So at most
+three more calls follow. The red-team call runs after the review. The refutation
+calls run together after it. So an approval can take up to twice
 `PRREVIEW_GATE_VERIFY_TIMEOUT` (1200 seconds) longer to appear.
 
 
 ## Across rounds
 
-Every push is a new round, and the previous round's blocking findings go back
-into the prompt. The prompt asks the model to say which ones are fixed, and to
-repeat each one that is not, word for word, with a `Carried over:` prefix. The
-aim is that the author sees the same finding, not a rewording of it. The
-harness does not check that the model does this.
+Every push is a new round. The blocking findings of the previous round go back
+into the prompt. The prompt asks the model to say which ones are fixed. It also
+asks the model to repeat each unfixed one, word for word, with a `Carried over:`
+prefix. The aim is that the author sees the same finding and not a rewording of
+it. The harness does not check that the model does this.
 
-From round 2 on, a new blocking finding about a file that the changes since
-the last reviewed round did not touch and that no earlier round cited is
-shown as MEDIUM. It was just as visible in round 1, and the author should
-not pay a round for the reviewer missing it. CRITICAL findings are never
-lowered.
+From round 2 on, a new blocking finding can be about a file that the changes
+since the last reviewed round did not touch. If no earlier round cited that
+file, the comment shows the finding as MEDIUM. The finding was just as visible
+in round 1. The author should not pay a round for a miss of the reviewer.
+CRITICAL findings are never lowered.
 
-If a PR is merged while the reviewer's last comment on it is ❌ Changes
-requested, ❌ Please split, ⛔ Review withheld or ⛔ Refused, the next round
-posts one alert comment on the merged PR. With `PRREVIEW_GATE_TICKETS=1` it also
-opens a follow-up issue. The check reads the first 10 merged PRs that
-`gh pr list` returns, which sorts them by when they were opened, and alerts on
-those merged in the last 48 hours. A PR opened long before it was merged can
-fall outside those 10.
+Suppose a PR is merged. The last comment of the reviewer on it is one of these:
+❌ Changes requested, ❌ Please split, ⛔ Review withheld or ⛔ Refused. Then the
+next round posts one alert comment on the merged PR. With
+`PRREVIEW_GATE_TICKETS=1` it also opens a follow-up issue. The check reads the
+first 10 merged PRs that `gh pr list` returns. `gh pr list` sorts them by when
+they were opened. The check alerts on those merged in the last 48 hours. A PR
+opened long before it was merged can fall outside those 10.
 
 
 ## When something fails
 
-The reviewer does not post a verdict it could not reach. What happens instead:
+The reviewer does not post a verdict that it could not reach. Instead, this
+happens:
 
-- **Some slices of a large diff fail.** The slices that worked are posted as
-  one comment. It always says ❌ Changes requested, whatever they found, and
-  lists the files no slice reviewed; push again to review the whole diff.
-- **The review fails outright**: every call fails or times out, or the answer
-  still cannot be parsed after the repair call. Nothing is posted for that
-  head, and the head goes on hold: 5 minutes (`PRREVIEW_GATE_HOLDOFF_FAIL`), or 30 minutes after
-  a usage-limit error (`PRREVIEW_GATE_HOLDOFF_QUOTA`). Each repeat of the same
-  reason doubles the wait, up to an hour (`PRREVIEW_GATE_HOLDOFF_MAX`). The round
-  log says when the next attempt is due. To retry at once, delete the files
-  named `<repo>-<PR number>-*` in
-  `~/.cache/pr-reviewer/review-holdoff/`. A new push, or an
-  edited title, description or base branch, or a push to the parent branch of a
-  stacked PR, starts over with no hold. The cooldown for an edited title,
-  description or base branch, or a push to the parent branch of a stacked PR
-  (`PRREVIEW_GATE_PR_COOLDOWN_MIN`), is a separate wait.
-- **Posting the comment fails.** The finished comment is kept, and the head
+- **Some slices of a large diff fail.** The reviewer posts the slices that worked
+  as one comment. The comment always says ❌ Changes requested, whatever the
+  slices found. It lists the files that no slice reviewed. Push again to review
+  the whole diff.
+- **The review fails outright.** Every call fails or times out, or the answer
+  still cannot be parsed after the repair call. The reviewer posts nothing for
+  that head. The head goes on hold. The hold is 5 minutes
+  (`PRREVIEW_GATE_HOLDOFF_FAIL`), or 30 minutes after a usage-limit error
+  (`PRREVIEW_GATE_HOLDOFF_QUOTA`). Each repeat of the same reason doubles the
+  wait, up to an hour (`PRREVIEW_GATE_HOLDOFF_MAX`). The round log says when the
+  next attempt is due. To retry at once, delete the files named
+  `<repo>-<PR number>-*` in `~/.cache/pr-reviewer/review-holdoff/`. A new push
+  starts over with no hold. So does an edited title, description or base branch,
+  and a push to the parent branch of a stacked PR. The cooldown for those edits
+  and that push (`PRREVIEW_GATE_PR_COOLDOWN_MIN`) is a separate wait.
+- **Posting the comment fails.** The reviewer keeps the finished comment. The head
   goes on the same hold as above (5 minutes, doubling on repeats). The next
-  attempt after that posts the kept comment without calling the model again.
-- **The comment matches your sensitive-data patterns**, or the scan cannot
-  run. A short notice is posted instead, and the full text goes only to the
-  round log, in a directory only you can read.
-- **Something stops a PR or a whole repo from being reviewed at all**: a repo
-  or a PR that cannot be read, a merge base that cannot be found, a diff that
-  cannot be fetched whole, a symlink on the base branch, an App token that
-  cannot be created, a review job that crashes. The round finishes the other
-  PRs and then exits with an error. `review-loop.sh` then opens one issue in
-  `PRREVIEW_ALERT_REPO` if you set it; it opens no second one while that issue is
-  open, and closing it re-arms the alert. While it stays open and rounds keep
-  failing, it gets a "Still failing" comment at most every 6 hours
-  (`PRREVIEW_ALERT_REPEAT_HOURS`). Without `PRREVIEW_ALERT_REPO`, the failure is only in
-  the log.
+  attempt after that posts the kept comment. It does not call the model again.
+- **The comment matches your sensitive-data patterns, or the scan cannot run.**
+  The reviewer posts a short notice instead. The full text goes only to the round
+  log, in a directory that only you can read.
+- **Something stops a PR or a whole repo from being reviewed at all.** These
+  cases are of this kind:
+  - A repo or a PR that cannot be read.
+  - A merge base that cannot be found.
+  - A diff that cannot be fetched whole.
+  - A symlink on the base branch.
+  - An App token that cannot be created.
+  - A review job that crashes.
+
+  The round finishes the other PRs. Then it exits with an error. If you set
+  `PRREVIEW_ALERT_REPO`, `review-loop.sh` then opens one issue there. It opens no
+  second issue while that issue is open. Closing the issue re-arms the alert.
+  While the issue stays open and rounds keep failing, it gets a "Still failing"
+  comment at most every 6 hours (`PRREVIEW_ALERT_REPEAT_HOURS`). Without
+  `PRREVIEW_ALERT_REPO`, the failure appears only in the log.
 - **A round runs longer than `PRREVIEW_LOOP_ROUND_TIMEOUT`** (3900 seconds). The
   loop kills it and counts it as failed. The default leaves room for a first
-  round on a diff near the 2000-line ceiling: two passes over eight slices is
-  16 calls, which at 8 calls in flight is two waves of
+  round on a diff near the 2000-line ceiling. Two passes over eight slices make
+  16 calls. At 8 calls in flight, that is two waves of
   `PRREVIEW_GATE_REVIEW_TIMEOUT`.
 
 
 ## Watching a round
 
-`prreview logs` shows the service's own log, a few lines per round. The full
-output of each round is in `~/.cache/pr-reviewer/gate-logs/round-*.log`.
+`prreview logs` shows the own log of the service, a few lines for each round.
+The full output of each round is in `~/.cache/pr-reviewer/gate-logs/round-*.log`.
 
 With no open PR, `prreview once` prints only `ROUND USAGE: 0 call(s)`. That is
 not an error.
@@ -284,48 +310,46 @@ ROUND USAGE: 3 call(s)  in=28 out=6978 cache_read=347346 cache_write=40101  cost
 ```
 
 If you run `prreview once` again without a push, the head already has its
-comment and the PR is skipped. With the service installed, `prreview once`
-right after setup usually prints `this head was already handled` for every PR,
-because the service got there first. If it prints
+comment. The reviewer skips the PR. With the service installed, `prreview once`
+right after setup usually prints `this head was already handled` for every PR.
+The service got there first. If it prints
 `another pr-autoreview run holds … — exiting`, the service is in the middle of
 a round. `prreview logs -f` shows that round. To try `once` on its own, run
-`prreview stop` first, then `prreview start` afterwards. A stopped service
+`prreview stop` first. Then run `prreview start` afterwards. A stopped service
 stays stopped.
 
 
 ## Where to run it
 
-Run it on a machine only you use. The background service runs as your user,
-with your `gh` login, your Claude Code login and, if you set one up, a GitHub
-App's private key; anyone who can act as that user can post as you.
+Run it on a machine only you use. The background service runs as your user. It
+uses your `gh` login, your Claude Code login and, if you set one up, the private
+key of a GitHub App. Anyone who can act as that user can post as you.
 
-The service is started by launchd or systemd, not by your shell, so it does
-not see variables your shell profile exports. Log in with `gh auth login` and
-`claude auth login`: a `GH_TOKEN` or `ANTHROPIC_API_KEY` that exists only
-in your shell never reaches the service, although `prreview once` in that same
-terminal does see it. To use an API key, run `prreview run` from a terminal that has the key, or
-run `claude auth login` to store a login. On a machine with no browser, such
+launchd or systemd starts the service, not your shell. So the service does not
+see variables that your shell profile exports. Log in with `gh auth login` and
+`claude auth login`. A `GH_TOKEN` or `ANTHROPIC_API_KEY` that exists only in your
+shell never reaches the service. But `prreview once` in that same terminal does
+see it. To use an API key, run `prreview run` from a terminal that has the key.
+Or run `claude auth login` to store a login. On a machine with no browser, such
 as a server you reach over SSH, `claude auth login` prints a link to open on
-another device.
-Claude Code also runs with no settings sources, so nothing in
-`~/.claude/settings.json` (model, permissions, hooks, `env`) applies to a
-review.
+another device. Claude Code also runs with no settings sources. So nothing in
+`~/.claude/settings.json` (model, permissions, hooks, `env`) applies to a review.
 
-The reviewer clones over the protocol that `gh config get git_protocol`
-reports and fetches with the login of `gh`. With `ssh`, the background service
-would need your SSH key with no prompt, and a systemd user service has no
-ssh-agent. So `prreview setup` offers to switch `gh` to `https` when you choose
-the background service, and `prreview start` offers it when it installs the
-service and stdin is a terminal. With no terminal, `prreview start` prints the
-command and goes on. The switch changes `gh` for all programs, not only this
-one. The command is `gh config set git_protocol https -h github.com`.
+The reviewer clones over the protocol that `gh config get git_protocol` reports.
+It fetches with the login of `gh`. With `ssh`, the background service would need
+your SSH key with no prompt. A systemd user service has no ssh-agent. So
+`prreview setup` offers to switch `gh` to `https` when you choose the background
+service. `prreview start` offers it when it installs the service and stdin is a
+terminal. With no terminal, `prreview start` prints the command and goes on. The
+switch changes `gh` for all programs, not only this one. The command is
+`gh config set git_protocol https -h github.com`.
 
-On Linux, a separate account for the reviewer, called `reviewer` below, is a
-good way to keep it to itself. Log in to that account directly, for example
-over SSH, rather than switching to it with `su` or `sudo -iu`. A switched session has no
-`XDG_RUNTIME_DIR`, so `systemctl --user` cannot reach the account's service
-manager and `prreview setup` cannot install the service. If switching is the only
-way in:
+On Linux, a separate account for the reviewer keeps it apart. This page calls the
+account `reviewer`. Log in to that account directly, for example over SSH. Do not
+switch to it with `su` or `sudo -iu`. A switched session has no
+`XDG_RUNTIME_DIR`. So `systemctl --user` cannot reach the service manager of the
+account, and `prreview setup` cannot install the service. If switching is the
+only way in, run:
 
 ```bash
 sudo loginctl enable-linger reviewer      # once, from an admin account
@@ -337,17 +361,18 @@ export XDG_RUNTIME_DIR=/run/user/$(id -u) # in the reviewer's session
 
 | Path | What is there |
 | --- | --- |
-| `~/.config/pr-reviewer/` | `config`, `sensitive-patterns`, your copy of the checklist in `checks/`, and a GitHub App's key as `app.pem` |
-| `~/.cache/pr-reviewer/` | The service's log `gate.log`, round logs in `gate-logs/`, holds in `review-holdoff/`, and the round lock |
-| `~/.cache/pr-reviewer/work/` | Review clones and each round's scratch files (`PRREVIEW_GATE_WORKROOT`); under `$XDG_CACHE_HOME` when that is set |
-| `~/.local/state/pr-reviewer/` | Which repo the next round starts with; under `$XDG_STATE_HOME` when that is set |
+| `~/.config/pr-reviewer/` | `config`, `sensitive-patterns`, your copy of the checklist in `checks/`, and the key of a GitHub App as `app.pem` |
+| `~/.cache/pr-reviewer/` | The log `gate.log` of the service, round logs in `gate-logs/`, holds in `review-holdoff/`, and the round lock |
+| `~/.cache/pr-reviewer/work/` | Review clones and the scratch files of each round (`PRREVIEW_GATE_WORKROOT`). The path is under `$XDG_CACHE_HOME` when that is set |
+| `~/.local/state/pr-reviewer/` | Which repo the next round starts with. The path is under `$XDG_STATE_HOME` when that is set |
 | `~/Library/LaunchAgents/local.pr-reviewer.plist` | The background service on macOS |
 | `~/.config/systemd/user/pr-reviewer.service` | The background service on Linux |
 
 
 ## Removing it
 
-`prreview uninstall` removes only the background service. To remove everything:
+`prreview uninstall` removes only the background service. To remove everything,
+run:
 
 ```bash
 cd ~/pr-reviewer
@@ -357,11 +382,10 @@ rm -f ~/.local/bin/prreview
 cd ~ && rm -rf ~/pr-reviewer
 ```
 
-The first `rm` also deletes your checklist copy and the App's key; keep
-anything you want first. If `XDG_CACHE_HOME` or `XDG_STATE_HOME` is set, or
-you set `PRREVIEW_GATE_WORKROOT`, remove those directories too. If you ran
+The first `rm` also deletes your checklist copy and the key of the App. Keep
+anything you want first. If `XDG_CACHE_HOME` or `XDG_STATE_HOME` is set, or you
+set `PRREVIEW_GATE_WORKROOT`, remove those directories too. If you ran
 `loginctl enable-linger` only for the reviewer, `sudo loginctl disable-linger
 "$USER"` undoes it. A GitHub App stays on GitHub until you delete it on its
 settings page. If you added a `PATH` line to `~/.zshrc` for `~/.local/bin`,
 remove it by hand when nothing else uses that directory.
-

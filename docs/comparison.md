@@ -1,22 +1,29 @@
 # How pr-reviewer compares
 
-This page puts pr-reviewer next to other pull-request review tools. Every row about another tool links to the page it comes from. Pages were read in October 2026, and most vendor pages show no date. Tools change, so check the linked page before you rely on a row. "Not found" means the page does not say. It does not mean "no".
+This page puts pr-reviewer next to other pull-request review tools. Every row about another tool links to the page it comes from. The pages were read in October 2026. Most vendor pages show no date. Tools change, so check the linked page before you rely on a row. "Not found" means the page does not say. It does not mean "no".
 
-The page lists no price and no review quality. pr-reviewer has no published accuracy number yet. See [Accuracy](#accuracy).
+This page lists no price and no review quality. pr-reviewer has no published accuracy number yet. See [Accuracy](#accuracy).
+
 
 ## Where pr-reviewer differs
 
-Each point names the code that does it. The code paths are at the commit you are reading.
+Each point names the code that does it. The code paths are at the commit that you read.
 
-- **It runs on your machine and needs no admin rights.** A loop polls once a minute. It needs your `gh` login and your Claude Code login, and no workflow file, GitHub App or webhook. [`prreview`](../prreview) checks the Claude Code login with `claude auth status`.
-- **The default branch supplies the rules for every PR.** `CLAUDE.md`, `AGENTS.md`, any README or CONTRIBUTING file, `.mcp.json`, `.claude/` and `.github/review-checks.md` are copied from the default branch after the PR's diff is applied ([`tree_force_convention_files`](../lib/tree.sh#L265), list at [`lib/tree.sh:168`](../lib/tree.sh#L168)).
-- **The model gets three read tools.** `Read`, `Grep` and `Glob` only, set with `--tools` ([`lib/claude-call.sh:48`](../lib/claude-call.sh#L48) and [`:73`](../lib/claude-call.sh#L73)). The code refuses a Claude Code older than 2.1.305 ([`:42`](../lib/claude-call.sh#L42)). Your code is never run.
-- **A second call tries to refute each blocking finding.** A refutation removes a finding only at confidence 0.8 or higher ([`lib/findings.sh:995`](../lib/findings.sh#L995)). The step can only remove findings, so it lowers false alarms and is not a security control ([SECURITY.md](../SECURITY.md)).
-- **A comment is scanned against your own patterns before it posts.** A hit, or a scan that cannot run, means the comment is replaced by a short notice ([`scan_hit_or_unknown`](../lib/scan.sh#L80), used before the final post at [`pr-autoreview.sh:3062`](../pr-autoreview.sh#L3062)).
-- **It posts nothing when a step fails.** Output that cannot be parsed, even after one repair call, gives "no action (fail closed)" ([`pr-autoreview.sh:2194`](../pr-autoreview.sh#L2194)).
+- **It runs on your machine and needs no admin rights.** A loop polls once a minute. It needs your `gh` login and your Claude Code login. It needs no workflow file, GitHub App or webhook. [`prreview`](../prreview) checks the Claude Code login with `claude auth status`.
+- **The default branch supplies the rules for every PR.** The reviewer applies the diff of the PR first. Then it copies these files from the default branch:
+  - `CLAUDE.md` and `AGENTS.md`
+  - any README or CONTRIBUTING file
+  - `.mcp.json` and `.claude/`
+  - `.github/review-checks.md`
+
+  The function is [`tree_force_convention_files`](../lib/tree.sh#L265). The file list is at [`lib/tree.sh:168`](../lib/tree.sh#L168).
+- **The model gets three read tools.** The tools are `Read`, `Grep` and `Glob`, and nothing else. The `--tools` option sets them ([`lib/claude-call.sh:48`](../lib/claude-call.sh#L48) and [`:73`](../lib/claude-call.sh#L73)). The code refuses a Claude Code older than 2.1.305 ([`:42`](../lib/claude-call.sh#L42)). Your code never runs.
+- **A second call tries to refute each blocking finding.** A refutation removes a finding only at confidence 0.8 or higher ([`lib/findings.sh:995`](../lib/findings.sh#L995)). The step can only remove findings. It lowers false alarms. It is not a security control ([SECURITY.md](../SECURITY.md)).
+- **It scans a comment against your own patterns before it posts.** A match, or a scan that cannot run, replaces the comment with a short notice ([`scan_hit_or_unknown`](../lib/scan.sh#L80), used before the final post at [`pr-autoreview.sh:3062`](../pr-autoreview.sh#L3062)).
+- **It posts nothing when a step fails.** If the output cannot be parsed, even after one repair call, the result is "no action (fail closed)" ([`pr-autoreview.sh:2194`](../pr-autoreview.sh#L2194)).
 - **Unfixed blocking findings carry over to the next round.** The round prompt tells the model to mark them "Carried over:" ([`pr-autoreview.sh:1810`](../pr-autoreview.sh#L1810)).
-- **Claims in the PR text are checked against the diff.** Sentences such as "tests pass" or "verified" are handed to the model as claims to check ([`prompt_claims_section`](../lib/prompt.sh#L564)).
-- **It comments and nothing more.** Every verdict is a `gh pr comment` ([`pr-autoreview.sh:3084`](../pr-autoreview.sh#L3084)). Its one merge-related call is `gh pr merge --disable-auto`, which disarms an auto-merge on a head the reviewer has not reviewed ([`lib/merge.sh:26`](../lib/merge.sh#L26)).
+- **Claims in the PR text are checked against the diff.** The prompt gives the model sentences such as "tests pass" or "verified" as claims to check ([`prompt_claims_section`](../lib/prompt.sh#L564)).
+- **It comments and nothing more.** Every verdict is a `gh pr comment` ([`pr-autoreview.sh:3084`](../pr-autoreview.sh#L3084)). It makes one merge-related call: `gh pr merge --disable-auto`. This call disarms an auto-merge on a head that the reviewer has not reviewed ([`lib/merge.sh:26`](../lib/merge.sh#L26)).
 - **A second, adversarial pass is off by default.** The red team runs only when `PRREVIEW_GATE_REDTEAM` is set ([`lib/redteam.sh:61`](../lib/redteam.sh#L61)).
 
 ## Tools side by side
@@ -50,15 +57,15 @@ These columns come from each vendor's own documentation.
 
 ## Login
 
-**It uses your Claude Code login.** Anthropic's [legal and compliance page][cc-legal] says the advertised Pro and Max limits "assume ordinary, individual usage" and gives no number (read 2026-10-21). Anthropic decides whether an always-on poller counts. An API key avoids the question, but a key set in your shell does not reach the background service. Run `prreview run` from a terminal that has the key ([details](operations.md#where-to-run-it)).
+**It uses your Claude Code login.** Anthropic's [legal and compliance page][cc-legal] says the advertised Pro and Max limits "assume ordinary, individual usage". The page gives no number (read 2026-10-21). Anthropic decides whether an always-on poller counts. An API key avoids the question. But a key set in your shell does not reach the background service. Run `prreview run` from a terminal that has the key ([details](operations.md#where-to-run-it)).
 
 Other tools, per their docs:
 
-- claude-code-action takes an OAuth token for a Claude subscription, and it needs a workflow file and a secret ([GitHub Actions docs][cc-actions]).
-- OpenCodeReview has a delegation mode that reuses the host agent's subscription quota ([delegation doc][ocr-delegate]).
+- claude-code-action takes an OAuth token for a Claude subscription. It needs a workflow file and a secret ([GitHub Actions docs][cc-actions]).
+- OpenCodeReview has a delegation mode. The mode reuses the subscription quota of the host agent ([delegation doc][ocr-delegate]).
 - The PR-Agent docs describe model provider API keys through LiteLLM. They do not describe a subscription login ([changing a model][pa-model]).
-- CodeRabbit runs its own models, and no option to use your own Claude login was found ([FAQ][cr-faq]).
-- The terms forbid routing requests through Free, Pro or Max credentials "on behalf of their users". One Claude Code login is for one person, so a Claude login shared by a team does not fit pr-reviewer ([legal and compliance page][cc-legal]).
+- CodeRabbit runs its own models. No option to use your own Claude login was found ([FAQ][cr-faq]).
+- The terms forbid routing requests through Free, Pro or Max credentials "on behalf of their users". One Claude Code login is for one person. So a Claude login that a team shares does not fit pr-reviewer ([legal and compliance page][cc-legal]).
 
 ## When pr-reviewer fits
 
@@ -68,23 +75,24 @@ Other tools, per their docs:
 - You want the model limited to reading, with PR text handled as data and every comment scanned before it posts.
 - You want a comment and not a gate.
 
+
 ## When another tool fits
 
-- **You want built-in scanners.** CodeRabbit lists 50 or more ([tools][cr-tools]). Bito and Amazon Q list their own ([Bito][bito], [Amazon Q][amazonq]). pr-reviewer has none.
+- **You want built-in scanners.** CodeRabbit lists 50 or more ([tools][cr-tools]). Bito and Amazon Q list their own scanners ([Bito][bito], [Amazon Q][amazonq]). pr-reviewer has none.
 - **You want the tool to learn from feedback.** CodeRabbit, Greptile, Cursor Bugbot, Graphite Agent and Kodus do ([CodeRabbit][cr-learn], [Greptile][greptile-rules], [Bugbot][bugbot], [Graphite][graphite], [Kodus][kodus-readme]). pr-reviewer does not.
-- **You want one-click fixes.** Copilot, Greptile, Cursor Bugbot and CodeRabbit are listed as offering them ([Copilot][gh-use], [Greptile][greptile-rules], [Bugbot][bugbot], [CodeRabbit][cr-config]). pr-reviewer is built not to change your code.
-- **You want a merge gate.** CodeRabbit can request changes and approve ([request changes][cr-request]). Kodus can request changes and auto-approve ([policy][kodus-policy]). Copilot approvals are in public preview ([use][gh-use]). pr-reviewer never approves and never submits a GitHub review.
-- **You do not want a machine to keep running.** CodeRabbit runs as a vendor service ([FAQ][cr-faq]). Anthropic's managed Code Review runs on Anthropic infrastructure ([Code Review][cc-review]). claude-code-action runs on your GitHub runner, so it does not depend on your computer being on ([README][cca-readme]). pr-reviewer pauses when the machine sleeps.
+- **You want one-click fixes.** The docs list Copilot, Greptile, Cursor Bugbot and CodeRabbit as offering them ([Copilot][gh-use], [Greptile][greptile-rules], [Bugbot][bugbot], [CodeRabbit][cr-config]). pr-reviewer is built not to change your code.
+- **You want a merge gate.** CodeRabbit can request changes and approve ([request changes][cr-request]). Kodus can request changes and auto-approve ([policy][kodus-policy]). Copilot approvals are in public preview ([use][gh-use]). pr-reviewer never approves. It never submits a GitHub review.
+- **You do not want a machine to keep running.** CodeRabbit runs as a vendor service ([FAQ][cr-faq]). Anthropic's managed Code Review runs on Anthropic infrastructure ([Code Review][cc-review]). claude-code-action runs on your GitHub runner. So it does not depend on your computer being on ([README][cca-readme]). pr-reviewer pauses when the machine sleeps.
 - **You use GitLab, Bitbucket or Azure DevOps.** PR-Agent supports all three ([README][pa-readme]). OpenCodeReview supports GitLab CI and Gerrit ([README][ocr-readme]). pr-reviewer uses `gh` and works on GitHub only.
 - **You want to ask follow-up questions inside the PR.** claude-code-action answers `@claude` in a PR ([README][cca-readme]).
-- **You need hidden characters removed from PR text.** claude-code-action cleans input of hidden content ([security][cca-security]). pr-reviewer does not. It wraps PR text in markers with a random value and tells the model that the text is data. [SECURITY.md](../SECURITY.md) says this is an instruction to the model and not a sandbox.
+- **You need hidden characters removed from PR text.** claude-code-action cleans hidden content from its input ([security][cca-security]). pr-reviewer does not. It wraps PR text in markers with a random value. It tells the model that the text is data. [SECURITY.md](../SECURITY.md) says this is an instruction to the model and not a sandbox.
 - **A team shares one reviewer.** See [Login](#login). The terms do not allow routing a shared Claude login through other people's use.
 
 ## Accuracy
 
-pr-reviewer has no published accuracy number yet. A paired benchmark is in progress. It scores seeded-bug PRs against clean PRs. Until it reports, treat pr-reviewer's detection rate as unknown.
+pr-reviewer has no published accuracy number yet. A paired benchmark is in progress. It scores seeded-bug PRs against clean PRs. Until it reports, treat the detection rate of pr-reviewer as unknown.
 
-The numbers other vendors publish are vendor claims. Each vendor's benchmark ranks its own tool first, and some of them share the same repos or the same bug-seeding method, so they are not independent ([Greptile][greptile-bench], [Entelligence][entelligence], [Qodo][qodo-bench]).
+The numbers that other vendors publish are vendor claims. Each vendor's benchmark ranks its own tool first. Some of them share the same repos or the same bug-seeding method. So they are not independent ([Greptile][greptile-bench], [Entelligence][entelligence], [Qodo][qodo-bench]).
 
 | Source | Number | What it is |
 | --- | --- | --- |
@@ -95,11 +103,12 @@ The numbers other vendors publish are vendor claims. Each vendor's benchmark ran
 
 Independent studies:
 
-- SWE-PRBench, 350 PRs and eight models. With only the diff, the models found 15% to 31% of the problems that human reviewers flagged. More context made all eight models worse ([arXiv][swe-prbench]).
-- SWR-Bench, 1,000 verified PRs. Merging several review runs raised F1 by up to 43.67% ([arXiv][swr-bench]).
-- A field study of 31,073 CodeRabbit review responses. Developers accepted 36.4% and rejected 56.3% (academic, abstract only, [arXiv][cr-field]).
-- RevMate, 587 or more patch reviews in two organizations. Teams accepted 8.1% and 7.2% of the generated comments ([arXiv][revmate]).
-- A study of 16 GitHub AI-review actions. 0.9% to 19.2% of valid AI comments were acted on, against 60% of human comments ([arXiv][sun25]).
+- SWE-PRBench has 350 PRs and eight models. With only the diff, the models found 15% to 31% of the problems that human reviewers flagged. More context made all eight models worse ([arXiv][swe-prbench]).
+- SWR-Bench has 1,000 verified PRs. Merging several review runs raised F1 by up to 43.67% ([arXiv][swr-bench]).
+- A field study covers 31,073 CodeRabbit review responses. Developers accepted 36.4% and rejected 56.3% (academic, abstract only, [arXiv][cr-field]).
+- RevMate covers 587 or more patch reviews in two organizations. Teams accepted 8.1% and 7.2% of the generated comments ([arXiv][revmate]).
+- A study of 16 GitHub AI-review actions found that 0.9% to 19.2% of valid AI comments were acted on. For human comments, the figure was 60% ([arXiv][sun25]).
+
 
 [cca-readme]: https://github.com/anthropics/claude-code-action
 [cca-security]: https://github.com/anthropics/claude-code-action/blob/main/docs/security.md
