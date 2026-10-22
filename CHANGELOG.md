@@ -28,6 +28,9 @@ All notable changes to this project are recorded here. The format follows
   skips PRs prints one `WARNING:` line with the count.
 - `README.zh-TW.md` is a translation of `README.md`. It states the same
   facts.
+- `docs/how-it-reviews.md` lists the 13 checklist items with their default
+  severities, the security standards they cite, and what the reviewer does not
+  cover yet.
 
 ### Changed
 
