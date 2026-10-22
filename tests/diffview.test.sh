@@ -216,8 +216,7 @@ NEW[1]${TAB}+y"
 # ── CRLF payload keeps its carriage return ───────────────────────────────
 printf 'diff --git a/c.txt b/c.txt\n--- a/c.txt\n+++ b/c.txt\n@@ -1 +1 @@\n-a\r\n+b\r\n' > "$TMP/in.diff"
 diffview_render "$TMP/in.diff" "$TMP/out.view"
-is 'a carriage return stays on its line' "$(sed -n 6p "$TMP/out.view" | od -An -c | tr -s ' ')" \
-   " N E W [ 1 ] \t + b \r \n"
+is 'a carriage return stays on its line' "$(sed -n 6p "$TMP/out.view" | tail -c 4 | od -An -tx1 | tr -d ' \n')" "2b620d0a"
 
 # ── generation failure: no output file, non-zero status ──────────────────
 fails() { # $1 label, $2 text
@@ -287,8 +286,9 @@ printf 'x\n' > "$G/mode.sh"
 printf 'no newline at end' > "$G/nonl.txt"
 printf '\000\001\002' > "$G/bin.dat"
 git -C "$G" add -A && git -C "$G" commit -q -m base
-sed -i.bak -e '3d' -e '12a added after 12' -e '30s/.*/changed 30/' "$G/multi.txt"
-sed -i.bak -e '100s/.*/changed 100/' -e '11050a added deep' -e '11990d' "$G/big.txt"
+# awk, not sed: the "a" command of BSD sed (macOS) needs a different syntax.
+awk 'NR == 3 { next } NR == 30 { $0 = "changed 30" } { print } NR == 12 { print "added after 12" }' "$G/multi.txt" > "$G/multi.new" && mv "$G/multi.new" "$G/multi.txt"
+awk 'NR == 11990 { next } NR == 100 { $0 = "changed 100" } { print } NR == 11050 { print "added deep" }' "$G/big.txt" > "$G/big.new" && mv "$G/big.new" "$G/big.txt"
 git -C "$G" rm -q gone.txt
 git -C "$G" mv rename-old.txt rename-new.txt
 printf 'a\nb\nCHANGED\nd\ne\n' > "$G/rename-new.txt"
@@ -296,7 +296,6 @@ chmod +x "$G/mode.sh"
 printf 'brand new\nfile\n' > "$G/fresh.txt"
 printf 'no newline changed' > "$G/nonl.txt"
 printf '\000\001\003' > "$G/bin.dat"
-rm -f "$G"/*.bak
 git -C "$G" add -A
 git -C "$G" diff --cached -U1 > "$TMP/real.diff"
 if diffview_render "$TMP/real.diff" "$TMP/real.view"; then
