@@ -31,6 +31,10 @@ All notable changes to this project are recorded here. The format follows
 - `docs/how-it-reviews.md` lists the 13 checklist items with their default
   severities, the security standards they cite, and what the reviewer does not
   cover.
+- `docs/install.md`, `docs/trust-cost-limits.md` and `docs/demo.md` are new.
+  They hold the install steps, the trust, cost and limits text, and the demo
+  recording with the example comment. `docs/zh-TW/diagrams.md` holds the
+  diagrams for `README.zh-TW.md`.
 
 ### Changed
 
@@ -142,6 +146,11 @@ All notable changes to this project are recorded here. The format follows
   GitHub approval." A Changes requested banner is unchanged.
 - `README.zh-TW.md` uses plain wording and has its own diagrams. The body text
   of every diagram is justified.
+- The README is about 150 lines. It keeps what a new user needs to decide,
+  install and use the tool. The diagrams moved to `docs/how-it-reviews.md`,
+  and the install details moved to `docs/install.md`. `docs/operations.md`
+  has a new section, Command rules. `README.zh-TW.md` has the same structure
+  as `README.md`.
 
 ### Fixed
 
