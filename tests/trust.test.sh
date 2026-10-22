@@ -129,6 +129,7 @@ STUB_EOF
 # A gh that answers from files in \$T and writes every call to gh.calls.
 # list.json answers the open PR list, view-N.json answers `pr view N` (a
 # draft when there is no file) and view-N.K.json answers its K-th call,
+# view-N.K.rc is the exit code of that call (it prints nothing),
 # list.rc is the exit code of the list, and
 # merged.json answers the list of merged PRs (empty when there is no file).
 # merge.rc is the exit code of `pr merge` (0 when there is no file).
@@ -149,6 +150,7 @@ case "\$1 \$2" in
     esac ;;
   "pr view")
     k="\$(grep -c "^pr view \$3 " "$T/gh.calls")"
+    [ ! -f "$T/view-\$3.\$k.rc" ] || exit "\$(cat "$T/view-\$3.\$k.rc")"
     if [ -f "$T/view-\$3.\$k.json" ]; then emit "\$(cat "$T/view-\$3.\$k.json")"
     elif [ -f "$T/view-\$3.json" ]; then emit "\$(cat "$T/view-\$3.json")"; else emit '{"isDraft":true}'; fi ;;
   "api "*)
@@ -435,7 +437,7 @@ view2 "$(cd_comment "$HEAD40" 60)" false > "$T/view-2.json"
 OUT="$(run_gate PRREVIEW_GATE_FORK_PRS=1)"
 has 'cooldown: the log says the PR waits and why'      "$OUT" "PR #2: same head as the reviewer's last comment, and that comment is 60 s old. Waiting 540 s more"
 has '...and the setting that changes it'               "$OUT" 'PRREVIEW_GATE_PR_COOLDOWN_MIN=10'
-is  '...and the job did not start (one read only)'     "$(viewed 2)" 1
+is  '...and the job did not start (the check and one re-read of the head)' "$(viewed 2)" 2
 has '...and the round ends well'                       "$OUT" 'rc=0'
 OUT="$(run_gate PRREVIEW_GATE_FORK_PRS=1 PRREVIEW_GATE_PR_COOLDOWN_MIN=0)"
 lacks 'cooldown 0: no wait'                            "$OUT" 'same head'
@@ -455,6 +457,19 @@ OUT="$(run_gate PRREVIEW_GATE_FORK_PRS=1)"
 has 'an unreadable time: the log says it is not applied' "$OUT" 'could not read when the reviewer commented'
 lacks '...and there is no wait'                        "$OUT" 'same head'
 is  '...and the job starts'                            "$([ "$(viewed 2)" -ge 2 ] && echo yes)" yes
+# A push between the dispatcher's read and the skip: the skip is decided on
+# the first read, so one more read of the head must confirm it. A head that
+# moved, or a re-read that fails, means no skip.
+view2 "$(cd_comment "$HEAD40" 60)" false > "$T/view-2.1.json"
+jq -nc '{headRefOid:"2222222222222222222222222222222222222222"}' > "$T/view-2.2.json"; rm -f "$T/view-2.json"
+OUT="$(run_gate PRREVIEW_GATE_FORK_PRS=1)"
+lacks 'a head that moved before the skip: no wait'     "$OUT" 'same head'
+is  '...and the job starts (a third read)'             "$([ "$(viewed 2)" -ge 3 ] && echo yes)" yes
+rm -f "$T/view-2.2.json"; echo 1 > "$T/view-2.2.rc"
+OUT="$(run_gate PRREVIEW_GATE_FORK_PRS=1)"
+lacks 'a re-read that fails: no wait'                  "$OUT" 'same head'
+is  '...and the job starts (a third read)'             "$([ "$(viewed 2)" -ge 3 ] && echo yes)" yes
+rm -f "$T/view-2.1.json" "$T/view-2.2.rc"
 # A named PR asked for a review: it gets one, and the round keeps its rule
 # (0 only after a verdict). The dispatcher reads the fresh comment, the job
 # reads a draft, which shows that the job started.

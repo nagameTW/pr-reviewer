@@ -3359,8 +3359,20 @@ for PR in $OPEN_PRS; do
     # extra review, never a PR left unreviewed.
     if [ -z "$ONCE_NUM" ]; then
       CD_LAST="$(cooldown_last_gate_comment "$PRE" "$MARKER" "$PRIOR_AUTHORS")"
-      CD_ANSWER="$(cooldown_decide "$(jq -r '.headRefOid // ""' <<<"$PRE" 2>/dev/null)" \
+      CD_HEAD="$(jq -r '.headRefOid // ""' <<<"$PRE" 2>/dev/null)"
+      CD_ANSWER="$(cooldown_decide "$CD_HEAD" \
         "${CD_LAST%% *}" "${CD_LAST#* }" "$(date +%s)" "$COOLDOWN_MIN")"
+      # A push after the first read makes the snapshot old. Read the head
+      # again and skip only when it is the same. A re-read that fails does
+      # not skip: one extra review, never a new head that waits.
+      case "$CD_ANSWER" in
+        "skip "*)
+          CD_NOW="$("$GH" pr view "$PR" --repo "$REPO" --json headRefOid --jq '.headRefOid' 2>/dev/null)" || CD_NOW=""
+          if [ -z "$CD_NOW" ] || [ "$CD_NOW" != "$CD_HEAD" ]; then
+            echo "[$REPO_KEY#$PR] PR #$PR: the head changed or could not be read again, so the cooldown does not apply to this PR"
+            CD_ANSWER="review recheck"
+          fi ;;
+      esac
       case "$CD_ANSWER" in
         "skip "*)
           CD_LEFT="${CD_ANSWER#skip }"
