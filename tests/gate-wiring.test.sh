@@ -141,12 +141,35 @@ before 'the gh version is checked before the lock' 'gh_version_check "$GH" || ex
 # fetch pinned to the SHA from the same `gh pr view` read, the file list taken
 # from that file, the count checked against that read's changedFiles.
 is     'no moving gh pr diff call is left in the gate or its libs' "$(grep -n 'pr diff' pr-autoreview.sh lib/*.sh | tr '\n' ' ')" ''
-pin    'the PR info read carries changedFiles and the base commit, from one read with the head' 'headRefOid,isDraft,reviews,comments,title,body,additions,deletions,changedFiles,autoMergeRequest,baseRefName,baseRefOid)"' pr-autoreview.sh
+pin    'the PR info read carries changedFiles and the base commit, from one read with the head' 'headRefOid,isDraft,reviews,comments,title,body,additions,deletions,changedFiles,autoMergeRequest,baseRefName,baseRefOid,number,author,isCrossRepository)"' pr-autoreview.sh
 pin    'the diff is fetched for the SHA the key was made from, with the file count of the same read' 'pr_diff_pinned "$REPO" "$MERGE_BASE" "$SHA" "$DIFF" "$(jq -r '"'"'.changedFiles // ""'"'"' <<<"$INFO")"' pr-autoreview.sh
 before 'the merge base is resolved from the two commit IDs, before the diff is fetched' 'MERGE_BASE="$(merge_base_sha "$REPO" "$PR_BASE_OID" "$SHA")"' 'pr_diff_pinned "$REPO"' pr-autoreview.sh
 before 'the diff is fetched before it is applied to the tree' 'pr_diff_pinned "$REPO"' 'APPLY_ERR="$(git -C "$REPO_DIR" apply' pr-autoreview.sh
 before 'the file list exists before anything reads it' 'pr_diff_pinned "$REPO"' 'REVIEW_CHECKS="$(review_checks_render' pr-autoreview.sh
 is     'the merge base is looked up once' "$(grep -c 'MERGE_BASE="$(merge_base_sha' pr-autoreview.sh)" 1
+
+# Who the reviewer reads (lib/trust.sh). The list call reads the author, the
+# fork flag and the labels, and the filter runs on that one answer before any
+# per-PR call for a skipped PR. The job looks again with its own read, and a PR it does not
+# trust ends with `return 0` before the first model call and the first diff
+# fetch.
+pin    'the filter runs on the one list answer' 'PR_PLAN="$(trust_plan_prs "$PR_LIST" "$TRUSTED_AUTHORS" "$GATE_FORK_PRS" "$ONCE_NUM")" \' pr-autoreview.sh
+before 'the author filter runs before the first per-PR call' 'PR_PLAN="$(trust_plan_prs' 'PRE="$("$GH" pr view' pr-autoreview.sh
+JOB="$(awk '/^review_one_pr\(\) \{/,/^\}$/' pr-autoreview.sh | grep -vE '^[[:space:]]*#')"
+JOB_TRUST_LN="$(grep -nF 'pr_author_trusted' <<<"$JOB" | head -1 | cut -d: -f1)"
+JOB_MODEL_LN="$(grep -nF 'claude_call' <<<"$JOB" | head -1 | cut -d: -f1)"
+JOB_DIFF_LN="$(grep -nF 'pr_diff_pinned' <<<"$JOB" | head -1 | cut -d: -f1)"
+if [ -n "$JOB_TRUST_LN" ] && [ -n "$JOB_MODEL_LN" ] && [ -n "$JOB_DIFF_LN" ] && [ "$JOB_TRUST_LN" -lt "$JOB_MODEL_LN" ] && [ "$JOB_TRUST_LN" -lt "$JOB_DIFF_LN" ]; then
+  ok 'the job checks the author before any model call and before the diff is fetched'
+else
+  bad 'the job checks the author before any model call and before the diff is fetched' "trust at ${JOB_TRUST_LN:-none}, first model call at ${JOB_MODEL_LN:-none}, diff at ${JOB_DIFF_LN:-none}"
+fi
+is     'a PR the job does not trust ends with return 0, not exit or continue' "$(sed -n "$((${JOB_TRUST_LN:-0})),$((${JOB_TRUST_LN:-0} + 5))p" <<<"$JOB" | grep -c '^    return 0$')" 1
+pin    'the job passes the PR number that once --pr named' 'pr_author_trusted "$INFO" "$TRUSTED_AUTHORS" "$ONCE_NUM"' pr-autoreview.sh
+pin    'a named PR waits for the round lock and does not give up quietly' 'ONCE_LOCK_OPT=(-w "$ONCE_WAIT")' pr-autoreview.sh
+pin    '...and a wait of 0 does not wait' '[ "$ONCE_WAIT" -gt 0 ] || ONCE_LOCK_OPT=(-n)' pr-autoreview.sh
+pin    '...and fails when it cannot get the lock' 'if ! flock "${ONCE_LOCK_OPT[@]}" 9; then' pr-autoreview.sh
+before 'the named PR is read before the lock is taken' 'ONCE_REF="$(trust_parse_pr_ref' 'LOCKFILE=' pr-autoreview.sh
 
 # `line` in a finding has one meaning, written once (REVIEW_LINE_SPEC in
 # lib/review-spec.sh) and handed to every prompt whose schema has `line`.

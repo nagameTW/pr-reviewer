@@ -152,7 +152,7 @@ case "$1 $2" in
   "repo view") r="${3#https://github.com/}"; [ "$r" != me/old ] || r=me/new
                case "$r" in me/*|acme/*) echo "$r" ;; *) exit 1 ;; esac ;;
   "config get") echo "${FAKE_GH_PROTOCOL:-https}" ;;
-  "config set") echo "$*" >> "${FAKE_GH_SET_LOG:-/dev/null}" ;;
+  "config set") echo "$*" >> "${FAKE_GH_SET_LOG:-/dev/null}"; echo "gh config set" >> "${FAKE_ORDER_LOG:-/dev/null}" ;;
   *) exit 1 ;;
 esac
 EOF
@@ -265,6 +265,15 @@ prreview set parallel 5 >/dev/null
 is 'set takes a friendly name' "$(prreview get parallel)" 5
 has 'set refuses a misspelled setting' "$(prreview set PRREVIEW_GATE_PARALEL 5 2>&1)" 'not a setting the reviewer reads'
 has 'set refuses a name that is not a setting' "$(prreview set bogus 1 2>&1)" 'not a setting name'
+# PRREVIEW_ONCE_PR names the PR of one `prreview once --pr` run. As a setting
+# it would name the same PR in every round of the loop.
+is 'PRREVIEW_ONCE_PR is not a setting name' "$(prreview_key_of PRREVIEW_ONCE_PR || echo refused)" refused
+has 'the settings file refuses to store it' "$(prreview_config_set "$T/once-set" PRREVIEW_ONCE_PR 'a/b#5' 2>&1)" 'not a setting name: PRREVIEW_ONCE_PR'
+is '...and holds nothing after the refusal' "$([ -e "$T/once-set" ] && echo written || echo none)" none
+printf 'PRREVIEW_GATE_REPOS=a/b\nPRREVIEW_ONCE_PR=a/b#5\n' > "$T/once"
+is 'a settings file that holds it is refused, naming the line' "$(prreview_config_read "$T/once" 2>&1 >/dev/null | cut -d: -f2)" 2
+has '...and the message says how the key is set' "$(prreview_config_read "$T/once" 2>&1 >/dev/null)" 'prreview once --pr'
+has 'set refuses it' "$(prreview set PRREVIEW_ONCE_PR a/b#5 2>&1)" 'not a setting name: PRREVIEW_ONCE_PR'
 OUT="$(prreview bogus 2>&1)"; RC=$?
 has 'an unknown command is named' "$OUT" 'unknown command: bogus'
 is '...and is a usage error' "$RC" 2
@@ -343,13 +352,13 @@ prreview set checks "$MYCHECKS" >/dev/null
 D2="$T/d2"; mkdir -p "$D2"
 # With FAKE_SYSTEMCTL_STOPPED set, is-active fails, so an installed service
 # reads as stopped.
-printf '#!/bin/sh\necho "$*" >> "%s"\ncase "$*" in *is-active*) [ -z "$FAKE_SYSTEMCTL_STOPPED" ] || exit 3 ;; esac\n' "$D2/systemctl.log" > "$D2/systemctl"; chmod +x "$D2/systemctl"
+printf '#!/bin/sh\necho "$*" >> "%s"\necho "systemctl $*" >> "${FAKE_ORDER_LOG:-/dev/null}"\ncase "$*" in *is-active*) [ -z "$FAKE_SYSTEMCTL_STOPPED" ] || exit 3 ;; esac\n' "$D2/systemctl.log" > "$D2/systemctl"; chmod +x "$D2/systemctl"
 UNIT_FILE="$H/.config/systemd/user/$PRREVIEW_SERVICE_NAME.service"
 # d2_via <runner> <gh git_protocol> <prreview arguments>: on Linux; gh records
 # config set. The runner (a command name, or empty) starts the command.
 d2_via() {
   local run="$1" proto="$2"; shift 2
-  $run "${PRREVIEW_ENV[@]}" PRREVIEW_PLATFORM=linux PATH="$D2:$FAKE:$PATH" FAKE_GH_PROTOCOL="$proto" FAKE_GH_SET_LOG="$D2/ghset.log" bash "$ROOT/prreview" "$@"
+  $run "${PRREVIEW_ENV[@]}" PRREVIEW_PLATFORM=linux PATH="$D2:$FAKE:$PATH" FAKE_GH_PROTOCOL="$proto" FAKE_GH_SET_LOG="$D2/ghset.log" FAKE_ORDER_LOG="$D2/order.log" bash "$ROOT/prreview" "$@"
 }
 d2() { d2_via "" "$@"; }
 # pty_run <command...>: runs the command with a terminal on stdin and stdout.
@@ -364,7 +373,7 @@ pty_run() {
   fi
 }
 d2_tty() { d2_via pty_run "$@"; }
-d2_reset() { rm -f "$UNIT_FILE" "$D2/ghset.log"; : > "$D2/systemctl.log"; }
+d2_reset() { rm -f "$UNIT_FILE" "$D2/ghset.log" "$D2/order.log"; : > "$D2/systemctl.log"; }
 # Five answers for the steps before the service question: Enter for the
 # repositories, who posts, parallel and model; n for the patterns file.
 D2_STEPS='\n\n\n\nn\n'
@@ -389,7 +398,8 @@ d2_reset
 OUT="$(printf "${D2_STEPS}y\ny\n" | d2 ssh setup 2>&1)"
 has 'y to the service question: setup warns when gh clones over ssh' "$OUT" 'no ssh-agent'
 is '...and switches gh to https on yes' "$(cat "$D2/ghset.log" 2>/dev/null)" 'config set git_protocol https -h github.com'
-is '...before it installs the service' "$([ -e "$UNIT_FILE" ] && echo installed || echo none)" installed
+is '...and installs the service' "$([ -e "$UNIT_FILE" ] && echo installed || echo none)" installed
+is '...and gh config set comes before the first systemctl call' "$(head -n1 "$D2/order.log")" 'gh config set'
 
 d2_reset
 printf "${D2_STEPS}y\nn\n" | d2 ssh setup >/dev/null 2>&1
