@@ -108,7 +108,9 @@ All notable changes to this project are recorded here. The format follows
   branch is reviewed with today's rules, and a PR is reviewed again under new
   rules only when something else starts a new round. This is intended. A
   symlink from a convention file now needs a target that git tracks under
-  any letter case of a convention name.
+  any letter case of a convention name. The note to the model says that a path
+  the default branch lacks is absent from the tree. The log line about the
+  copy appears only when a convention file changed.
 
 ### Fixed
 

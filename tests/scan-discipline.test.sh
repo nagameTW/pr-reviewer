@@ -224,9 +224,10 @@ want 'the verify prompt still branches on whether the diff was applied' \
 # write the files the prompt calls the project's conventions (CLAUDE.md,
 # AGENTS.md, .claude/skills/), i.e. to supply its own review rules. Three
 # versions of that guard were wrong before this one, and none of them was
-# pinned by anything — so pin the guard's existence and its shape: git
-# pathspecs, never a regex over the diff, because that is the axis it kept
-# failing on (root-anchored, then blind to C-quoted non-ASCII headers).
+# pinned by anything — so pin the guard's existence and its shape: a
+# regex over the file names git lists, never a pathspec and never the text of
+# the diff, because that is the axis it kept failing on (root-anchored, then
+# blind to C-quoted non-ASCII headers).
 #
 # Lives in lib/tree.sh —
 # checked the same way merge_base_allowed is checked below: the SHAPE is

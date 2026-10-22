@@ -25,9 +25,10 @@
 # path pattern reads it from the link, so `docs/sub/../../x` matches the tree's
 # pattern and opens x beside the tree. A file cannot be walked through.
 # And a link at a convention path (TREE_CONV_RE) must lead to a convention
-# file git tracks under that exact name: only those are restored from the base
-# before this runs, so `AGENTS.md -> docs/x.md` would let a PR that edits
-# docs/x.md write the rules it is judged by.
+# file git tracks under a convention name in any letter case: only those are
+# replaced from the default branch (tree_force_convention_files) before this
+# runs, so `AGENTS.md -> docs/x.md` would let a PR that edits docs/x.md write
+# the rules it is judged by.
 #
 # Walking the filesystem, not `git ls-tree`: a symlink can arrive from a
 # source `git ls-tree` never sees (an extracted archive, a patch applied on
@@ -244,8 +245,9 @@ tree_revert_convention_files() {
 #   - a convention file in the tree that $2 has is replaced with $2's copy;
 #   - a convention file in the tree that $2 lacks is removed (disk and index);
 #   - a convention file that only $2 has is added.
-# Returns 0 when done and sets TREE_CONV_FORCED to 1 when it touched a file,
-# else 0 (and to 0 on a failure). Returns 1 and sets TREE_CONV_ERR to a sentence when a step failed,
+# Returns 0 when done and sets TREE_CONV_FORCED to 1 when a file changed
+# (its content differs from $2's, or it was added or removed), else 0 (and to
+# 0 on a failure). Returns 1 and sets TREE_CONV_ERR to a sentence when a step failed,
 # and the caller must not review: a tree where one convention file still comes
 # from the PR or its parent holds rules that the author chose. Nothing is
 # removed before both file lists are read, so a failed read leaves the tree as
@@ -296,9 +298,11 @@ tree_force_convention_files() {
     fi
   done < "$gd/conv-have"
   for p in ${want[@]+"${want[@]}"}; do
+    # Any status but 0 counts as a change: when git cannot compare, the
+    # copy still runs and the caller logs it.
+    git -C "$dir" diff --quiet "$ref" -- "$p" 2>/dev/null || touched=1
     git -C "$dir" checkout "$ref" -- "$p" 2>/dev/null \
       || { TREE_CONV_ERR="could not check out a convention file from $ref"; return 1; }
-    touched=1
   done
   TREE_CONV_FORCED="$touched"
   return 0

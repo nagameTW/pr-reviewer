@@ -1288,8 +1288,9 @@ the default branch. Edit the title and it is checked again automatically."
     # files exist is not.
     #
     # Untracked ones were created by the patch and go. Tracked ones were
-    # modified by it and are restored to the merge base, so a repo that
-    # legitimately ships a convention file keeps its real content.
+    # modified by it and are restored to the merge base. That restore is a
+    # first step only: tree_force_convention_files below sets the final
+    # content, the default branch's copy.
     # The code is lib/tree.sh's tree_revert_convention_files.
     # The git-pathspec-vs-shell-case lesson (why this cannot be a
     # `git ls-files -- '*/.claude'` pathspec) lives ONLY in lib/tree.sh's own
@@ -1319,12 +1320,12 @@ the default branch. Edit the title and it is checked again automatically."
     tree_force_convention_files "$REPO_DIR" "origin/$DEFAULT_BRANCH" \
       || { note_skip "$TREE_CONV_ERR, skipping (fail closed)"; return 0; }
     if [ "$TREE_CONV_FORCED" = 1 ]; then
-      echo "PR #$PR: convention files taken from origin/$DEFAULT_BRANCH, so neither the PR nor its base branch supplies the review rules"
+      echo "PR #$PR: convention files in the review tree changed to match origin/$DEFAULT_BRANCH, so neither the PR nor its base branch supplies the review rules"
     fi
     if [ "$CONV_RC" -eq 0 ] \
        && grep -qE "$TREE_CONV_RE" <<<"$(LC_ALL=C tr '[:upper:]' '[:lower:]' <<<"$PR_FILES")"; then
       echo "PR #$PR: the diff writes convention files ($TREE_CONV_NAMES) — replaced in the review tree with the default branch's so the change cannot supply its own review rules"
-      TREE_CONV_NOTE=" ONE exception to what you just read: this PR writes files that define the project's conventions ($TREE_CONV_NAMES). In this tree those paths hold the versions on the newest commit of the default branch, so the change under review cannot supply the rules it is judged by. For those paths only, the file on disk is NOT what the PR makes it: read them from the diff, and do not treat the on-disk content as evidence against a finding."
+      TREE_CONV_NOTE=" ONE exception to what you just read: this PR writes files that define the project's conventions ($TREE_CONV_NAMES). In this tree those paths hold the versions on the newest commit of the default branch (a path the default branch does not have is absent from the tree), so the change under review cannot supply the rules it is judged by. For those paths only, the file on disk is NOT what the PR makes it: read them from the diff, and do not treat the on-disk content as evidence against a finding."
     fi
     # The symlink guard ran BEFORE this, so it covered the checkout but not
     # the patch. A patch that adds a symlink pointing

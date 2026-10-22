@@ -123,6 +123,23 @@ is  "happy: ...and from the index"                      "$(git -C "$D" ls-files 
 is  "happy: a file that is no convention file stays"    "$(cat "$D/src.py")" "parent code"
 is  "happy: the index agrees with the disk, so no later checkout undoes it" "$(git -C "$D" diff --name-only | grep -c 'CLAUDE.md\|SKILL.md')" 0
 
+# ── TREE_CONV_FORCED says that a file really changed ───────────────────────
+# A tree that already holds the default branch's convention files has nothing
+# to replace, and the caller logs only when something was replaced.
+CI="$TMP/case-identical"; build "$CI"; git -C "$CI" reset -q --hard origin/main
+tree_force_convention_files "$CI" origin/main; IRC=$?
+is  "identical tree: it returns 0"                      "$IRC" 0
+is  "identical tree: TREE_CONV_FORCED is 0"             "${TREE_CONV_FORCED-unset}" 0
+# A file that only the default branch has comes in, and that is a change.
+git -C "$CI" rm -q --cached AGENTS.md; rm -f "$CI/AGENTS.md"
+tree_force_convention_files "$CI" origin/main
+is  "file only in default: it is added"                 "$(cat "$CI/AGENTS.md" 2>/dev/null)" "main agents"
+is  "file only in default: TREE_CONV_FORCED is 1"       "${TREE_CONV_FORCED-unset}" 1
+# A file the default branch lacks goes, and that is a change too.
+mkdir -p "$CI/docs"; printf 'x\n' > "$CI/docs/CLAUDE.md"; git -C "$CI" add docs/CLAUDE.md
+tree_force_convention_files "$CI" origin/main
+is  "file not in default: TREE_CONV_FORCED is 1"        "${TREE_CONV_FORCED-unset}" 1
+
 # ── the ref must resolve first ──────────────────────────────────────────────
 run_case drop_origin
 skipped "no origin ref" "cannot resolve origin/main"
@@ -164,6 +181,7 @@ is  "truncated list: the file keeps the parent's version" "$(cat "$CASE_DIR/CLAU
 
 run_case fail_checkout
 skipped "checkout fails" "check out a convention file"
+is  "checkout fails: the file keeps the parent's version" "$(cat "$CASE_DIR/CLAUDE.md")" "parent rules"
 
 run_case fail_index_rm
 skipped "index removal fails" "from the index"
@@ -200,9 +218,9 @@ is  "newline name, present: it returns 0"               "$RC" 0
 is  "newline name, present: the file takes the default version" "$(cat "$CASE_DIR/$ODD")" "main odd"
 
 # ── names are matched in any letter case ───────────────────────────────────
-# The parent has docs/readme.md and Readme.txt-style names the default lacks,
-# and a lowercase claude.md. Fixture names are lowercase, so the pattern in
-# upper case has to match them.
+# The parent adds docs/readme.md, claude.local.md and .mcp.json, and the
+# default branch has none of them. Their names are lowercase, so the pattern
+# has to match them although the convention names are written in upper case.
 CD="$TMP/case-names"; build "$CD"
 printf 'parent lower\n' > "$CD/docs/readme.md"; printf 'parent local\n' > "$CD/claude.local.md"
 printf '{}\n' > "$CD/.mcp.json"
