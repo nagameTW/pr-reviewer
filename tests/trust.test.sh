@@ -124,7 +124,8 @@ echo "2.1.305 (Claude Code)"
 STUB_EOF
 # A gh that answers from files in \$T and writes every call to gh.calls.
 # list.json answers the open PR list, view-N.json answers `pr view N` (a
-# draft when there is no file), list.rc is the exit code of the list, and
+# draft when there is no file) and view-N.K.json answers its K-th call,
+# list.rc is the exit code of the list, and
 # merged.json answers the list of merged PRs (empty when there is no file).
 # merge.rc is the exit code of `pr merge` (0 when there is no file).
 cat > "$T/bin/gh" <<STUB_EOF
@@ -143,7 +144,9 @@ case "\$1 \$2" in
       *) [ ! -s "$T/list.rc" ] || exit "\$(cat "$T/list.rc")"; emit "\$(cat "$T/list.json")" ;;
     esac ;;
   "pr view")
-    if [ -f "$T/view-\$3.json" ]; then emit "\$(cat "$T/view-\$3.json")"; else emit '{"isDraft":true}'; fi ;;
+    k="\$(grep -c "^pr view \$3 " "$T/gh.calls")"
+    if [ -f "$T/view-\$3.\$k.json" ]; then emit "\$(cat "$T/view-\$3.\$k.json")"
+    elif [ -f "$T/view-\$3.json" ]; then emit "\$(cat "$T/view-\$3.json")"; else emit '{"isDraft":true}'; fi ;;
   "pr merge") [ ! -s "$T/merge.rc" ] || exit "\$(cat "$T/merge.rc")" ;;
   "pr comment") echo ok ;;
   "issue list") echo '[]' ;;
@@ -195,6 +198,8 @@ is 'a named fork PR is read'                "$(viewed 2)" 1
 has 'a named PR that is a draft says so'    "$OUT" 'PR #2: is a draft, not reviewed until it is ready'
 is '...and no other PR is'                  "$(viewed 1)" 0
 lacks '...with no warning about the others' "$OUT" 'WARNING: '
+has '...and the round exits 75, not 0'      "$OUT" 'rc=75'
+has '...and says that the PR was not reviewed' "$OUT" 'owner/repo#2 was not reviewed'
 OUT="$(run_gate PRREVIEW_ONCE_PR=OWNER/Repo#2)"
 is 'the repository in the name may differ in letter case' "$(viewed 2)" 1
 OUT="$(run_gate PRREVIEW_ONCE_PR=owner/repo#9)"
@@ -297,6 +302,58 @@ OUT="$(run_gate)"
 is 'a stale list, disarm off: the job disarms nothing'       "$(merges)" 0
 rm -f "$T/view-3.json"
 
+# ── a named round ends well only when the PR has a verdict on its head ──────
+# A draft, a skip by any check and a refusal leave the PR without a verdict,
+# so the round exits 75 and says so. A head that already has a verdict from
+# the reviewer counts as reviewed.
+set_list '[{"number":2,"author":{"login":"mallory"},"isCrossRepository":true,"labels":[]}]'
+INFO2="{\"number\":2,\"headRefOid\":\"$HEAD40\",\"baseRefOid\":\"$HEAD40\",\"baseRefName\":\"main\",\"title\":\"t\",\"body\":\"b\"}"
+KEY2="$( . lib/tools.sh; . lib/merge.sh; . lib/prompt.sh; tools_resolve; prompt_review_key "$INFO2" main )"
+is 'the test PR has a review key' "${#KEY2}" 53
+view2() { # COMMENTS_JSON DRAFT: the answer of `pr view 2`
+  jq -n --argjson c "$1" --argjson d "$2" --arg h "$HEAD40" '{number:2,headRefOid:$h,baseRefOid:$h,baseRefName:"main",
+    isDraft:$d,reviews:[],comments:$c,title:"t",body:"b",additions:1,deletions:0,changedFiles:1,autoMergeRequest:null,
+    author:{login:"mallory"},isCrossRepository:true}'
+}
+GATE_COMMENT="[{\"author\":{\"login\":\"owner\"},\"body\":\"<!-- pr-reviewer $KEY2 -->\\n\\n> **Automated review: ✅ Approved**\",\"createdAt\":\"2026-01-01T00:00:00Z\"}]"
+
+# The dispatcher reads a draft.
+OUT="$(run_gate PRREVIEW_ONCE_PR=owner/repo#2)"
+has 'a draft: the round exits 75'      "$OUT" 'rc=75'
+# The dispatcher reads a ready PR, the job reads a draft.
+view2 '[]' false > "$T/view-2.1.json"; view2 '[]' true > "$T/view-2.2.json"
+OUT="$(run_gate PRREVIEW_ONCE_PR=owner/repo#2)"
+has 'a draft that only the job sees: the job says so'  "$OUT" '[owner__repo#2] PR #2: is a draft, not reviewed until it is ready'
+has '...and the round exits 75'                         "$OUT" 'rc=75'
+has '...and says that the PR was not reviewed'          "$OUT" 'owner/repo#2 was not reviewed'
+rm -f "$T/view-2.1.json" "$T/view-2.2.json"
+# A check of the job skips it: the title check posts a reminder and stops.
+view2 '[]' false > "$T/view-2.json"
+OUT="$(run_gate PRREVIEW_ONCE_PR=owner/repo#2 PRREVIEW_GATE_TITLE_CHECK=1)"
+has 'a skip by a check of the job: the job says so'     "$OUT" 'non-conventional title — reminder posted, not reviewed'
+has '...and the round exits 75'                          "$OUT" 'rc=75'
+set_list '[{"number":2,"author":{"login":"alice"},"isCrossRepository":false,"labels":[]}]'
+OUT="$(run_gate PRREVIEW_GATE_TITLE_CHECK=1)"
+has 'the same skip in a round with no named PR exits 0'  "$OUT" 'rc=0'
+set_list '[{"number":2,"author":{"login":"mallory"},"isCrossRepository":true,"labels":[]}]'
+# The reviewer's verdict is already on the head: the dispatcher sees it.
+view2 "$GATE_COMMENT" false > "$T/view-2.json"
+OUT="$(run_gate PRREVIEW_ONCE_PR=owner/repo#2)"
+has 'a head with a verdict: the dispatcher says so'      "$OUT" 'this head was already handled'
+has '...and the round exits 0'                           "$OUT" 'rc=0'
+lacks '...with no word about a missing review'           "$OUT" 'was not reviewed'
+rm -f "$T/view-2.json"
+# The dispatcher sees none, the job sees it.
+view2 '[]' false > "$T/view-2.1.json"; view2 "$GATE_COMMENT" false > "$T/view-2.2.json"
+OUT="$(run_gate PRREVIEW_ONCE_PR=owner/repo#2)"
+has 'a head with a verdict that only the job sees: the job says so' "$OUT" '[owner__repo#2] PR #2: this head was already handled'
+has '...and the round exits 0'                           "$OUT" 'rc=0'
+rm -f "$T/view-2.1.json" "$T/view-2.2.json"
+# A verdict the job posts counts too. This pins the wiring: a full review
+# needs a model.
+is 'the job records its verdict comment for the named round' \
+   "$(grep -A1 '^    RO_POSTED=1$' pr-autoreview.sh | tail -1)" '    note_answered'
+
 # ── the post-merge scan ───────────────────────────────────────────────────
 # The scan reads the merged PRs of the last 48 hours. It comments on a merged
 # PR, fork or not, only when the reviewer's own last comment there is a blocking
@@ -374,7 +431,11 @@ once() { # ARGS...: prreview once ARGS; prints the output and the exit code
 ONCE_ENV=(PRREVIEW_X=1)
 OUT="$(once --pr owner/repo#2)"
 is 'prreview once --pr: the named fork PR is read' "$(viewed 2)" 1
-has '...and the round ends well'                    "$OUT" 'rc=0'
+has '...and a draft is not reported as reviewed'     "$OUT" 'rc=75'
+view2 "$GATE_COMMENT" false > "$T/view-2.json"
+OUT="$(once --pr owner/repo#2)"
+has '...and a PR with a verdict on its head ends well' "$OUT" 'rc=0'
+rm -f "$T/view-2.json"
 for r in 'owner/repo' '#12' 'owner/repo#0' 'owner/repo#12x' 'https://github.com/owner/repo/pull/2' 'owner/repo#2;ls' ''; do
   OUT="$(once --pr "$r")"
   has "once --pr rejects $(printf '%q' "$r")" "$OUT" 'owner/repo#N'

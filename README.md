@@ -174,8 +174,15 @@ author pushes again, the new head is skipped until you run the command again.
 If a round is running, the command waits for it up to `PRREVIEW_GATE_ONCE_WAIT`
 seconds (300 by default). If it cannot get the lock in that time, it prints the
 reason and exits with code 75, so you know the PR was not reviewed. It rejects
-anything that is not `owner/repo#N` for a repository you review. If the PR is
-closed or a draft, the command says so.
+anything that is not `owner/repo#N` for a repository you review.
+
+The exit code says if the PR has a verdict:
+
+- `0`: the PR has a verdict on its current head, from this run or an earlier
+  one.
+- `75`: the PR has no verdict, and nothing failed. The PR can be a draft, or
+  a check can have skipped it. The command prints the reason.
+- `1`: the PR is not open, or the reviewer could not read it.
 
 To review the PRs of one fork author each time, put the login in
 `PRREVIEW_GATE_TRUSTED_AUTHORS`:

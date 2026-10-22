@@ -746,6 +746,14 @@ note_skip() {
 # Fork PRs this round did not review, over every repo. A decision about the PR
 # and not a failure to read it, so it does not count into GATE_DEGRADED.
 N_FORK_SKIPPED=0
+# A round for a named PR (`prreview once --pr`) ends well only when the PR has
+# a verdict on its current head: one this round posted, or an earlier one. A
+# job runs in a subshell, so it records that in this file, and the end of the
+# round reads it. A skip, a draft or a refusal leaves the file out, and the
+# round exits 75. Not GATE_DEGRADED: that would raise the failure alert.
+ONCE_ANSWERED=""
+[ -z "$ONCE_NUM" ] || ONCE_ANSWERED="$GATE_SCRATCH/prreview-gate-answered-$$"
+note_answered() { : > "${ONCE_ANSWERED:-/dev/null}" 2>/dev/null || true; }
 
 for REPO in $REPOS_ROTATED; do
 # A named PR (`prreview once --pr`) is the only work of its round.
@@ -918,7 +926,11 @@ review_one_pr() { # $1 = PR number, $2 = the worktree the dispatcher made
     echo "PR #$PR: not reviewed, a fork PR whose author is not trusted"
     return 0
   fi
-  [ "$(jq -r '.isDraft' <<<"$INFO")" = "true" ] && return 0
+  if [ "$(jq -r '.isDraft' <<<"$INFO")" = "true" ]; then
+    # A named PR must not look reviewed.
+    [ -z "$ONCE_NUM" ] || echo "PR #$PR: is a draft, not reviewed until it is ready"
+    return 0
+  fi
   SHA="$(jq -r '.headRefOid' <<<"$INFO")"
   # Where this PR wants to land. Read once here because the stacked-base
   # convention guard below needs it.
@@ -975,6 +987,7 @@ review_one_pr() { # $1 = PR number, $2 = the worktree the dispatcher made
   # already handled this exact head + title/body?
   if [ "$HEAD_HANDLED" = 1 ]; then
     echo "PR #$PR: this head was already handled — nothing to do until it changes (review-only: this gate never merges)"
+    note_answered
     return 0
   fi
   # This head's marker from an App outside PRIOR_AUTHORS: the identity list
@@ -3130,6 +3143,7 @@ This change or its review matched the sensitive-data scan, or the scan could not
     [ -n "${REPLAY_F:-}" ] && holdoff_verdict_clear "$REPLAY_F"
     echo "PR #$PR: review-only verdict comment posted (verdict=$VERDICT)"
     RO_POSTED=1
+    note_answered
   else
     # No ticket either: its Source line points at this very comment, and a
     # ticket citing a comment that never landed is the said-but-not-done
@@ -3287,6 +3301,7 @@ for PR in $OPEN_PRS; do
     fi
     if prompt_head_handled "$PRE" "$MARKER" "$PRIOR_AUTHORS" "$DEFAULT_BRANCH"; then
       echo "[$REPO_KEY#$PR] PR #$PR: this head was already handled — nothing to do until it changes (review-only: this gate never merges)"
+      note_answered
       continue
     fi
   fi
@@ -3482,6 +3497,11 @@ if [ "${N_SKIP:-0}" -gt 0 ]; then
   GATE_DEGRADED=$((GATE_DEGRADED + N_SKIP))
 fi
 rm -rf "$SKIP_DIR" 2>/dev/null || true
+ONCE_REVIEWED=0
+if [ -n "$ONCE_ANSWERED" ]; then
+  [ ! -e "$ONCE_ANSWERED" ] || ONCE_REVIEWED=1
+  rm -f "$ONCE_ANSWERED" 2>/dev/null || true
+fi
 
 if [ "${GATE_DEGRADED:-0}" -gt 0 ]; then
   # "item(s)", not "repo(s)": this counter also absorbs review jobs that
@@ -3492,4 +3512,10 @@ if [ "${GATE_DEGRADED:-0}" -gt 0 ]; then
   # has to avoid contradicting it.
   echo "$GATE_DEGRADED item(s) — repo(s), review job(s) and/or fail-closed PR skips — could not be evaluated on this box; failing the round so the alert fires"
   exit 1
+fi
+# The lines above say why. 75 is EX_TEMPFAIL, the code of a lock that stays
+# held, so a script can tell this outcome from a failure.
+if [ -n "$ONCE_NUM" ] && [ "$ONCE_REVIEWED" != 1 ]; then
+  echo "$ONCE_REPO#$ONCE_NUM was not reviewed: it has no verdict on its current head. The lines above say why."
+  exit 75
 fi

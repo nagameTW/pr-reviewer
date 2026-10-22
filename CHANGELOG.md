@@ -53,6 +53,11 @@ All notable changes to this project are recorded here. The format follows
   skips it, unless `prreview once --pr` names it. Set `PRREVIEW_GATE_FORK_PRS=1`
   to bring back the old behavior. A fork PR that was open before the upgrade
   keeps its earlier comment, and its new heads are skipped.
+- `prreview once --pr` exits 0 only when the PR has a verdict on its current
+  head, from this run or an earlier one. Before, it also exited 0 for a draft
+  and for a PR that a check skipped, such as the title format check. Now it
+  prints the reason and exits 75, the code of a lock that stays held. A PR
+  that is not open still exits 1.
 - The loop starts a round only when an open PR passes the same rule. Before,
   it counted every open PR, so one fork PR left open started a round each
   minute, with the scan of merged PRs and up to ten reads each time. The count
