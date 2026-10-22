@@ -170,17 +170,15 @@ chunk_plan() {
 # round task lets a slice move a wrong line to the right one. Two slices can
 # then give two lines for one finding.
 # Entries that share a key may still disagree on severity, area, audience or
-# kind, and "the first one wins" would let a LOW from an early slice hide a
-# HIGH from a later one, so the PR gets approve. The merge keeps the variant
-# that affects the verdict most. Weight is the number of modes (coach and
-# gatekeeper) in which the entry blocks, 0 to 2, read from the same blocking
-# rule the verdict uses (FINDINGS_IS_BLOCKING_JQ), after the kind cap that
-# FINDINGS_CONVERGE_JQ applies in round 1. Variants of equal top weight that
-# differ in severity, area, audience (only read on a doc) or kind cap both
-# stay: the merge cannot tell which one the verdict needs.
-# Trade-off: only the variants of top weight survive, so a lower variant with
-# a better line or wording is dropped. The line of a kept entry is the line
-# its own slice gave. Between equal variants the first slice in the input wins.
+# kind. The merge merges only entries with an identical profile: the same
+# severity as written, area, audience (only read on a doc) and kind cap. It
+# keeps every distinct profile, and it does not rank or drop an entry by how
+# much it blocks. The real convergence caps run after the merge and in later
+# rounds they depend on the round, so no rank made here is safe. A variant
+# that is a minor one in round 1 can be the only blocker after the late cap.
+# Trade-off: one finding can appear twice, once per profile. Between identical
+# entries the first slice in the input wins, and the line of a kept entry is
+# the line its own slice gave.
 #
 # unverified: unioned and capped at 3, matching the single-pass contract. Six
 # slices each declaring three residual risks would otherwise bury the reader
@@ -196,11 +194,6 @@ chunk_plan() {
 # The truncation mark is the one string in this merge a reader sees;
 # everything else here is structure.
 CHUNK_SUMMARY_CUT=' (summary too long, truncated)'
-# The merge reads the blocking rule from lib/findings.sh. Tests source this
-# lib alone, so it loads that file itself when the rule is not defined yet.
-if [ -z "${FINDINGS_IS_BLOCKING_JQ-}" ]; then
-  . "$(dirname "${BASH_SOURCE[0]}")/findings.sh" || return 1
-fi
 # shellcheck disable=SC2034  # read by the scripts that source this lib
 CHUNK_MERGE_JQ='
   def sev_rank:
@@ -209,22 +202,12 @@ CHUNK_MERGE_JQ='
       elif $s == "MEDIUM"   then 2
       elif $s == "LOW"      then 3
       else 1 end;
-  def converged:
-    {findings: [.]}
-    | (1 as $round | null as $delta | [] as $prior | '"$FINDINGS_CONVERGE_JQ"')
-    | .findings[0];
-  def blocks_in(c):
-    ((. + {coach: c}) | ('"$FINDINGS_IS_BLOCKING_JQ"')) | if . then 1 else 0 end;
-  def weight: blocks_in(false) + blocks_in(true);
+  def txt(f): f | if type == "string" then (gsub("^\\s+|\\s+$"; "") | ascii_downcase) else "" end;
   def profile:
-    (('"$FINDINGS_AREA_JQ"') as $a
-     | [('"$FINDINGS_SEVERITY_JQ"'), $a,
-        (if $a == "doc" then ('"$FINDINGS_AUDIENCE_JQ"') else "" end),
-        (.capped // "")]);
-  def strongest:
-    map({e: ., c: converged} | . + {w: (.c | weight), p: (.c | profile)})
-    | (map(.w) | max) as $top
-    | map(select(.w == $top)) | unique_by(.p) | map(.e);
+    txt(.area) as $a | txt(.kind) as $k
+    | [txt(.severity), $a,
+       (if $a == "doc" then txt(.audience) else "" end),
+       (if (["wording", "judgment", "half_fix"] | index($k)) != null then "capped" else "" end)];
   { verdict: (if any(.[]; (.verdict // "") == "request_changes")
               then "request_changes" else "approve" end),
     summary: ([.[].summary // empty | select(type == "string")] | join(" ")
@@ -235,7 +218,7 @@ CHUNK_MERGE_JQ='
                            (if ((.issue // "" | tostring) | test("^\\s*carried[ -]over"; "i"))
                             then "carried" else (.line // 0 | tostring) end),
                            (.issue // "" | tostring)])
-               | map(strongest) | add // []
+               | map(unique_by(profile)) | add // []
                | sort_by(sev_rank)) }'
 
 # How many independent review passes a round gets.

@@ -233,44 +233,62 @@ is 'merge: a finding that is not carried is still keyed on its line' \
    "$(printf '%s\n%s\n' "$NA" "$NB" | merge | jq -r '.findings | length')" '2'
 
 # Two slices can return one carried finding with a different label. The merge
-# keeps the variant that affects the verdict most, in either input order, so a
-# LOW from an early slice cannot hide a HIGH from a later one.
+# merges only identical profiles and keeps every distinct one, in either input
+# order, so a LOW from an early slice cannot hide a HIGH from a later one.
+# It does not rank by weight: the late cap runs after the merge.
 mk() { printf '{"verdict":"request_changes","summary":"x","unverified":[],"findings":[{"file":"b.py","line":%s,"issue":"Carried over: major issue"%s}]}' "$1" "$2"; }
+both() { printf '%s|%s' \
+  "$(printf '%s\n%s\n' "$1" "$2" | merge | jq -r "$3")" \
+  "$(printf '%s\n%s\n' "$2" "$1" | merge | jq -r "$3")"; }
 SEV_H="$(mk 9 ',"severity":"HIGH"')"
 SEV_L="$(mk 412 ',"severity":"LOW"')"
-is 'merge: carried HIGH then LOW keeps the HIGH' \
-   "$(printf '%s\n%s\n' "$SEV_H" "$SEV_L" | merge | jq -r '[.findings[].severity] | join(",")')" 'HIGH'
-is 'merge: carried LOW then HIGH keeps the HIGH' \
-   "$(printf '%s\n%s\n' "$SEV_L" "$SEV_H" | merge | jq -r '[.findings[].severity] | join(",")')" 'HIGH'
-is 'merge: the line of the kept variant is its own' \
-   "$(printf '%s\n%s\n' "$SEV_L" "$SEV_H" | merge | jq -r '.findings[0].line')" '9'
+is 'merge: carried HIGH and LOW both stay, in both orders' \
+   "$(both "$SEV_H" "$SEV_L" '[.findings[].severity] | sort | join(",")')" 'HIGH,LOW|HIGH,LOW'
+is 'merge: the line of a kept variant is its own' \
+   "$(printf '%s\n%s\n' "$SEV_L" "$SEV_H" | merge | jq -r '[.findings[] | select(.severity == "HIGH") | .line][0]')" '9'
 KIND_W="$(mk 9 ',"severity":"HIGH","kind":"wording"')"
-is 'merge: a carried HIGH tagged wording loses to a plain HIGH, in both orders' \
-   "$(printf '%s\n%s\n' "$KIND_W" "$SEV_H" | merge | jq -r '[.findings[] | .kind // "none"] | join(",")')|$(printf '%s\n%s\n' "$SEV_H" "$KIND_W" | merge | jq -r '[.findings[] | .kind // "none"] | join(",")')" 'none|none'
+is 'merge: a carried HIGH tagged wording and a plain HIGH both stay' \
+   "$(both "$KIND_W" "$SEV_H" '.findings | length')" '2|2'
 AREA_T="$(mk 9 ',"severity":"HIGH","area":"test"')"
-is 'merge: a carried HIGH in test area loses to a HIGH in correctness, in both orders' \
-   "$(printf '%s\n%s\n' "$AREA_T" "$SEV_H" | merge | jq -r '[.findings[] | .area // "none"] | join(",")')|$(printf '%s\n%s\n' "$SEV_H" "$AREA_T" | merge | jq -r '[.findings[] | .area // "none"] | join(",")')" 'none|none'
-AUD_M="$(mk 9 ',"severity":"HIGH","area":"doc","audience":"maintainer"')"
-AUD_O="$(mk 9 ',"severity":"HIGH","area":"doc","audience":"operator"')"
-is 'merge: a carried doc HIGH for operators beats one for maintainers, in both orders' \
-   "$(printf '%s\n%s\n' "$AUD_M" "$AUD_O" | merge | jq -r '[.findings[].audience] | join(",")')|$(printf '%s\n%s\n' "$AUD_O" "$AUD_M" | merge | jq -r '[.findings[].audience] | join(",")')" 'operator|operator'
-# Equal weight, different label: the merge cannot tell which one the verdict
-# needs, so both stay.
 AREA_S="$(mk 9 ',"severity":"HIGH","area":"security"')"
 AREA_D="$(mk 9 ',"severity":"HIGH","area":"data"')"
-is 'merge: carried HIGHs of equal weight in two areas both stay' \
-   "$(printf '%s\n%s\n' "$AREA_S" "$AREA_D" | merge | jq -r '.findings | length')" '2'
+is 'merge: carried HIGHs in two areas both stay, in both orders' \
+   "$(both "$AREA_S" "$AREA_D" '.findings | length')" '2|2'
+is 'merge: a carried HIGH in test area and one in security both stay' \
+   "$(both "$AREA_T" "$AREA_S" '.findings | length')" '2|2'
+AUD_M="$(mk 9 ',"severity":"HIGH","area":"doc","audience":"maintainer"')"
+AUD_O="$(mk 9 ',"severity":"HIGH","area":"doc","audience":"operator"')"
 AUD_U="$(mk 9 ',"severity":"HIGH","area":"doc","audience":"user"')"
-is 'merge: carried doc HIGHs of equal weight for two audiences both stay' \
-   "$(printf '%s\n%s\n' "$AUD_O" "$AUD_U" | merge | jq -r '.findings | length')" '2'
+is 'merge: carried doc HIGHs for two audiences both stay' \
+   "$(both "$AUD_M" "$AUD_O" '.findings | length')|$(both "$AUD_O" "$AUD_U" '.findings | length')" '2|2|2|2'
 KIND_J="$(mk 9 ',"severity":"HIGH","kind":"judgment"')"
-KIND_D="$(mk 9 ',"severity":"MEDIUM","kind":"defect"')"
-is 'merge: carried findings of equal weight and different kind cap both stay' \
-   "$(printf '%s\n%s\n' "$KIND_J" "$KIND_D" | merge | jq -r '.findings | length')" '2'
-is 'merge: two equal carried variants still merge into one' \
-   "$(printf '%s\n%s\n' "$AREA_S" "$AREA_S" | merge | jq -r '.findings | length')" '1'
-is 'merge: equal variants written with different case and space still merge' \
+is 'merge: carried findings with a different kind cap both stay' \
+   "$(both "$KIND_J" "$SEV_H" '.findings | length')" '2|2'
+is 'merge: two identical carried variants merge into one, in both orders' \
+   "$(both "$AREA_S" "$(mk 3 ',"severity":"HIGH","area":"security"')" '.findings | length')" '1|1'
+is 'merge: variants written with different case and space still merge' \
    "$(printf '%s\n%s\n' "$AREA_S" "$(mk 3 ',"severity":" high ","area":"Security"')" | merge | jq -r '.findings | length')" '1'
+
+# The late cap runs after the merge, so the merge must not pick a variant.
+# Round 2, a carried key on a file the delta does not touch. Variant P is a
+# HIGH in correctness: it blocks in both modes, so a weight rank would keep
+# it. The late cap demotes it. Variant Q has no severity and area test: the
+# late cap skips it (its raw severity is not HIGH) and it blocks in coach
+# mode. Q is then the only blocker. Dropping it turns request_changes into
+# approve.
+. lib/findings.sh || { echo "FAIL: cannot source lib/findings.sh"; exit 1; }
+LATE_P="$(mk 9 ',"severity":"HIGH","area":"correctness"')"
+LATE_Q="$(mk 9 ',"area":"test"')"
+late_blockers() {
+  printf '%s\n%s\n' "$1" "$2" | merge \
+    | jq -c --argjson coach true "$FINDINGS_STAMP_JQ" \
+    | jq -c --argjson round 2 --argjson delta '["other.py"]' --argjson prior '[]' "$FINDINGS_CONVERGE_JQ" \
+    | jq -r "$FINDINGS_BLOCKING_COUNT_JQ"
+}
+is 'merge: round 2 late cap leaves one blocker, in both input orders' \
+   "$(late_blockers "$LATE_P" "$LATE_Q")|$(late_blockers "$LATE_Q" "$LATE_P")" '1|1'
+is 'merge: round 2 late cap keeps the verdict request_changes' \
+   "$(findings_resolve_verdict request_changes "$(late_blockers "$LATE_P" "$LATE_Q")" 2 0 0)" 'request_changes'
 
 # Eight slices of prose must not eat the cross-round memory window: the
 # comment puts the summary before the findings and the next round keeps only
