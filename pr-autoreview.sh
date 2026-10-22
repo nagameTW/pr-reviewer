@@ -3152,8 +3152,9 @@ This change or its review matched the sensitive-data scan, or the scan could not
     [ -n "${HOLD_F:-}" ] && holdoff_clear "$HOLD_F"
     [ -n "${REPLAY_F:-}" ] && holdoff_verdict_clear "$REPLAY_F"
     echo "PR #$PR: review-only verdict comment posted (verdict=$VERDICT)"
+    # A withheld-scan notice is not a verdict. Only a verdict answers a named PR.
     RO_POSTED=1
-    note_answered
+    if [ "${SCAN_WITHHELD:-0}" -eq 0 ]; then note_answered; fi
   else
     # No ticket either: its Source line points at this very comment, and a
     # ticket citing a comment that never landed is the said-but-not-done

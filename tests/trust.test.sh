@@ -151,6 +151,11 @@ case "\$1 \$2" in
     k="\$(grep -c "^pr view \$3 " "$T/gh.calls")"
     if [ -f "$T/view-\$3.\$k.json" ]; then emit "\$(cat "$T/view-\$3.\$k.json")"
     elif [ -f "$T/view-\$3.json" ]; then emit "\$(cat "$T/view-\$3.json")"; else emit '{"isDraft":true}'; fi ;;
+  "api "*)
+    case "\$*" in
+      *" -q "*) echo 2222222222222222222222222222222222222222 ;;
+      *) cat "$T/pr.diff" ;;
+    esac ;;
   "pr merge") [ ! -s "$T/merge.rc" ] || exit "\$(cat "$T/merge.rc")" ;;
   "pr comment") echo ok ;;
   "issue list") echo '[]' ;;
@@ -391,7 +396,26 @@ rm -f "$T/view-2.json"
 # A verdict the job posts counts too. This pins the wiring: a full review
 # needs a model.
 is 'the job records its verdict comment for the named round' \
-   "$(grep -A1 '^    RO_POSTED=1$' pr-autoreview.sh | tail -1)" '    note_answered'
+   "$(grep -A1 '^    RO_POSTED=1$' pr-autoreview.sh | tail -1)" '    if [ "${SCAN_WITHHELD:-0}" -eq 0 ]; then note_answered; fi'
+# A verdict body that hits the outbound scan is posted as a notice. The first
+# named run must then exit 75, as the runs after it do. A parked verdict makes
+# the job reach the scan without a model.
+printf '# patterns\nzz-scan-hit-zz\n' > "$T/patterns-hit"
+printf 'diff --git a/a.txt b/a.txt\nnew file mode 100644\n--- /dev/null\n+++ b/a.txt\n@@ -0,0 +1 @@\n+x\n' > "$T/pr.diff"
+mkdir -p "$T/hold"
+( PRREVIEW_GATE_HOLDOFF_DIR="$T/hold"; . lib/holdoff.sh
+  holdoff_verdict_save "$(holdoff_verdict_path "$(holdoff_path owner/repo 2 "$KEY2")")" "$KEY2" approve \
+    "<!-- pr-reviewer $KEY2 -->
+
+> **Automated review: ✅ Approved**
+
+zz-scan-hit-zz" '' )
+view2 '[]' false > "$T/view-2.json"
+OUT="$(run_gate PRREVIEW_ONCE_PR=owner/repo#2 PRREVIEW_GATE_HOLDOFF_DIR="$T/hold" PRREVIEW_SENSITIVE_PATTERNS_FILE="$T/patterns-hit")"
+has 'a verdict that hits the outbound scan: the job posts the notice' "$OUT" 'review body matched sensitive patterns'
+has '...and the first named run exits 75'                            "$OUT" 'rc=75'
+has '...and says that the PR was not reviewed'                       "$OUT" 'owner/repo#2 was not reviewed'
+rm -f "$T/view-2.json"
 
 # ── the post-merge scan ───────────────────────────────────────────────────
 # The scan reads the merged PRs of the last 48 hours. It comments on a merged
