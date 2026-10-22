@@ -164,9 +164,11 @@ if [ -n "$JOB_TRUST_LN" ] && [ -n "$JOB_MODEL_LN" ] && [ -n "$JOB_DIFF_LN" ] && 
 else
   bad 'the job checks the author before any model call and before the diff is fetched' "trust at ${JOB_TRUST_LN:-none}, first model call at ${JOB_MODEL_LN:-none}, diff at ${JOB_DIFF_LN:-none}"
 fi
-is     'a PR the job does not trust ends with return 0, not exit or continue' "$(sed -n "$((${JOB_TRUST_LN:-0})),$((${JOB_TRUST_LN:-0} + 3))p" <<<"$JOB" | grep -c '^    return 0$')" 1
+is     'a PR the job does not trust ends with return 0, not exit or continue' "$(sed -n "$((${JOB_TRUST_LN:-0})),$((${JOB_TRUST_LN:-0} + 5))p" <<<"$JOB" | grep -c '^    return 0$')" 1
 pin    'the job passes the PR number that once --pr named' 'pr_author_trusted "$INFO" "$TRUSTED_AUTHORS" "$ONCE_NUM"' pr-autoreview.sh
-pin    'a named PR waits for the round lock and does not give up quietly' 'flock -w "$ONCE_WAIT" 9' pr-autoreview.sh
+pin    'a named PR waits for the round lock and does not give up quietly' 'ONCE_LOCK_OPT=(-w "$ONCE_WAIT")' pr-autoreview.sh
+pin    '...and a wait of 0 does not wait' '[ "$ONCE_WAIT" -gt 0 ] || ONCE_LOCK_OPT=(-n)' pr-autoreview.sh
+pin    '...and fails when it cannot get the lock' 'if ! flock "${ONCE_LOCK_OPT[@]}" 9; then' pr-autoreview.sh
 before 'the named PR is read before the lock is taken' 'ONCE_REF="$(trust_parse_pr_ref' 'LOCKFILE=' pr-autoreview.sh
 
 # `line` in a finding has one meaning, written once (REVIEW_LINE_SPEC in
