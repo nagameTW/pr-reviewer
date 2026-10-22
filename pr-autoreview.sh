@@ -334,6 +334,15 @@ GATE_ISSUE_NOTE="${PRREVIEW_GATE_ISSUE_NOTE:-0}"
 # (lib/merge.sh disarm_unreviewed_auto_merge). Opt-in too
 # (PRREVIEW_GATE_DISARM_AUTO_MERGE): by default auto-merge is left alone.
 GATE_DISARM_AUTO_MERGE="${PRREVIEW_GATE_DISARM_AUTO_MERGE:-0}"
+# Whose PRs are reviewed (lib/trust.sh). A PR from a fork is skipped unless its
+# author is in PRREVIEW_GATE_TRUSTED_AUTHORS (logins as `gh pr list --json
+# author` prints them, separated by spaces or commas) or `prreview once --pr`
+# names it. PRREVIEW_GATE_FORK_PRS=1 reviews fork PRs like any other.
+GATE_FORK_PRS="${PRREVIEW_GATE_FORK_PRS:-0}"
+TRUSTED_AUTHORS="${PRREVIEW_GATE_TRUSTED_AUTHORS:-}"
+# Seconds that `prreview once --pr` waits for a round that is running.
+ONCE_WAIT="${PRREVIEW_GATE_ONCE_WAIT:-300}"
+case "$ONCE_WAIT" in '' | *[!0-9]*) echo "PRREVIEW_GATE_ONCE_WAIT must be a whole number of seconds, got '$ONCE_WAIT'" >&2; exit 2 ;; esac
 # The tool lib comes first: the checks below use what it resolves.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/lib/tools.sh" || { echo "lib/tools.sh missing — refusing to run"; exit 1; }
@@ -351,6 +360,18 @@ command -v flock >/dev/null || { echo "flock missing"; exit 1; }
 . "$SCRIPT_DIR/lib/claude-call.sh" || { echo "lib/claude-call.sh missing, refusing to run"; exit 1; }
 claude_version_check || exit 1
 gh_version_check "$GH" || exit 1
+# Read before the lock, because a named PR changes how the lock is taken.
+. "$SCRIPT_DIR/lib/trust.sh" || { echo "lib/trust.sh missing, refusing to run"; exit 1; }
+# `prreview once --pr owner/repo#N` sets this. The round then reviews that PR
+# and nothing else, and counts it as trusted.
+ONCE_REPO=""; ONCE_NUM=""
+if [ -n "${PRREVIEW_ONCE_PR:-}" ]; then
+  ONCE_REF="$(trust_parse_pr_ref "$PRREVIEW_ONCE_PR")" \
+    || { echo "PRREVIEW_ONCE_PR must look like owner/repo#123, got '$PRREVIEW_ONCE_PR' — refusing to run" >&2; exit 2; }
+  ONCE_REPO="$(trust_listed_repo "${ONCE_REF% *}" "$REPOS")" \
+    || { echo "${ONCE_REF% *} is not in PRREVIEW_GATE_REPOS — refusing to run" >&2; exit 2; }
+  ONCE_NUM="${ONCE_REF#* }"
+fi
 
 # Single-instance lock. The gate fetches and checks out in $GATE_WORKROOT,
 # so a manual run overlapping the scheduled one would have two
@@ -360,14 +381,26 @@ gh_version_check "$GH" || exit 1
 LOCKFILE="${PRREVIEW_GATE_LOCK:-$HOME/.cache/pr-reviewer/pr-autoreview.lock}"
 mkdir -p "$(dirname "$LOCKFILE")" || { echo "cannot create lock dir"; exit 1; }
 exec 9>"$LOCKFILE" || { echo "cannot open lock $LOCKFILE"; exit 1; }
-if ! flock -n 9; then
-  # Name the holder. Losing the race exits 0 (success, no alert),
-  # so a run wedged on a hung `claude -p` would otherwise stall every later
-  # round with nothing in the log to say who is sitting on the lock. The
-  # loop-driven path is bounded by its round timeout (3900s by default); a
-  # manual run is not.
-  echo "another pr-autoreview run holds $LOCKFILE — exiting"
+# Name the holder. Losing the race exits 0 (success, no alert),
+# so a run wedged on a hung `claude -p` would otherwise stall every later
+# round with nothing in the log to say who is sitting on the lock. The
+# loop-driven path is bounded by its round timeout (3900s by default); a
+# manual run is not.
+lock_holder() {
   command -v fuser >/dev/null && fuser -u "$LOCKFILE" 2>&1 | sed 's/^/  holder: /'
+}
+if [ -n "$ONCE_NUM" ]; then
+  # A named PR waits for the running round and fails when it cannot get the
+  # lock. Exit 0 here would tell the person who asked that the PR was
+  # reviewed. 75 is EX_TEMPFAIL.
+  if ! flock -w "$ONCE_WAIT" 9; then
+    echo "another pr-autoreview run still holds $LOCKFILE after ${ONCE_WAIT}s — $ONCE_REPO#$ONCE_NUM was not reviewed"
+    lock_holder
+    exit 75
+  fi
+elif ! flock -n 9; then
+  echo "another pr-autoreview run holds $LOCKFILE — exiting"
+  lock_holder
   exit 0
 fi
 
@@ -710,8 +743,13 @@ note_skip() {
   echo "PR #$PR: $1"
   : > "$SKIP_DIR/$REPO_KEY-$PR" 2>/dev/null || true
 }
+# Fork PRs this round did not review, over every repo. A decision about the PR
+# and not a failure to read it, so it does not count into GATE_DEGRADED.
+N_FORK_SKIPPED=0
 
 for REPO in $REPOS_ROTATED; do
+# A named PR (`prreview once --pr`) is the only work of its round.
+[ -z "$ONCE_REPO" ] || [ "$REPO" = "$ONCE_REPO" ] || continue
 # The directory name this repo's clone, worktrees and per-PR markers go
 # under: owner and name, so two repos that share a name never share a clone.
 REPO_KEY="${REPO%%/*}__${REPO##*/}"
@@ -866,8 +904,15 @@ review_one_pr() { # $1 = PR number, $2 = the worktree the dispatcher made
   # marker above treats every nonzero exit as an unexpected death.
   cd "$REPO_DIR" || { note_skip "review worktree missing — skipping (fail closed)"; return 0; }
   INFO="$("$GH" pr view "$PR" --repo "$REPO" \
-        --json headRefOid,isDraft,reviews,comments,title,body,additions,deletions,changedFiles,autoMergeRequest,baseRefName,baseRefOid)"
+        --json headRefOid,isDraft,reviews,comments,title,body,additions,deletions,changedFiles,autoMergeRequest,baseRefName,baseRefOid,number,author,isCrossRepository)"
   [ -n "$INFO" ] || { note_skip "could not fetch PR info — skipping (fail closed)"; return 0; }
+  # The dispatcher already filtered on the list. This is the same rule on the
+  # job's own read, before any model call or diff fetch. Not note_skip: it is
+  # a decision about the PR, and a failed round would raise the alert.
+  if [ "$GATE_FORK_PRS" != 1 ] && ! pr_author_trusted "$INFO" "$TRUSTED_AUTHORS" "$ONCE_NUM"; then
+    echo "PR #$PR: not reviewed, a fork PR whose author is not trusted"
+    return 0
+  fi
   [ "$(jq -r '.isDraft' <<<"$INFO")" = "true" ] && return 0
   SHA="$(jq -r '.headRefOid' <<<"$INFO")"
   # Where this PR wants to land. Read once here because the stacked-base
@@ -3174,15 +3219,38 @@ $(findings_threshold_note "$TICKET_MIN_SEV" "${N_BELOW:-0}" "$REPO" "$PR")"
 PRE_FIELDS=headRefOid,isDraft,reviews,comments,title,body,baseRefName,baseRefOid
 # A list that fails is not an empty repo: read as "no open PRs", a token
 # without pull-request access left every round clean and nothing reviewed.
-OPEN_PRS="$("$GH" pr list --repo "$REPO" --state open --limit 1000 --json number -q '.[].number')" \
+# One call also reads who wrote each PR and whether it comes from a fork, so
+# the author filter (lib/trust.sh) needs no call per PR. Labels come in the
+# same answer; the filter does not read them.
+PR_LIST="$("$GH" pr list --repo "$REPO" --state open --limit 1000 --json number,author,isCrossRepository,labels)" \
   || { echo "$REPO: could not list open PRs — skipping repo (fail closed)"; GATE_DEGRADED=$((GATE_DEGRADED + 1)); continue; }
+PR_PLAN="$(trust_plan_prs "$PR_LIST" "$TRUSTED_AUTHORS" "$GATE_FORK_PRS" "$ONCE_NUM")" \
+  || { echo "$REPO: could not read the list of open PRs — skipping repo (fail closed)"; GATE_DEGRADED=$((GATE_DEGRADED + 1)); continue; }
+OPEN_PRS="$(sed -n 's/^review //p' <<<"$PR_PLAN")"
+# Numbers only. A title is text the PR author wrote.
+# Trade-off: a draft fork PR counts as skipped, because the list does not say
+# whether a PR is a draft.
+SKIPPED_PRS="$(sed -n 's/^skip /#/p' <<<"$PR_PLAN" | tr '\n' ' ')"
+if [ -n "$SKIPPED_PRS" ]; then
+  echo "$REPO: not reviewed, fork PR by an author who is not trusted: ${SKIPPED_PRS% }"
+  N_FORK_SKIPPED=$((N_FORK_SKIPPED + $(grep -c '^skip ' <<<"$PR_PLAN")))
+fi
+# Asked for by number: a PR that is closed, or not in this repo, must not look reviewed.
+if [ -n "$ONCE_NUM" ] && [ -z "$OPEN_PRS" ]; then
+  echo "$REPO: PR #$ONCE_NUM is not open — nothing to review"
+  GATE_DEGRADED=$((GATE_DEGRADED + 1))
+fi
 for PR in $OPEN_PRS; do
   # Nothing is done for a draft or an already-handled head but say so, and finding that out takes one API call, not a checkout: it
   # is decided here, before a job slot or a worktree is spent on the PR. Any
   # doubt (the call fails, the answer does not parse) falls through to the
   # full job, which makes the same checks and fails closed on its own.
   if PRE="$("$GH" pr view "$PR" --repo "$REPO" --json "$PRE_FIELDS" 2>/dev/null)"; then
-    [ "$(jq -r '.isDraft' <<<"$PRE" 2>/dev/null)" = true ] && continue
+    if [ "$(jq -r '.isDraft' <<<"$PRE" 2>/dev/null)" = true ]; then
+      # A named PR must not look reviewed.
+      [ -z "$ONCE_NUM" ] || echo "PR #$PR: is a draft, not reviewed until it is ready"
+      continue
+    fi
     if prompt_head_handled "$PRE" "$MARKER" "$PRIOR_AUTHORS" "$DEFAULT_BRANCH"; then
       echo "[$REPO_KEY#$PR] PR #$PR: this head was already handled — nothing to do until it changes (review-only: this gate never merges)"
       continue
@@ -3306,6 +3374,10 @@ The last review comment above says what was still open: blocking findings, a req
 done
 
 done  # $REPOS
+
+# One warning a round, so the person who runs the reviewer learns that a PR
+# is waiting. `prreview status` reads the count from the round log.
+[ "$N_FORK_SKIPPED" -eq 0 ] || trust_warning "$N_FORK_SKIPPED"
 
 # The round's quota tally. Log-only by design: quota exhaustion
 # is transient and every affected PR retries next round; what must not

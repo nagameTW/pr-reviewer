@@ -11,13 +11,21 @@ All notable changes to this project are recorded here. The format follows
 - CI runs the test suite on macOS with `/bin/bash`, which is bash 3.2. The
   job installs jq, gh, flock, shellcheck and coreutils with Homebrew and does
   not put the coreutils `gnubin` directory on `PATH`.
+- `prreview once --pr owner/repo#N` reviews one PR now, a fork PR included.
+  It reviews that PR and no other, and it waits for a running round with
+  `flock -w`. If it cannot get the lock in `PRREVIEW_GATE_ONCE_WAIT` seconds
+  (300 by default), it prints the reason and exits with code 75. It rejects
+  any value that is not `owner/repo#N` for a repository on your list.
+- `PRREVIEW_GATE_TRUSTED_AUTHORS` lists the logins whose fork PRs are
+  reviewed. `PRREVIEW_GATE_FORK_PRS=1` reviews every PR, as before.
+- `prreview status` shows how many PRs the last round skipped. A round that
+  skips PRs prints one `WARNING:` line with the count.
 
 ### Changed
 
 - `tests/run-all.sh` fails when `shellcheck` is not installed. It used to
   skip the lint step. It prints the versions of bash, gh, git, jq and flock
   first, and it runs every test with the bash that runs it.
-
 - `prreview setup` no longer installs the background service by default. The
   question defaults to `n` while no service is installed, and to `y` once one
   is, so pressing Enter keeps what you have. A new service reviews every open
@@ -29,7 +37,17 @@ All notable changes to this project are recorded here. The format follows
   service. The switch changes `gh` for all programs, so a user who answers `n`
   no longer sees it, and `gh config set` is not called. `prreview start` now
   needs a terminal or piped answers when `gh` clones over `ssh`.
-
+- The reviewer reviews only PRs from a trusted author. A PR is trusted when it
+  comes from a branch of the repository itself, when the author is in
+  `PRREVIEW_GATE_TRUSTED_AUTHORS`, or when `prreview once --pr` names it. A PR
+  from a fork is skipped otherwise, and nothing is posted on it. The round log
+  names a skipped PR by number only. One `gh pr list` call now reads the
+  number, the author, the fork flag and the labels, and the filter runs on that
+  answer before any call for a single PR. The review job checks the rule again
+  before any model call. A missing field means the PR is not trusted. Set
+  `PRREVIEW_GATE_FORK_PRS=1` to bring back the old behavior. A fork PR that
+  was open before the upgrade keeps its earlier comment, and its new heads are
+  skipped.
 - The reviewer finds `gtimeout` and `gsha256sum` on its own. At startup it uses
   `timeout` or `gtimeout` for deadlines. It uses `sha256sum`, `gsha256sum` or
   `shasum -a 256` for the review key digest, whichever it finds first. When only
@@ -47,6 +65,17 @@ All notable changes to this project are recorded here. The format follows
   `)` of a `case` pattern and printed a syntax error. The loop that counts the
   lines of each cited file now writes the pattern with a leading `(`. The check
   is off by default.
+
+### Security
+
+- A fork PR no longer reaches a model by default. Before, anyone who could
+  open a PR on a watched repository made the reviewer read the diff and call
+  the model, and each push to the PR or edit of its title or description
+  started another call on the operator's account. Now the reviewer skips a fork
+  PR unless the author is trusted or `prreview once --pr` names it. The rule
+  assumes that everyone who can push to the repository is trusted. A
+  repository whose workflows build branches from outside input breaks that
+  assumption.
 
 ## [0.2.2] - 2026-10-22
 

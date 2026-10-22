@@ -1,7 +1,8 @@
 # Security policy
 
-The reviewer passes text from anyone who can open a pull request to a model
-that can read files, and then posts the result under your GitHub account. So
+The reviewer passes the text of pull requests to a model that can read files,
+and then posts the result under your GitHub account. By default it reads only
+PRs from branches of the repository itself and PRs from authors you list. So
 the security model is worth stating plainly.
 
 ## Reporting a vulnerability
@@ -26,6 +27,19 @@ The project is pre-1.0, so only the latest commit on `main` gets fixes.
 ## The security model
 
 These hold by design. If you can break one, that is a vulnerability.
+
+**Fork PRs are skipped unless the author is trusted.** The reviewer reads the
+author and the `isCrossRepository` field of each open PR with one
+`gh pr list` call. It reads a PR when the field is false, when the author is in
+`PRREVIEW_GATE_TRUSTED_AUTHORS`, or when `prreview once --pr` names the PR.
+The review job checks the same rule on its own read of the PR, before any
+model call. A missing or unreadable field means the PR is not trusted. The
+reviewer posts nothing on a skipped PR and logs its number only.
+`PRREVIEW_GATE_FORK_PRS=1` turns the rule off. The rule assumes that everyone
+who can push to the repository is trusted. A repository whose workflows build
+branches from outside input, for example with `pull_request_target`, breaks
+that assumption. Do not list an account only because it contributed once. The
+list lives in the settings of the machine that runs the reviewer.
 
 **The pull request is data.** The model reads titles, descriptions, diffs and
 repository files with its read-only tools, and the prompt says that none of
@@ -125,6 +139,8 @@ have not changed, so the key stays the same and no new review runs. Version
 
 ## In scope
 
+- A PR from a fork, by an author who is not trusted, that reaches a model call
+  without `prreview once --pr` and without `PRREVIEW_GATE_FORK_PRS=1`.
 - Text in a pull request that makes the reviewer post something it should not:
   content from outside the repository, text the sensitive-data scan should
   have caught, or instructions followed as if they came from the operator.

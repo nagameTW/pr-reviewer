@@ -52,7 +52,8 @@ the suite in the `bash:3.2` Docker image.
   earlier rounds, `findings.sh` filters and renders what the model returns,
   `review-spec.sh` reads the checklist in `checks/` and holds the rules every
   prompt shares, `chunk.sh` slices diffs, `scan.sh` is the sensitive-data
-  scan, `holdoff.sh` remembers failures between rounds, and so on. Every file
+  scan, `holdoff.sh` remembers failures between rounds, `trust.sh` decides
+  which PRs the reviewer reads by their authors, and so on. Every file
   there can be sourced on its own and has no side effects when sourced.
 - `review-loop.sh` runs rounds on a timer; `owner-alert.sh` opens an issue when
   a round fails and `PRREVIEW_ALERT_REPO` is set.
@@ -63,7 +64,8 @@ the suite in the `bash:3.2` Docker image.
   `lib/chunk.sh`). The exceptions: `prreview.test.sh` tests `prreview` together with
   `lib/prreview-config.sh` and `lib/prreview-service.sh`,
   `review-checks.test.sh` tests how `lib/review-spec.sh` reads `checks/`, and
-  `alert.test.sh` tests `owner-alert.sh`. `gate-wiring.test.sh`,
+  `alert.test.sh` tests `owner-alert.sh`. `trust.test.sh` also runs the gate
+  against a stub `gh`, and tests `prreview once --pr`. `gate-wiring.test.sh`,
   `posting.test.sh` and `startup.test.sh` pin how `pr-autoreview.sh` calls
   the libs.
 - The "discipline" tests scan the source for patterns that caused bugs
