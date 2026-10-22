@@ -444,7 +444,7 @@ if [ -n "$TREE_GATED" ]; then
 fi
 
 # ── fifth class: the linked issue text is scanned before the model can read it ──
-# The README promises that a pattern match in the title or body of the issue
+# docs/operations.md promises that a pattern match in the title or body of the issue
 # the PR links stops the review. The issue text goes into the intent file that
 # the model Reads, so the scan must run before that write. The real block
 # runs here, lifted out of the script. Stubs stand in for gh, the post and

@@ -189,6 +189,20 @@ skips because of its author. A head that an earlier `prreview once --pr`
 reviewed loses its auto-merge too, because the PR list does not show that
 review.
 
+Give it the smallest token scope that can read the repos and comment on pull
+requests. GitHub's pull-request write permission also allows approvals, which
+the reviewer's code never uses. A GitHub App needs only the permissions its
+setup link asks for: Pull requests read and write, Issues read and write, and
+Metadata read ([docs/github-app.md](docs/github-app.md)).
+`PRREVIEW_GATE_TICKETS=1` and `PRREVIEW_ALERT_REPO` also need permission to
+open issues. `PRREVIEW_GATE_DISARM_AUTO_MERGE=1` needs write access to the repo.
+
+With a GitHub App, the comments and the follow-up issues of
+`PRREVIEW_GATE_TICKETS=1` go out as the App. The `gh` login does the PR reads,
+the clones, the alert issues of `PRREVIEW_ALERT_REPO` and the call of
+`PRREVIEW_GATE_DISARM_AUTO_MERGE=1`. Grant the issue permission for alerts and
+the write access for the disarm call to that login.
+
 **Scratch files stay private.** Diffs, slices and raw model output are written
 under the reviewer's own work directory, not a shared `/tmp`.
 

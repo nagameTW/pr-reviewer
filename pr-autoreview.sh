@@ -2924,17 +2924,19 @@ $SLICE_CLEAN"
   # match reads such a blocking verdict as a pass.
   # The reason belongs here, where somebody would make the edit.
 
-  # The banner is the verdict and its counts, nothing else. What used to sit
-  # in a parenthesis after it was either background the reader already knows
-  # (dropped; the review-only caveat moved to a footer) or an action only the
-  # reader can take, which keeps one sentence on the callout's second line.
+  # The banner is the verdict and its counts. What used to sit in a parenthesis
+  # after it was either background the reader already knows (dropped; the
+  # review-only caveat moved to a footer) or an action only the reader can
+  # take, which keeps one sentence on the callout's second line. On Approved,
+  # that line says it is not a GitHub approval.
   BANNER_COUNTS="$( [ "${N_BLOCKING:-0}" -gt 0 ] && printf ' · %s blocking' "$N_BLOCKING")$( [ "${N_SOFT:-0}" -gt 0 ] && printf ' · %s not blocking' "$N_SOFT")"
   if [ "$VERDICT" = "approve" ]; then
     # Review-only: the verdict is stated so a person can weigh it,
     # and the banner keeps the ✅/❌ shape the cross-round memory keys on —
     # but nothing here approves, blocks, or merges (the footer says so).
     BANNER="> [!TIP]
-> **Automated review: ✅ Approved**$BANNER_COUNTS"
+> **Automated review: ✅ Approved**$BANNER_COUNTS
+> Automated review, not a GitHub approval."
   else
     BANNER="> [!WARNING]
 > **Automated review: ❌ Changes requested**$BANNER_COUNTS

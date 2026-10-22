@@ -59,11 +59,11 @@ is 'a setting only the gate script reads is known' "$(prreview_key_known "$ROOT"
 is 'a misspelled one is not' "$(prreview_key_known "$ROOT" PRREVIEW_GATE_PARALEL || echo unknown)" unknown
 is 'nor a name that is only the start of a setting' "$(prreview_key_known "$ROOT" PRREVIEW_GATE_PARALLE || echo unknown)" unknown
 is "nor a name prreview uses for itself" "$(prreview_key_known "$ROOT" PRREVIEW_SERVICE_NAME || echo unknown)" unknown
-UNKNOWN=""; TABLE_KEYS="$(grep -oE '^\| `PRREVIEW_[A-Z0-9_]+`' README.md | tr -d '|` ')"
+UNKNOWN=""; TABLE_KEYS="$(grep -oE '^\| `PRREVIEW_[A-Z0-9_]+`' docs/configuration.md | tr -d '|` ')"
 for k in $TABLE_KEYS; do prreview_key_known "$ROOT" "$k" || UNKNOWN="$UNKNOWN $k"; done
-is 'the README settings table was found' "$([ -n "$TABLE_KEYS" ] && echo found)" found
-is 'every setting in the README table is one the reviewer reads' "$UNKNOWN" ''
-# Where the README gives one plain value as a default, it must be the one
+is 'the settings table in docs/configuration.md was found' "$([ -n "$TABLE_KEYS" ] && echo found)" found
+is 'every setting in the docs/configuration.md table is one the reviewer reads' "$UNKNOWN" ''
+# Where docs/configuration.md gives one plain value as a default, it must be the one
 # the reviewer uses: a default changed on one side only misleads.
 DRIFT=""
 while IFS='|' read -r _ k d _; do
@@ -71,9 +71,9 @@ while IFS='|' read -r _ k d _; do
   [[ "$d" =~ ^\`[A-Za-z0-9._-]+\`$ ]] || continue
   d="${d//\`/}"; c="$(prreview_key_default "$ROOT" "$k")"
   case "$c" in ''|*'$'*) continue ;; esac
-  [ "$c" = "$d" ] || DRIFT="$DRIFT $k(README $d, reviewer $c)"
-done < <(grep -E '^\| `PRREVIEW_[A-Z0-9_]+` \|' README.md)
-is 'every plain default in the README table is the one the reviewer uses' "$DRIFT" ''
+  [ "$c" = "$d" ] || DRIFT="$DRIFT $k(docs $d, reviewer $c)"
+done < <(grep -E '^\| `PRREVIEW_[A-Z0-9_]+` \|' docs/configuration.md)
+is 'every plain default in the docs/configuration.md table is the one the reviewer uses' "$DRIFT" ''
 printf 'PRREVIEW_GATE_PARALLEL=2\nPRREVIEW_GATE_PARALLEL=6\n' > "$T/twice"
 is 'a key set twice is refused, naming the second line' "$(prreview_config_read "$T/twice" 2>&1 >/dev/null | cut -d: -f2)" 2
 cp "$C" "$T/c.before"

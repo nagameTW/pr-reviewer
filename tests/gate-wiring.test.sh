@@ -241,4 +241,17 @@ pin    'a slice keeps the quoted line of a finding in another slice' 'Keep its l
 if grep -qF 'Never reword, re-anchor, or re-rate' pr-autoreview.sh; then bad 'no rule forbids re-anchoring a carried finding' 'the old sentence is still in pr-autoreview.sh'; else ok 'no rule forbids re-anchoring a carried finding'; fi
 pin    'the structural repair gets the same definition' 'findings_repair_prompt "$OUT" "$REVIEW_SCHEMA" "$REVIEW_LINE_SPEC")"' pr-autoreview.sh
 
+# The Approved banner says what it is not. A reader who skims a comment that
+# starts with a green check can take it for a GitHub approval, so the second
+# line of that banner names the difference. Every verdict matcher in
+# lib/prompt.sh matches `Automated review: ` with a colon, and this line has a
+# comma, so it cannot pass for a second banner.
+APPROVE_BANNER="$(awk '/BANNER="> \[!TIP\]/ { p = 1 } p { print } p && /^  else$/ { exit }' pr-autoreview.sh)"
+has    'the Approved banner says it is not a GitHub approval' '> Automated review, not a GitHub approval.' "$APPROVE_BANNER"
+has    '...and the banner keeps the verdict line' '**Automated review: ✅ Approved**$BANNER_COUNTS' "$APPROVE_BANNER"
+VERDICT_AT="$(printf '%s\n' "$APPROVE_BANNER" | grep -nF -- '**Automated review: ✅ Approved**' | head -1 | cut -d: -f1)"
+NOTE_AT="$(printf '%s\n' "$APPROVE_BANNER" | grep -nF -- '> Automated review, not a GitHub approval.' | head -1 | cut -d: -f1)"
+if [ -n "$VERDICT_AT" ] && [ -n "$NOTE_AT" ] && [ "$VERDICT_AT" -lt "$NOTE_AT" ]; then ok '...and the note sits below the verdict line'; else bad '...and the note sits below the verdict line' "verdict at ${VERDICT_AT:-none}, note at ${NOTE_AT:-none}"; fi
+case "$APPROVE_BANNER" in *'Automated review: '*'Automated review: '*) bad '...and the note does not repeat the colon form the parsers match' 'two lines match the banner pattern' ;; *) ok '...and the note does not repeat the colon form the parsers match' ;; esac
+
 if [ "$FAILED" -eq 0 ]; then echo "PASS: gate wiring"; else echo "FAIL: gate wiring"; exit 1; fi
