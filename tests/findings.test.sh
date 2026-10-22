@@ -11,6 +11,7 @@
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 . lib/findings.sh || { echo "FAIL: cannot source lib/findings.sh"; exit 1; }
+. lib/tree.sh || { echo "FAIL: cannot source lib/tree.sh"; exit 1; }
 
 FAILED=0
 ok()  { printf '  ok   %s\n' "$1"; }
@@ -1655,6 +1656,17 @@ is 'clamp: the log has one line per changed finding' "$(grep -c . "$CL_REPO/err"
 is 'clamp: input that is not JSON comes back unchanged' "$(findings_clamp_lines "$CL_REPO" x <<<'not json' 2>/dev/null)" 'not json'
 is 'clamp: input with no findings comes back unchanged' "$(findings_clamp_lines "$CL_REPO" x <<<'{"findings":[]}' 2>/dev/null)" '{"findings":[]}'
 rm -rf "$CL_REPO"
+
+# A convention file on disk is the base copy, so a PR that grows it must keep
+# its lines. Other files of the same tree are still measured.
+CV_REPO="$(mktemp -d)"
+printf 'a\nb\n' > "$CV_REPO/CLAUDE.md"; printf 'a\nb\n' > "$CV_REPO/ReadMe.Txt"; printf 'a\nb\n' > "$CV_REPO/c.sh"
+CV_OUT="$(findings_clamp_lines "$CV_REPO" "PR #7" 2>/dev/null <<<'{"findings":[{"file":"CLAUDE.md","line":40,"issue":"conv"},{"file":"./ReadMe.Txt","line":40,"issue":"conv lower"},{"file":"c.sh","line":40,"issue":"plain"}]}')"
+cv() { jq -r --arg i "$1" '.findings[] | select(.issue == $i) | .line' <<<"$CV_OUT"; }
+is 'clamp: a convention file keeps its line' "$(cv conv)" '40'
+is 'clamp: a convention file is matched in any letter case' "$(cv 'conv lower')" '40'
+is 'clamp: a file that is not a convention file is still measured' "$(cv plain)" '0'
+rm -rf "$CV_REPO"
 
 # ── the wiring in pr-autoreview.sh ────────────────────────────────────────
 SRC_LINE="$(cat pr-autoreview.sh)"

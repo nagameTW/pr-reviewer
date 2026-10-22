@@ -560,6 +560,16 @@ FINDINGS_CLAMP_LOG_JQ='(.findings // [])[]
   | select(($counts[$f] // null) as $n | ($n != null) and (.line > $n))
   | "\(.file):\(.line)"'
 
+# findings_is_convention_path PATH: succeed when PATH is a convention file
+# (TREE_CONV_RE in lib/tree.sh, matched on the lowercased path). Without the
+# regex, nothing matches and the file is measured.
+findings_is_convention_path() {
+  local LC_ALL=C l
+  [ -n "${TREE_CONV_RE-}" ] || return 1
+  l="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+  [[ $l =~ $TREE_CONV_RE ]]
+}
+
 # findings_clamp_lines REPO_DIR LABEL: read the findings JSON on stdin, write
 # it with every provably wrong line set to 0, and log one row per change on
 # stderr. LABEL starts each log row, for example "PR #7". Input that is not
@@ -576,7 +586,9 @@ findings_clamp_lines() {
         # measured, so the finding keeps its line.
         if [[ "$f" != /* && "$f" != *..* ]]; then
           f="${f#./}"
-          if [ -n "$f" ] && [ -f "$repo/$f" ]; then
+          # A convention file on disk is the base copy, not the PR's file
+          # (lib/tree.sh), so its length says nothing about the PR's line.
+          if [ -n "$f" ] && [ -f "$repo/$f" ] && ! findings_is_convention_path "$f"; then
             printf '%s\t%s\n' "$f" "$(LC_ALL=C awk 'END { print NR }' "$repo/$f" 2>/dev/null)"
           fi
         fi
