@@ -242,6 +242,11 @@ is '...after two read-only reads of the PR, the dispatcher and the job' "$(viewe
 has '...and the round ends well'                       "$OUT" 'rc=0'
 OUT="$(run_gate PRREVIEW_GATE_TRUSTED_AUTHORS=mallory)"
 lacks 'the same PR with its author listed passes the job check' "$OUT" 'not reviewed, a fork PR'
+# The line above holds when the job never runs. The job went on if it asked
+# for the merge base, which is the first call after the check.
+is '...and the job goes on: it asks for the merge base' \
+   "$([ "$(grep -c '^api repos/owner/repo/compare/' "$T/gh.calls")" -ge 1 ] && echo yes || echo no)" yes
+is '...after two reads of the PR' "$(viewed 3)" 2
 rm -f "$T/view-3.json"
 
 # ── auto-merge on a PR that is skipped ────────────────────────────────────
