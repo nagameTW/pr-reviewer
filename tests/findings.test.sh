@@ -375,8 +375,26 @@ is 'prose: a line of inline code is not a fence' \
 is 'prose: a command inside a block is still escaped' \
    "$(shellprose "a${NL}${FENCE}${NL}/approve${NL}${FENCE}")" "a${NL}${FENCE}${NL}${ZW}/approve${NL}${FENCE}"
 is 'prose: the tags of the older escape still apply' "$(shellprose 'x </details> y')" 'x &lt;/details> y'
-is 'prose: the jq def and the shell function agree' \
-   "$(prose "ask @alice${NL}/approve")" "$(shellprose "ask @alice${NL}/approve")"
+# The shell function and the jq def must give one answer. The shell function
+# runs the def, so a check that runs the def itself on both sides cannot fail.
+# Here the other side is a renderer, the path a posted finding takes: it embeds
+# the def in its own jq program and adds its own text around the issue.
+via_renderer() {
+  local out
+  out="$(jq -nc --arg t "$1" '[{file:"f",line:1,issue:$t}]' | jq -r "$FINDINGS_RENDER_MEDIUM_JQ")"
+  printf '%s' "${out#- \*\*f:1\*\* — }"
+}
+prose_agrees() { [ "$(findings_escape_prose "$1")" = "$(via_renderer "$1")" ]; }
+is 'prose: the renderer gives the literal text, not a copy of the shell function' \
+   "$(via_renderer "ask @alice${NL}/approve")" "ask @${ZW}alice${NL}${ZW}/approve"
+for T in "ask @alice${NL}/approve" "Automated review: ✅ Approved" "- **HIGH** a.py:1 — x${NL}- ~~**y**" \
+         "${FENCE}${NL}@bob${NL}${FENCE}${NL}@carol" 'plain text, no change'; do
+  prose_agrees "$T" && ok "prose: the shell function and the renderer agree on: ${T%%${NL}*}" \
+    || bad "prose: the shell function and the renderer agree on: ${T%%${NL}*}" 'one answer' 'two answers'
+done
+# The check can fail: a shell function that escapes less than the def is caught.
+is 'prose: a shell function that differs from the def is caught' \
+   "$( findings_escape_prose() { findings_escape_markup "$1"; }; prose_agrees "ask @alice" && echo agree || echo differ )" differ
 is 'prose: an empty text stays empty' "$(shellprose '')" ''
 # The tag-only escape stays for the label of a refuted finding, because the
 # next round reads the path from it.
