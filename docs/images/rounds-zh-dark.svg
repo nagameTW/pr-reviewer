@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg viewBox="0 0 880 544" xmlns="http://www.w3.org/2000/svg" xml:lang="zh-TW" role="img" aria-labelledby="rounds-github-zh-dark-title rounds-github-zh-dark-desc" id="rounds-github-zh-dark-root">
 <title id="rounds-github-zh-dark-title">會擋下核准的問題在多輪之間的狀態</title>
-<desc id="rounds-github-zh-dark-desc">每次推送都開始新的一輪。模型把先前會擋下核准的問題標為已修正，或沿用到下一輪。若新的 HIGH 問題位於本次推送未改動的檔案，改列為 MEDIUM，不擋下核准。</desc>
+<desc id="rounds-github-zh-dark-desc">每次推送都開始新的一輪。模型把先前會擋下核准的問題標為已修正，或沿用到下一輪。若新的 HIGH 問題位於本次推送未改動、先前各輪也未引用的檔案，改列為 MEDIUM，不擋下核准。</desc>
 <defs>
       <style>#rounds-github-zh-dark-root { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", Helvetica, Arial, sans-serif; color: #F0F6FC; }
       #rounds-github-zh-dark-root .page { max-width: 1000px; width: 100%; }
@@ -53,7 +53,7 @@
 <rect class="mask" x="287" y="278" width="46" height="16" rx="2"/><text class="t-arrow" x="310" y="290" text-anchor="middle">未修正</text>
 <rect class="mask" x="667" y="276" width="46" height="16" rx="2"/><text class="t-arrow" x="690" y="288" text-anchor="middle">已修正</text>
 <rect class="mask" x="485" y="388" width="46" height="16" rx="2"/><text class="t-arrow" x="508" y="400" text-anchor="middle">未修正</text>
-<rect class="mask" x="58" y="268" width="170" height="16" rx="2"/><text class="t-arrow" x="143" y="280" text-anchor="middle">位於未改動檔案的 HIGH 問題</text>
+<rect class="mask" x="58" y="268" width="116" height="16" rx="2"/><text class="t-arrow" x="116" y="280" text-anchor="middle">未改動檔案的 HIGH</text>
 <text class="t-eye" x="24" y="112">新問題</text>
 <circle class="dot" cx="48" cy="148" r="6"/>
 <g class="focal" data-box="120 104 200 88">
