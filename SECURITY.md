@@ -97,15 +97,17 @@ was refused. Before these flags, `Bash` was in the tool set. In the same
 check, the shell commands `ls`, `cat`, `git log` and `git show` ran inside the
 clone without an allow rule.
 
-**The merge base sets the rules.** The review tree is the PR's merge base with
-the diff applied, and convention files such as `CLAUDE.md` are read as they are
-at the PR's merge base. For a PR based on another branch, the merge base is on
-that branch, so each convention file the tree has is replaced with the default
-branch's version, or removed when the default branch does not have it. A file
-that only the default branch has is not added. If a step of the replacement
-fails, the PR is not reviewed that round. The match is exact in file name
-case, so a PR's edit to a differently cased file such as `readme.md` is not
-restored. The author's branch is never checked out.
+**The default branch sets the rules.** The review tree is the PR's merge base
+with the diff applied. Convention files (`CLAUDE.md`, `CLAUDE.local.md`,
+`AGENTS.md`, `.mcp.json`, `.claude/`, README, CONTRIBUTING and
+`.github/review-checks.md`) come from the newest commit of the default branch
+for every PR, matched in any letter case. The copy comes after the diff is
+applied. A file the default branch lacks is removed, and a file only the
+default branch has is added. This also covers a PR based on another branch,
+whose parent branch is not protected. If a step of the copy fails, the PR is
+not reviewed that round. A file outside this list stays as the PR has it. An
+old branch is reviewed with today's rules, and there is no switch to turn that
+off. The author's branch is never checked out.
 
 **Comments with PR text or model output are scanned.** Every comment that
 carries PR text or model output is checked against the operator's
@@ -204,6 +206,19 @@ another PR, the merge base moves to C and the net diff becomes the revert of
 C. The head commit H, the title, the description and the base branch name
 have not changed, so the key stays the same and no new review runs. Version
 0.3.0 will add the merge base commit ID to the key of every PR.
+
+**The cooldown limits edits, not pushes to the PR branch.** An edit of a PR's
+title, description or base branch changes the review key and asks for a new
+review. When the head is the same, the reviewer waits until its last comment on
+the PR is `PRREVIEW_GATE_PR_COOLDOWN_MIN` minutes old (10 by default, 0 turns
+it off). Repeated edits then cost one review per cooldown. A push to the PR
+branch is never delayed, so an account that can push can still start one
+review per push. The cooldown compares only the PR head. For a stacked PR, a
+push to the parent branch leaves the head the same and can wait up to the
+cooldown. `prreview once
+--pr` ignores the cooldown. The wait uses the time of the reviewer's last
+comment on the PR. It keeps no file. If that time cannot be read, the PR is
+reviewed.
 
 ## In scope
 

@@ -512,6 +512,10 @@ REVIEW_MODEL="${PRREVIEW_REVIEW_MODEL:-$REVIEW_MODEL_DEFAULT}"
 # next one repeats the whole review — see lib/holdoff.sh for what that cost.
 . "$SCRIPT_DIR/lib/holdoff.sh" || { echo "lib/holdoff.sh missing — refusing to run"; exit 1; }
 holdoff_knobs_ok || exit 2
+# The same-head cooldown: the decision for a PR whose title or description
+# changed on a head the reviewer just reviewed.
+. "$SCRIPT_DIR/lib/cooldown.sh" || { echo "lib/cooldown.sh missing — refusing to run"; exit 1; }
+cooldown_knob_ok || exit 2
 
 # The review-followup ticket threshold, resolved ONCE per run so every PR in
 # the round files by the same rule and a bad value is reported once. Default
@@ -602,7 +606,7 @@ post_symlink_refusal() {
   text="
 > **Automated review: ⛔ Refused**
 
-$1. The review model's file access is fenced by path patterns, and a symlink that points outside the tree can lead it somewhere it must not read, so this head is not reviewed. A symlink to a file inside the repository is fine as long as it does not point at a folder or into .git, and a convention file (${TREE_CONV_NAMES}) links only to another convention file that the base branch already has under exactly that name, same case. Fix the link or remove it and push a new commit; the PR then goes back into the review queue."
+$1. The review model's file access is fenced by path patterns, and a symlink that points outside the tree can lead it somewhere it must not read, so this head is not reviewed. A symlink to a file inside the repository is fine as long as it does not point at a folder or into .git, and a convention file (${TREE_CONV_NAMES}) links only to another convention file that git tracks. Fix the link or remove it and push a new commit; the PR then goes back into the review queue."
   body="<!-- $MARKER $KEY symlink-refused -->
 
 > [!CAUTION]$text"
@@ -939,11 +943,6 @@ review_one_pr() { # $1 = PR number, $2 = the worktree the dispatcher made
     return 0
   fi
   SHA="$(jq -r '.headRefOid' <<<"$INFO")"
-  # Where this PR wants to land. Read once here because the stacked-base
-  # convention guard below needs it.
-  # The other call sites still ask INFO directly; they predate this
-  # and re-reading the same field is harmless, unlike a SECOND source of truth.
-  PR_BASE="$(jq -r '.baseRefName // ""' <<<"$INFO")"
   # The commit the base branch pointed to in this same read. The merge base
   # is resolved from it and from $SHA, never from the branch name: a branch
   # can move between two calls, and a commit ID cannot.
@@ -1255,8 +1254,10 @@ the default branch. Edit the title and it is checked again automatically."
   #
   # A stacked PR gets the same tree: its merge base sits on the parent branch,
   # so the parent's changes are there too. The author still does not pick the
-  # rules: further down, the convention files in a stacked tree are replaced
-  # with the default branch's before the patch goes on.
+  # rules: further down, once the patch is on, the convention files of EVERY
+  # tree are replaced with the default branch's (tree_force_convention_files).
+  # Only after the patch: it is computed against the merge base, and a
+  # convention file that is newer on the default branch would make it fail.
   DIFF_APPLIED=0
   # Where the checkout actually landed. Every sentence that describes the tree
   # to a human or to the model is derived from this plus DIFF_APPLIED, because
@@ -1278,9 +1279,12 @@ the default branch. Edit the title and it is checked again automatically."
   # otherwise happy to run in parallel. Reviewing the stacked tree costs
   # nothing on the safety side: the parent branch is author-controlled, and
   # so is the diff applied on top. What guards the tree is further down: the
-  # convention files come from the default branch, the ones the patch wrote
-  # are reverted, and a symlink that could lead the model elsewhere
-  # (tree_has_symlinks says which) refuses the whole review.
+  # ones the patch wrote are reverted, the convention files come from the
+  # default branch, and a symlink that could lead the model elsewhere
+  # (tree_has_symlinks says which) refuses the whole review. A parent branch
+  # is an unprotected ref: anyone who can push a feature branch could commit
+  # their own CLAUDE.md to it, and no revert sees it, since the patch did not
+  # write it. So the copy is made for every PR, not only a stacked one.
   # $MERGE_BASE is a full 40-hex SHA by now: pr_diff_pinned refused anything
   # else. That check must stay, because the value comes off the network and
   # `git checkout` accepts refs, short SHAs and `HEAD@{...}`.
@@ -1290,114 +1294,6 @@ the default branch. Edit the title and it is checked again automatically."
   # wording below.
   if git -C "$REPO_DIR" checkout -q --detach "$MERGE_BASE" 2>/dev/null; then
     TREE_AT=base
-    # A merge base OFF the default branch sits on an unprotected ref,
-    # so its convention files are author-written even though this
-    # patch never touched them — and the revert further down cannot
-    # see them: it walks `ls-files --others` (what the patch created)
-    # and `diff --name-only` (what the patch modified), and a file the
-    # PARENT committed is in neither. `git checkout -- <path>` would
-    # not help either; it restores the parent's version, which is the
-    # author's. So the attack is: push a CLAUDE.md saying whatever you
-    # like to feat/parent (feature branches are unprotected), open a
-    # PR based on feat/parent, and the gate reads your rules as the
-    # project's from its own cwd. The comment this replaces claimed
-    # the tree was "author-controlled either way, the diff is the
-    # author's" — that was wrong, because the diff's half IS reverted
-    # and the parent's half was not.
-    #
-    # Taken from the default branch, not merely deleted: the review
-    # needs the real conventions present, not absent. Deleting is only
-    # for a path the default branch does not have at all.
-    if ! merge_base_allowed "$PR_BASE" "$DEFAULT_BRANCH"; then
-      # `*/.claude/*`, NOT `*/.claude`. A pathspec wildcard only
-      # tail-matches, so `*/.claude` matches nothing at all — measured,
-      # and it is the same trap three versions of the revert below fell
-      # into. `.claude` bare does work (git treats it as a prefix), and
-      # is kept alongside so a root-level one is never missed.
-      # The ref has to resolve before anything is removed. Measured
-      # while writing this: against an unresolvable origin/<default>,
-      # every `cat-file -e` fails, every path takes the `rm` arm, and
-      # the tree ends up with NO conventions at all — the model then
-      # reviews against nothing and says nothing about why. Refusing
-      # is the honest answer; a review without the project's rules is
-      # not a cheaper review, it is a different one.
-      if ! git -C "$REPO_DIR" rev-parse --verify -q "origin/$DEFAULT_BRANCH^{commit}" >/dev/null; then
-        note_skip "cannot resolve origin/$DEFAULT_BRANCH to force the convention files off a stacked base — refusing to review (fail closed)"
-        return 0
-      fi
-      CONV_FORCED=0
-      # The list goes to a file and is read from there, so git's exit status
-      # is seen (lib/tree.sh does the same). A process substitution hides it:
-      # a listing that failed would read as a tree with no convention files.
-      CONV_LIST="$(mktemp "$GATE_SCRATCH/prreview-conv-list-XXXXXX")" && TMPFILES+=("$CONV_LIST") \
-        || { note_skip "could not create a scratch file for the convention file list, skipping (fail closed)"; return 0; }
-      git -C "$REPO_DIR" ls-files -z \
-        'CLAUDE.md' '*/CLAUDE.md' 'AGENTS.md' '*/AGENTS.md' \
-        '.claude/*' '*/.claude/*' \
-        ${TREE_CONV_EXTRA_PATHSPECS[@]+"${TREE_CONV_EXTRA_PATHSPECS[@]}"} > "$CONV_LIST" 2>/dev/null \
-        || { note_skip "could not list the convention files to replace on a stacked base, skipping (fail closed)"; return 0; }
-      # The default branch's files go to a file the same way. A per-file
-      # `git cat-file -e` gives one status for "the tree has no such path" and
-      # for "git could not read the tree", and only the first one may remove a
-      # file. Here a failed read skips the PR before any file is touched.
-      CONV_TREE="$(mktemp "$GATE_SCRATCH/prreview-conv-tree-XXXXXX")" && TMPFILES+=("$CONV_TREE") \
-        || { note_skip "could not create a scratch file for the file list of origin/$DEFAULT_BRANCH, skipping (fail closed)"; return 0; }
-      git -C "$REPO_DIR" ls-tree -r --name-only -z "origin/$DEFAULT_BRANCH" > "$CONV_TREE" 2>/dev/null \
-        || { note_skip "could not list the files of origin/$DEFAULT_BRANCH on a stacked base, skipping (fail closed)"; return 0; }
-      # The listing goes into an array once, so a look-up below is a plain
-      # string comparison. grep -z is GNU only, and macOS has no GNU grep.
-      # `read -d ''` keeps a newline inside a name. git ends every name with a
-      # NUL, so a last name without one means the listing is cut off.
-      # Trade-off: one comparison per file for each convention file. A repo with
-      # 50000 files and 100 convention files takes about 15 s per stacked PR.
-      CONV_TREE_NAMES=(); CONV_TREE_LAST=""
-      { while IFS= read -r -d '' CONV_TREE_LAST; do
-          CONV_TREE_NAMES[${#CONV_TREE_NAMES[@]}]="$CONV_TREE_LAST"
-        done < "$CONV_TREE" && [ -z "$CONV_TREE_LAST" ]; } \
-        || { note_skip "the file list of origin/$DEFAULT_BRANCH ends in the middle of a name on a stacked base, skipping (fail closed)"; return 0; }
-      # Each step must work. A failed step skips the PR: a tree where one
-      # convention file still comes from the parent branch does not hold the
-      # default branch's rules. CONV_FORCED is set after the last file is done.
-      # `if`, not `[ -n ... ] || continue`: a bare continue inside
-      # review_one_pr is banned (tests/parallel-discipline.test.sh) —
-      # the function is a background job and the word would act on
-      # whichever loop happens to enclose it.
-      CONV_DONE=0
-      while IFS= read -r -d '' conv; do
-        if [ -n "$conv" ]; then
-          # CONV_HAVE: 0 = the default tree has the path, 1 = it has not.
-          CONV_HAVE=1
-          for CONV_TREE_NAME in ${CONV_TREE_NAMES[@]+"${CONV_TREE_NAMES[@]}"}; do
-            if [ "$CONV_TREE_NAME" = "$conv" ]; then CONV_HAVE=0; break; fi
-          done
-          if [ "$CONV_HAVE" = 0 ]; then
-            git -C "$REPO_DIR" checkout "origin/$DEFAULT_BRANCH" -- "$conv" 2>/dev/null \
-              || { note_skip "could not check out a convention file from origin/$DEFAULT_BRANCH on a stacked base, skipping (fail closed)"; return 0; }
-          else
-            # The INDEX too, not just the working tree. `rm -f` alone
-            # leaves the parent's blob staged, the path then shows up
-            # in the `git diff --name-only` list the revert loop below
-            # walks, and that loop's `git checkout -- <path>` writes
-            # the parent's version straight back out. Measured: the
-            # file was deleted, listed, and resurrected in the same
-            # round. It is the easiest arrangement of this attack too,
-            # because a path the default branch does not track at all
-            # (.claude/skills/<name>/SKILL.md, a subdirectory
-            # CLAUDE.md) always takes this arm. Clearing the index
-            # also keeps the path out of that list, so CONV_HIT is not
-            # set and the prompt does not tell the model this diff
-            # wrote a convention file when it did not.
-            git -C "$REPO_DIR" rm -q --cached -- "$conv" 2>/dev/null \
-              || { note_skip "could not remove a convention file from the index on a stacked base, skipping (fail closed)"; return 0; }
-            rm -f "${REPO_DIR:?}/$conv" \
-              || { note_skip "could not delete a convention file from the review tree on a stacked base, skipping (fail closed)"; return 0; }
-          fi
-          CONV_DONE=1
-        fi
-      done < "$CONV_LIST"
-      CONV_FORCED="$CONV_DONE"
-      [ "$CONV_FORCED" = 1 ] && echo "PR #$PR: stacked base — convention files forced back to origin/$DEFAULT_BRANCH so the parent branch cannot supply the review rules either"
-    fi
     if BIN_PATHS="$(tree_binary_paths "$DIFF")"; then
       while IFS= read -r bp; do
         [ -z "$bp" ] || BIN_EXCLUDES+=("--exclude=$bp")
@@ -1422,8 +1318,9 @@ the default branch. Edit the title and it is checked again automatically."
     # files exist is not.
     #
     # Untracked ones were created by the patch and go. Tracked ones were
-    # modified by it and are restored to the merge base, so a repo that
-    # legitimately ships a convention file keeps its real content.
+    # modified by it and are restored to the merge base. That restore is a
+    # first step only: tree_force_convention_files below sets the final
+    # content, the default branch's copy.
     # The code is lib/tree.sh's tree_revert_convention_files.
     # The git-pathspec-vs-shell-case lesson (why this cannot be a
     # `git ls-files -- '*/.claude'` pathspec) lives ONLY in lib/tree.sh's own
@@ -1447,10 +1344,18 @@ the default branch. Edit the title and it is checked again automatically."
       note_skip "could not restore the convention files in the review tree (git failed), so the PR's own rules may be on disk — not reviewing this round"
       return 0
     fi
+    # Then the default branch's versions, for every PR (see lib/tree.sh).
+    # Names in the diff are matched in any letter case: lowercased as a whole
+    # with LC_ALL=C tr, the way tree_conv_filter does it.
+    tree_force_convention_files "$REPO_DIR" "origin/$DEFAULT_BRANCH" \
+      || { note_skip "$TREE_CONV_ERR, skipping (fail closed)"; return 0; }
+    if [ "$TREE_CONV_FORCED" = 1 ]; then
+      echo "PR #$PR: convention files in the review tree changed to match origin/$DEFAULT_BRANCH, so neither the PR nor its base branch supplies the review rules"
+    fi
     if [ "$CONV_RC" -eq 0 ] \
-       && grep -qE "$TREE_CONV_RE" <<<"$PR_FILES"; then
-      echo "PR #$PR: the diff writes convention files ($TREE_CONV_NAMES) — reverted in the review tree so the change cannot supply its own review rules"
-      TREE_CONV_NOTE=" ONE exception to what you just read: this PR writes files that define the project's conventions ($TREE_CONV_NAMES), and those were deliberately reverted to their pre-change state in this tree so the change under review cannot supply the rules it is judged by. For those paths only, the file on disk is NOT what the PR makes it: read them from the diff, and do not treat the on-disk content as evidence against a finding."
+       && grep -qE "$TREE_CONV_RE" <<<"$(LC_ALL=C tr '[:upper:]' '[:lower:]' <<<"$PR_FILES")"; then
+      echo "PR #$PR: the diff writes convention files ($TREE_CONV_NAMES) — replaced in the review tree with the default branch's so the change cannot supply its own review rules"
+      TREE_CONV_NOTE=" ONE exception to what you just read: this PR writes files that define the project's conventions ($TREE_CONV_NAMES). In this tree those paths hold the versions on the newest commit of the default branch (a path the default branch does not have is absent from the tree), so the change under review cannot supply the rules it is judged by. For those paths only, the file on disk is NOT what the PR makes it: read them from the diff, and do not treat the on-disk content as evidence against a finding."
     fi
     # The symlink guard ran BEFORE this, so it covered the checkout but not
     # the patch. A patch that adds a symlink pointing
@@ -1477,7 +1382,13 @@ the default branch. Edit the title and it is checked again automatically."
     # author's parent branch, which nothing has checked — one hunk written not
     # to apply fails the whole patch, so failing the apply is something the
     # author can arrange. Check the tree it actually
-    # ends up on.
+    # ends up on. A tree on the base gets the default branch's convention
+    # files first, the same as an applied one. A tree on the default branch
+    # already holds them.
+    if [ "$TREE_AT" = base ]; then
+      tree_force_convention_files "$REPO_DIR" "origin/$DEFAULT_BRANCH" \
+        || { note_skip "$TREE_CONV_ERR, skipping (fail closed)"; return 0; }
+    fi
     if tree_has_symlinks "$REPO_DIR"; then
       echo "PR #$PR: refusing to review — a symlink is in the tree the failed apply left behind"
       post_symlink_refusal "This PR's diff did not apply to the review tree, and the branch reviewed in its place holds a symlink this reviewer does not accept"
@@ -3299,7 +3210,10 @@ PR_LIST_LIMIT=1000
 # because a stacked PR's key holds it. DEFAULT_BRANCH, read once for this repo
 # above, says which PR is stacked, so this check and the job compute the same
 # key with no extra call.
-PRE_FIELDS=headRefOid,isDraft,reviews,comments,title,body,baseRefName,baseRefOid,autoMergeRequest
+PRE_FIELDS=headRefOid,isDraft,reviews,comments,title,body,baseRefName,baseRefOid
+# The cooldown skip below leaves the head unreviewed, so an armed auto-merge
+# must be readable here, as in the job.
+[ "$GATE_DISARM_AUTO_MERGE" != 1 ] || PRE_FIELDS="$PRE_FIELDS,autoMergeRequest"
 # A list that fails is not an empty repo: read as "no open PRs", a token
 # without pull-request access left every round clean and nothing reviewed.
 # One call also reads who wrote each PR and whether it comes from a fork, so
@@ -3364,7 +3278,8 @@ for PR in $OPEN_PRS; do
   # Nothing is done for a draft or an already-handled head but say so, and finding that out takes one API call, not a checkout: it
   # is decided here, before a job slot or a worktree is spent on the PR. Any
   # doubt (the call fails, the answer does not parse) falls through to the
-  # full job, which makes the same checks and fails closed on its own.
+  # full job, which makes the same checks and fails closed on its own. The
+  # cooldown below is the exception: the job does not repeat it.
   # Trade-off: the list answer is the point where trust is decided. A PR that
   # turns into a fork after the list gets this one read-only `gh pr view`. The
   # job checks trust again before the diff fetch. That PR gets no model call
@@ -3399,6 +3314,43 @@ for PR in $OPEN_PRS; do
       disarm_unreviewed_auto_merge "$PRE" "$PR" \
         || note_skip "auto-merge could not be disarmed — skipping (fail closed)"
       continue
+    fi
+    # Same head, a changed key (title, description, base branch or, for a
+    # stacked PR, parent branch), and the reviewer commented a moment ago:
+    # wait for the cooldown (lib/cooldown.sh).
+    # A named PR asked for a review and gets one, so the round keeps its rule of
+    # 0 only after a verdict. A time that cannot be read does not skip, and the
+    # log says so.
+    # Trade-off: only this pre-check applies the cooldown. When its read fails,
+    # the job reviews the PR with no cooldown. That is the safe direction: one
+    # extra review, never a PR left unreviewed.
+    if [ -z "$ONCE_NUM" ]; then
+      CD_LAST="$(cooldown_last_gate_comment "$PRE" "$MARKER" "$PRIOR_AUTHORS")"
+      CD_HEAD="$(jq -r '.headRefOid // ""' <<<"$PRE" 2>/dev/null)"
+      CD_ANSWER="$(cooldown_decide "$CD_HEAD" \
+        "${CD_LAST%% *}" "${CD_LAST#* }" "$(date +%s)" "$COOLDOWN_MIN")"
+      # A push after the first read makes the snapshot old. Read the head
+      # again and skip only when it is the same. A re-read that fails does
+      # not skip: one extra review, never a new head that waits.
+      case "$CD_ANSWER" in
+        "skip "*)
+          CD_NOW="$("$GH" pr view "$PR" --repo "$REPO" --json headRefOid --jq '.headRefOid' 2>/dev/null)" || CD_NOW=""
+          if [ -z "$CD_NOW" ] || [ "$CD_NOW" != "$CD_HEAD" ]; then
+            echo "[$REPO_KEY#$PR] PR #$PR: the head changed or could not be read again, so the cooldown does not apply to this PR"
+            CD_ANSWER="review recheck"
+          fi ;;
+      esac
+      case "$CD_ANSWER" in
+        "skip "*)
+          CD_LEFT="${CD_ANSWER#skip }"
+          echo "[$REPO_KEY#$PR] PR #$PR: same head as the reviewer's last comment, and that comment is $((10#$COOLDOWN_MIN * 60 - CD_LEFT)) s old. Waiting $CD_LEFT s more (PRREVIEW_GATE_PR_COOLDOWN_MIN=$COOLDOWN_MIN, 0 turns it off)"
+          # The head has no verdict for this key, as in the job.
+          disarm_unreviewed_auto_merge "$PRE" "$PR" \
+            || { echo "[$REPO_KEY#$PR] PR #$PR: auto-merge could not be disarmed — skipping (fail closed)"; GATE_DEGRADED=$((GATE_DEGRADED + 1)); }
+          continue ;;
+        "review unreadable-time")
+          echo "[$REPO_KEY#$PR] PR #$PR: could not read when the reviewer commented, so the cooldown does not apply to this PR" ;;
+      esac
     fi
   fi
   # Round budget — admission control for the job pool. The outer round

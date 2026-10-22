@@ -93,6 +93,34 @@ All notable changes to this project are recorded here. The format follows
   key is the same through all three hash commands, so no open PR is reviewed
   again. If no timeout command or no hash command is found, the reviewer stops
   at startup and names the missing tool.
+- A PR whose head is unchanged waits when its title, description or base
+  branch changed and the reviewer's last comment on the PR is younger than
+  `PRREVIEW_GATE_PR_COOLDOWN_MIN` minutes (10 by default). The log says why.
+  A push to the PR branch never waits. For a stacked PR, a push to the parent
+  branch can wait up to the cooldown, because the cooldown compares only the
+  PR head. `0` turns the wait off. A value that is not a whole
+  number is refused by `prreview set` and by the reviewer. `prreview once
+  --pr` ignores the cooldown, so a named PR still ends with a verdict or with
+  exit code 75. If the time of the comment cannot be read, the PR is reviewed
+  and the log says so. The reviewer keeps no file for this.
+- Every PR now gets its convention files from the newest commit of the default
+  branch. Before, a PR into the default branch got them at its merge base, and
+  only a PR based on another branch got the default branch's. The files are
+  `CLAUDE.md`, `AGENTS.md`, anything under `.claude/`, README, CONTRIBUTING and
+  `.github/review-checks.md`, and now also `CLAUDE.local.md` and `.mcp.json`.
+  The reviewer copies them after it applies the PR's diff, so a newer file on
+  the default branch cannot make the diff fail. A file the default branch
+  lacks is removed from the review tree, and a file only the default branch
+  has is added. Names match in any letter case, so an edit to `readme.md` is
+  reverted too. Before, only the exact case counted. A stacked PR that changes
+  README is reviewed with its diff applied now. Before, it fell back to a
+  review against the base branch. There is no switch to turn this off. An old
+  branch is reviewed with today's rules, and a PR is reviewed again under new
+  rules only when something else starts a new round. This is intended. A
+  symlink from a convention file now needs a target that git tracks under
+  any letter case of a convention name. The note to the model says that a path
+  the default branch lacks is absent from the tree. The log line about the
+  copy appears only when a convention file changed.
 
 ### Fixed
 
