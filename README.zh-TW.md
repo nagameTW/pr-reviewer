@@ -134,7 +134,7 @@ pr-reviewer 依一份 13 個項目的檢查清單審查 diff（PR 的程式碼�
 
 ```
 ├── prreview                  # 命令列程式
-├── review-loop.sh            # 每分鐘執行一輪
+├── review-loop.sh            # 每分鐘檢查一次，需要時執行一輪
 ├── pr-autoreview.sh          # 一輪審查
 ├── checks/                   # 13 個檢查項目
 ├── lib/                      # 共用的 bash 程式碼

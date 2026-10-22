@@ -132,7 +132,7 @@ Each finding has a severity: CRITICAL, HIGH, MEDIUM or LOW, from highest to lowe
 
 ```
 ├── prreview                  # The command line
-├── review-loop.sh            # Runs a round once a minute
+├── review-loop.sh            # Checks once a minute, starts rounds
 ├── pr-autoreview.sh          # One round
 ├── checks/                   # The 13 checklist items
 ├── lib/                      # Shared bash code
