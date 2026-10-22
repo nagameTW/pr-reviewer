@@ -25,10 +25,11 @@ All notable changes to this project are recorded here. The format follows
   a choice. To install it later, run `prreview start`.
 - The question that switches `gh` to `https` moved from the GitHub step to the
   service. It is asked only when `gh` clones over `ssh` and you answer `y` to
-  the service question, or when `prreview start` installs or starts the
-  service. The switch changes `gh` for all programs, so a user who answers `n`
-  no longer sees it, and `gh config set` is not called. `prreview start` now
-  needs a terminal or piped answers when `gh` clones over `ssh`.
+  the service question, or when `prreview start` installs the service from a
+  terminal. The switch changes `gh` for all programs, so a user who answers
+  `n` no longer sees it, and `gh config set` is not called. With no terminal
+  on stdin, `prreview start` prints the `gh config set` command and goes on.
+  It asks nothing when it starts a service that is installed.
 
 - The reviewer finds `gtimeout` and `gsha256sum` on its own. At startup it uses
   `timeout` or `gtimeout` for deadlines. It uses `sha256sum`, `gsha256sum` or

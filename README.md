@@ -251,8 +251,10 @@ chooses one the same way it does for the built-in items.
   `gh`'s own login. With `ssh`, the background service has to use your SSH
   key with no prompt and possibly no ssh-agent (a systemd user service gets
   none), so `prreview setup` offers to switch `gh` to `https` when you choose
-  the background service. `prreview start` offers it too, when it installs or
-  starts the service. The switch changes `gh` for all programs, not only this one.
+  the background service. `prreview start` offers it too, when it installs the
+  service and stdin is a terminal. With no terminal, it prints the command
+  and goes on. It asks nothing when it starts a service that is installed.
+  The switch changes `gh` for all programs, not only this one.
 - **[Claude Code](https://code.claude.com/docs/en/overview) 2.1.305
   or later**, the `claude` CLI, logged in. `prreview setup` checks both, with
   `claude --version` and `claude auth status`, and the reviewer refuses to start
