@@ -202,16 +202,16 @@ fi
 # tests/prompt.test.sh (both halves) and tests/findings.test.sh (the verify
 # prompt's two halves).
 want 'the review prompt still tells the model what tree it is standing in' \
-     'The diff you are reviewing is in $SLICE_DIFF' '$TREE_CLAUSE' 2
+     'The diff you are reviewing is in $SLICE_VIEW' '$TREE_CLAUSE' 2
 # Slicing must not let a pass read the WHOLE diff: a slice that can open the
 # full diff reads the full diff, and the split has bought nothing but calls.
 REVIEW_ALLOWED="$(grep -F 'ALLOWED=("Read(/$REPO_DIR/**)"' pr-autoreview.sh)"
 if [ -z "$REVIEW_ALLOWED" ]; then
   WORDING_MISSING="$WORDING_MISSING
   the review call's tool allowlist is gone from pr-autoreview.sh"
-elif ! grep -qF -- 'Read(/$SLICE_DIFF)' <<<"$REVIEW_ALLOWED"; then
+elif ! grep -qF -- 'Read(/$SLICE_VIEW)' <<<"$REVIEW_ALLOWED"; then
   WORDING_MISSING="$WORDING_MISSING
-  the review call grants Read on something other than its own slice diff, so a slice can read the whole PR and the split buys nothing"
+  the review call grants Read on something other than its own slice display copy, so a slice can read the whole PR and the split buys nothing"
 fi
 want 'the verify prompt still branches on whether the diff was applied' \
      'try to REFUTE it' '$tree_para' 6

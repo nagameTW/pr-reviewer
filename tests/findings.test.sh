@@ -993,6 +993,9 @@ has 'the verify prompt is adversarial, not confirmatory' 'try to REFUTE' "$VP"
 has 'the verify prompt states the asymmetry' "$FINDINGS_MERGE_STAKES" "$VP"
 has 'the verify prompt forbids refuting on a line-number mismatch alone' \
     'Never refute on a line-number mismatch alone' "$VP"
+has 'the verify prompt explains the NEW[...] labels of the diff it reads' \
+    'A diff line that starts with NEW[n] is line n of the file after this change' "$VP"
+has '...and says the number Read prints is not a file line' 'not the number that Read prints in front of the line' "$VP"
 has 'the finding text is fenced as DATA' 'FINDING BEGINS' "$VP"
 # The reason's language clause is hand-copied here rather than sourced from
 # REVIEW_LANGUAGE_SPEC (this lib has to load without lib/review-spec.sh), so

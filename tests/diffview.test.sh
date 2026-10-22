@@ -256,6 +256,24 @@ fails 'a hunk with more added lines than declared fails' 'diff --git a/x b/x
 if diffview_render "$TMP/in.diff" "$TMP/out.view" 2>/dev/null; then bad 'an empty diff fails' 'got success'; else ok 'an empty diff fails'; fi
 if diffview_render "$TMP/no-such-file" "$TMP/out.view" 2>/dev/null; then bad 'a missing input fails' 'got success'; else ok 'a missing input fails'; fi
 
+# check_labels VIEW: walk a display copy and compare every NEW[n] line with
+# line n of the new file in $G. CUR is the file of the last "+++ b/" header.
+check_labels() {
+  local line n body want CUR=""
+  while IFS= read -r line; do
+    case "$line" in
+      "META[-]${TAB}+++ b/"*) CUR="${line#*+++ b/}" ;;
+      "NEW[-]${TAB}"* | "HUNK[-]${TAB}"* | "NOTE[-]${TAB}"* | "META[-]${TAB}"*) ;;
+      "NEW["*)
+        n="${line#NEW[}"; n="${n%%]*}"; body="${line#*${TAB}}"
+        want="$(sed -n "${n}p" "$G/$CUR")"
+        CHECKED=$((CHECKED + 1))
+        [ "$n" -gt 9999 ] && HIGH=$((HIGH + 1))
+        [ "${body#?}" = "$want" ] || { WRONG=$((WRONG + 1)); echo "    mismatch $CUR line $n: '${body#?}' vs '$want'"; } ;;
+    esac
+  done < "$1"
+}
+
 # ── property test on real git diffs ──────────────────────────────────────
 # For every labelled line NEW[n] the payload (without its first character)
 # must equal line n of the new file. This is the contract the model relies on.
@@ -286,26 +304,75 @@ if diffview_render "$TMP/real.diff" "$TMP/real.view"; then
   is '...with one output line per input line' "$(wc -l < "$TMP/real.view" | tr -d ' ')" "$(wc -l < "$TMP/real.diff" | tr -d ' ')"
   STRIPPED="$(sed -e 's/^[A-Z]*\[[-0-9]*\]'"$TAB"'//' "$TMP/real.view")"
   is '...and removing the labels gives the raw diff back, byte for byte' "$STRIPPED" "$(cat "$TMP/real.diff")"
-  # Walk the copy. CUR is the file of the last "+++ b/" header.
-  CUR=""; CHECKED=0; WRONG=0; HIGH=0
-  while IFS= read -r line; do
-    case "$line" in
-      "META[-]${TAB}+++ b/"*) CUR="${line#*+++ b/}" ;;
-      "NEW[-]${TAB}"* | "HUNK[-]${TAB}"* | "NOTE[-]${TAB}"* | "META[-]${TAB}"*) ;;
-      "NEW["*)
-        n="${line#NEW[}"; n="${n%%]*}"; body="${line#*${TAB}}"
-        want="$(sed -n "${n}p" "$G/$CUR")"
-        CHECKED=$((CHECKED + 1))
-        [ "$n" -gt 9999 ] && HIGH=$((HIGH + 1))
-        [ "${body#?}" = "$want" ] || { WRONG=$((WRONG + 1)); echo "    mismatch $CUR line $n: '${body#?}' vs '$want'"; } ;;
-    esac
-  done < "$TMP/real.view"
+  CHECKED=0; WRONG=0; HIGH=0
+  check_labels "$TMP/real.view"
   [ "$CHECKED" -gt 20 ] && ok "...$CHECKED labelled lines checked" || bad '...enough labelled lines checked' "only $CHECKED"
   is '...every label names the right line of the new file' "$WRONG" 0
   [ "$HIGH" -ge 1 ] && ok '...including a line above 9999' || bad '...including a line above 9999' 'none checked'
 else
   bad 'a real git diff renders' 'diffview_render failed'
 fi
+
+# ── sliced review: each slice is labelled on its own ─────────────────────
+# The review splits a big diff by file (lib/chunk.sh) and each slice gets its
+# own display copy. Counters must restart at every hunk header, so a slice
+# that starts at the second file still carries the right numbers.
+. lib/chunk.sh || { echo "FAIL: cannot source lib/chunk.sh"; exit 1; }
+SD="$TMP/slices"; mkdir "$SD"
+SPLIT="$(chunk_split "$TMP/real.diff" "$SD")"
+PLAN="$(printf '%s\n' "$SPLIT" | chunk_plan 8 400)"
+NSL="$(cut -f1 <<<"$PLAN" | sort -u | grep -c .)"
+[ "$NSL" -gt 1 ] && ok "the real diff splits into $NSL slices" || bad 'the real diff splits into several slices' "got $NSL"
+SL_CHECKED=0; SL_WRONG=0; SL_BYTES=0
+for sl in $(cut -f1 <<<"$PLAN" | sort -un); do
+  : > "$SD/slice-$sl.diff"
+  while IFS=$'\t' read -r _ _ part _; do cat "$part" >> "$SD/slice-$sl.diff"; done < <(awk -F'\t' -v s="$sl" '$1 == s' <<<"$PLAN")
+  V="$(diffview_make "$SD/slice-$sl.diff" "$TMP" "view-$sl")" || { bad "slice $sl renders" "diffview_make failed"; continue; }
+  CHECKED=0; WRONG=0; HIGH=0
+  check_labels "$V"
+  SL_CHECKED=$((SL_CHECKED + CHECKED)); SL_WRONG=$((SL_WRONG + WRONG))
+  [ "$(sed -e 's/^[A-Z]*\[[-0-9]*\]'"$TAB"'//' "$V")" = "$(cat "$SD/slice-$sl.diff")" ] || SL_BYTES=$((SL_BYTES + 1))
+done
+is 'every slice copy gives its raw slice back when the labels are removed' "$SL_BYTES" 0
+is 'every slice label names the right line of the new file' "$SL_WRONG" 0
+[ "$SL_CHECKED" -gt 20 ] && ok "...$SL_CHECKED labelled slice lines checked" || bad '...enough slice lines checked' "only $SL_CHECKED"
+
+# ── the wiring block in pr-autoreview.sh, run for real ───────────────────
+# Lift the lines that make the copies and run them against fake slices. This
+# covers the fallback: a diff the copy cannot label is read raw, with a WARNING.
+BLOCK="$(awk '/^  VIEW_ROOT="\$\(mktemp -d/ {on = 1} on {print} on && /^  done$/ {exit}' pr-autoreview.sh)"
+[ -n "$BLOCK" ] && ok 'the wiring block was found in pr-autoreview.sh' || bad 'the wiring block was found in pr-autoreview.sh' 'no VIEW_ROOT block'
+GOOD1="$TMP/good1.diff"; GOOD2="$TMP/good2.diff"; BAD1="$TMP/bad1.diff"
+printf 'diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-a\n+b\n' > "$GOOD1"
+printf 'diff --git a/y b/y\n--- a/y\n+++ b/y\n@@ -4 +4 @@\n-c\n+d\n' > "$GOOD2"
+printf 'diff --git a/z b/z\nnot a hunk\n@@ garbage\n' > "$BAD1"
+# shellcheck disable=SC2034  # DIFF, SLICE_DIFFS, GATE_SCRATCH and PR are read by the eval'd block
+run_block() { # $1 whole diff, then the slice diffs; sets OUT_LOG, DIFF_VIEW, SLICE_VIEWS
+  local scratch="$TMP/scratch-$RANDOM"; mkdir -p "$scratch"
+  DIFF="$1"; shift; SLICE_DIFFS=("$@"); GATE_SCRATCH="${SCRATCH_OVERRIDE:-$scratch}"; PR=9
+  OUT_LOG="$TMP/block.log"
+  eval "$BLOCK" > "$OUT_LOG" 2>&1
+}
+run_block "$GOOD1" "$GOOD1"
+is 'unsliced: the model copy is not the raw diff' "$([ "$DIFF_VIEW" != "$GOOD1" ] && echo copy || echo raw)" copy
+is '...and the one slice shares it' "${SLICE_VIEWS[0]}" "$DIFF_VIEW"
+is '...and its directory holds that one file' "$(ls -A "${DIFF_VIEW%/*}")" 'diff.numbered'
+is '...with no WARNING' "$(grep -c WARNING "$OUT_LOG")" 0
+run_block "$GOOD1" "$GOOD1" "$GOOD2"
+is 'sliced: each slice has its own copy in its own directory' "$([ "${SLICE_VIEWS[0]%/*}" != "${SLICE_VIEWS[1]%/*}" ] && echo apart || echo shared)" apart
+is '...and neither is the whole-diff copy directory' "$([ "${SLICE_VIEWS[0]%/*}" != "${DIFF_VIEW%/*}" ] && [ "${SLICE_VIEWS[1]%/*}" != "${DIFF_VIEW%/*}" ] && echo apart || echo shared)" apart
+is '...and each holds the labels of its own slice' "$(grep -c 'NEW\[4\]' "${SLICE_VIEWS[1]}")" 1
+run_block "$BAD1" "$BAD1"
+is 'a diff the copy cannot label: the model reads the raw diff' "$DIFF_VIEW" "$BAD1"
+is '...for the slice too' "${SLICE_VIEWS[0]}" "$BAD1"
+is '...and a WARNING is logged' "$(grep -c 'WARNING: could not make the numbered copy' "$OUT_LOG")" 1
+run_block "$GOOD1" "$GOOD1" "$BAD1"
+is 'one slice that cannot be labelled falls back alone' "${SLICE_VIEWS[1]}" "$BAD1"
+is '...while the other keeps its copy' "$([ "${SLICE_VIEWS[0]}" != "$GOOD1" ] && echo copy || echo raw)" copy
+is '...and the WARNING names slice 2' "$(grep -c 'numbered copy of slice 2' "$OUT_LOG")" 1
+SCRATCH_OVERRIDE="$TMP/does/not/exist" run_block "$GOOD1" "$GOOD1"
+is 'no directory for the copies: the model reads the raw diff' "$DIFF_VIEW" "$GOOD1"
+is '...with a WARNING' "$(grep -c WARNING "$OUT_LOG")" 1
 
 # ── diffview_make: the model-only directory ──────────────────────────────
 ROOT="$TMP/view-root"; mkdir "$ROOT"

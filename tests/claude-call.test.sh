@@ -93,8 +93,8 @@ common_env() { # $1 = label, $2 = env dump
 REPO_DIR=/srv/example/work/repo
 SLICE_READ=/srv/example/work/scratch/prreview-slice-ab12/slice-1
 INTENT_DIR=/srv/example/work/scratch/prreview-pr-intent-cd34ef
-SLICE_DIFF="$SLICE_READ/diff"
-run_call "$CLAUDE_READ_TOOLS" "$SLICE_READ" "$INTENT_DIR" -- "Read(/$REPO_DIR/**)" "Grep(/$REPO_DIR/**)" "Glob(/$REPO_DIR/**)" "Read(/$SLICE_DIFF)"
+SLICE_VIEW="$SLICE_READ/diff.numbered"
+run_call "$CLAUDE_READ_TOOLS" "$SLICE_READ" "$INTENT_DIR" -- "Read(/$REPO_DIR/**)" "Grep(/$REPO_DIR/**)" "Glob(/$REPO_DIR/**)" "Read(/$SLICE_VIEW)"
 ARGV="$(cat "$STUB/argv")"; ENVD="$(cat "$STUB/env")"
 is  'the read tool set is Read, Grep and Glob' "$CLAUDE_READ_TOOLS" 'Read,Grep,Glob'
 has 'read call: --tools names only Read, Grep and Glob' '[--tools][Read,Grep,Glob]' "$ARGV"
@@ -103,7 +103,7 @@ has 'read call: --add-dir carries exactly the given dirs, in order' \
 is  'read call: one --add-dir flag' "$(grep -o '\[--add-dir\]' <<<"$ARGV" | grep -c .)" 1
 lacks 'read call: the -- separator does not reach the CLI' '[--]' "$ARGV"
 has 'read call: the path-scoped rules reach --allowedTools, in order' \
-    "[--allowedTools][Read(//srv/example/work/repo/**)][Grep(//srv/example/work/repo/**)][Glob(//srv/example/work/repo/**)][Read(/$SLICE_DIFF)][--output-format]" "$ARGV"
+    "[--allowedTools][Read(//srv/example/work/repo/**)][Grep(//srv/example/work/repo/**)][Glob(//srv/example/work/repo/**)][Read(/$SLICE_VIEW)][--output-format]" "$ARGV"
 common_flags 'read call' "$ARGV"
 common_env 'read call' "$ENVD"
 is  'read call: the prompt arrives on stdin' "$(cat "$STUB/stdin")" "$PROMPT_MARK"
@@ -142,23 +142,45 @@ SITES="$(grep -E '^[^#]*claude_call ' pr-autoreview.sh)"
 is  'pr-autoreview.sh has four model calls, all through claude_call' "$(printf '%s\n' "$SITES" | grep -c 'claude_call ')" 4
 is  'review: reads with the read tool set, in the slice dir and the intent dir' \
     "$(printf '%s\n' "$SITES" | grep -cF 'claude_call "$REVIEW_TIMEOUT" "$REVIEW_MODEL" "$CLAUDE_READ_TOOLS" "${READ_DIRS[@]}" -- "${ALLOWED[@]}"')" 1
-is  'verify and red team: read with the read tool set, scoped to the clone and the diff dir' \
-    "$(printf '%s\n' "$SITES" | grep -cF 'claude_call "$VERIFY_TIMEOUT" "$REVIEW_MODEL" "$CLAUDE_READ_TOOLS" "$DIFF_DIR" -- "Read(/$REPO_DIR/**)" "Grep(/$REPO_DIR/**)" "Glob(/$REPO_DIR/**)" "Read(/$DIFF)"')" 2
+is  'verify and red team: read with the read tool set, scoped to the clone and the display copy of the diff' \
+    "$(printf '%s\n' "$SITES" | grep -cF 'claude_call "$VERIFY_TIMEOUT" "$REVIEW_MODEL" "$CLAUDE_READ_TOOLS" "${DIFF_VIEW%/*}" -- "Read(/$REPO_DIR/**)" "Grep(/$REPO_DIR/**)" "Glob(/$REPO_DIR/**)" "Read(/$DIFF_VIEW)"')" 2
+lacks 'no model call can read the raw diff' 'Read(/$DIFF)' "$SITES"
+lacks 'no model call is given the raw diff dir' '"$DIFF_DIR"' "$SITES"
 is  'repair: no tool, no read dir, and a rule that matches no file' \
     "$(printf '%s\n' "$SITES" | grep -cF 'claude_call "$REPAIR_TIMEOUT" "$CHEAP_MODEL" "" -- "Read(/nonexistent-repair-scope/**)"')" 1
-is  'the review rules are the clone, the slice diff and the intent file' \
-    "$(grep -cF 'ALLOWED=("Read(/$REPO_DIR/**)" "Grep(/$REPO_DIR/**)" "Glob(/$REPO_DIR/**)" "Read(/$SLICE_DIFF)")' pr-autoreview.sh)" 1
+is  'the review rules are the clone, the slice display copy and the intent file' \
+    "$(grep -cF 'ALLOWED=("Read(/$REPO_DIR/**)" "Grep(/$REPO_DIR/**)" "Glob(/$REPO_DIR/**)" "Read(/$SLICE_VIEW)")' pr-autoreview.sh)" 1
 # A read dir must hold only the files of one call. $GATE_SCRATCH holds every
 # PR's files, and $SLICE_DIR holds the parts of every slice.
-is  'review: the slice read dir is the dir of this slice diff' \
-    "$(grep -cF 'READ_DIRS=("${SLICE_DIFF%/*}")' pr-autoreview.sh)" 1
+is  'review: the slice read dir is the dir of this slice display copy' \
+    "$(grep -cF 'READ_DIRS=("${SLICE_VIEW%/*}")' pr-autoreview.sh)" 1
 is  'review: the intent dir is the other read dir' \
     "$(grep -cF '[ -n "$INTENT_FILE" ] && READ_DIRS+=("$INTENT_DIR")' pr-autoreview.sh)" 1
 is  'each slice diff is alone in its own dir under SLICE_DIR' \
     "$(grep -cF 'SD="$SLICE_DIR/slice-$s/diff"' pr-autoreview.sh)" 1
 is  'the PR diff is alone in its own dir' "$(grep -cF 'DIFF="$DIFF_DIR/pr.diff"' pr-autoreview.sh)" 1
+# The display copies (lib/diffview.sh) are what the model reads. Each one is
+# alone in its own dir under VIEW_ROOT: "full" for the whole diff, one dir per
+# slice. diffview_make creates the dir and writes the only file in it.
+is  'the display copy of the whole diff is alone in its own dir' \
+    "$(grep -cF 'diffview_make "$DIFF" "$VIEW_ROOT" full' pr-autoreview.sh)" 1
+is  'the display copy of each slice is alone in its own dir' \
+    "$(grep -cF 'diffview_make "${SLICE_DIFFS[$SI]}" "$VIEW_ROOT" "slice-$SI"' pr-autoreview.sh)" 1
+is  'an unsliced review shares the display copy of the whole diff' \
+    "$(grep -cF 'SLICE_VIEWS+=("$DIFF_VIEW")' pr-autoreview.sh)" 1
+is  'a display copy that cannot be made falls back to the raw diff and logs a WARNING' \
+    "$(grep -cF 'WARNING: could not make the numbered copy of' pr-autoreview.sh)" 2
+is  'the display copy root is removed when the job ends' \
+    "$(grep -cF '[ -n "${VIEW_ROOT:-}" ] && rm -rf "$VIEW_ROOT"' pr-autoreview.sh)" 1
+# The raw diff keeps every consumer that parses patch syntax.
+RAW_USES="$(grep -E '^[^#]*(chunk_split|symbols_scan|pr_diff_pinned|diff_changed_files|git .*apply)' pr-autoreview.sh)"
+has 'chunk_split reads the raw diff' 'chunk_split "$DIFF"' "$RAW_USES"
+has 'symbols_scan reads the raw diff' 'symbols_scan "$REPO_DIR" "$DIFF"' "$RAW_USES"
+lacks 'no patch parser reads a display copy' 'DIFF_VIEW' "$RAW_USES"
+lacks 'no patch parser reads a slice display copy' 'SLICE_VIEW' "$RAW_USES"
 is  'the intent file is alone in its own dir' "$(grep -cF 'INTENT_FILE="$INTENT_DIR/intent.txt"' pr-autoreview.sh)" 1
 DIR_LINES="$(printf '%s\n' "$SITES"; grep -E '^[^#]*READ_DIRS(\+)?=' pr-autoreview.sh)"
+lacks 'no read dir is $VIEW_ROOT' '"$VIEW_ROOT"' "$DIR_LINES"
 lacks 'no read dir is $GATE_SCRATCH' '$GATE_SCRATCH' "$DIR_LINES"
 lacks 'no read dir is $SLICE_DIR' '"$SLICE_DIR"' "$DIR_LINES"
 is  'no model prompt goes in argv (-p "$(...)")' "$(grep -cE '^[[:space:]]*-p "\$\(' pr-autoreview.sh)" 0
