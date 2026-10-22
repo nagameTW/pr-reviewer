@@ -910,6 +910,11 @@ review_one_pr() { # $1 = PR number, $2 = the worktree the dispatcher made
   # job's own read, before any model call or diff fetch. Not note_skip: it is
   # a decision about the PR, and a failed round would raise the alert.
   if [ "$GATE_FORK_PRS" != 1 ] && ! pr_author_trusted "$INFO" "$TRUSTED_AUTHORS" "$ONCE_NUM"; then
+    # The one write for a PR that is not reviewed: the disarm that the
+    # dispatcher does for a skipped PR (see there). It does nothing unless
+    # PRREVIEW_GATE_DISARM_AUTO_MERGE=1 and auto-merge is armed.
+    disarm_unreviewed_auto_merge "$INFO" "$PR" \
+      || note_skip "auto-merge could not be disarmed — skipping (fail closed)"
     echo "PR #$PR: not reviewed, a fork PR whose author is not trusted"
     return 0
   fi
@@ -3221,8 +3226,12 @@ PRE_FIELDS=headRefOid,isDraft,reviews,comments,title,body,baseRefName,baseRefOid
 # without pull-request access left every round clean and nothing reviewed.
 # One call also reads who wrote each PR and whether it comes from a fork, so
 # the author filter (lib/trust.sh) needs no call per PR. Labels come in the
-# same answer; the filter does not read them.
-PR_LIST="$("$GH" pr list --repo "$REPO" --state open --limit 1000 --json number,author,isCrossRepository,labels)" \
+# same answer; the filter does not read them. With
+# PRREVIEW_GATE_DISARM_AUTO_MERGE=1 the same call reads autoMergeRequest, for
+# the disarm of skipped PRs below.
+PR_LIST_FIELDS=number,author,isCrossRepository,labels
+[ "$GATE_DISARM_AUTO_MERGE" != 1 ] || PR_LIST_FIELDS="$PR_LIST_FIELDS,autoMergeRequest"
+PR_LIST="$("$GH" pr list --repo "$REPO" --state open --limit 1000 --json "$PR_LIST_FIELDS")" \
   || { echo "$REPO: could not list open PRs — skipping repo (fail closed)"; GATE_DEGRADED=$((GATE_DEGRADED + 1)); continue; }
 PR_PLAN="$(trust_plan_prs "$PR_LIST" "$TRUSTED_AUTHORS" "$GATE_FORK_PRS" "$ONCE_NUM")" \
   || { echo "$REPO: could not read the list of open PRs — skipping repo (fail closed)"; GATE_DEGRADED=$((GATE_DEGRADED + 1)); continue; }
@@ -3234,6 +3243,26 @@ SKIPPED_PRS="$(sed -n 's/^skip /#/p' <<<"$PR_PLAN" | tr '\n' ' ')"
 if [ -n "$SKIPPED_PRS" ]; then
   echo "$REPO: not reviewed, fork PR by an author who is not trusted: ${SKIPPED_PRS% }"
   N_FORK_SKIPPED=$((N_FORK_SKIPPED + $(grep -c '^skip ' <<<"$PR_PLAN")))
+  # With PRREVIEW_GATE_DISARM_AUTO_MERGE=1, a skipped PR keeps no armed
+  # auto-merge. Skipped PRs are the ones the reviewer never reads, and an
+  # armed auto-merge merges a head on anyone's approve. The list already holds
+  # the field, so a skipped PR without armed auto-merge gets no call. An armed
+  # one gets the disarm call and nothing else. Only a user with write access to
+  # the repository can arm auto-merge, so a stranger cannot cause this write.
+  # Trade-off: the list does not show if an earlier `prreview once --pr`
+  # reviewed the head, so that head loses its auto-merge too.
+  if [ "$GATE_DISARM_AUTO_MERGE" = 1 ]; then
+    ARMED_SKIPS="$(jq -r --arg skips "$(sed -n 's/^skip //p' <<<"$PR_PLAN")" '
+        ($skips | split("\n")) as $s
+        | .[] | select(.autoMergeRequest != null and ((.number | tostring) as $n | any($s[]; . == $n)))
+        | [(.number | tostring), tojson] | join("\t")' <<<"$PR_LIST")" \
+      || { echo "$REPO: could not read the auto-merge field of the skipped PRs (fail closed)"; GATE_DEGRADED=$((GATE_DEGRADED + 1)); ARMED_SKIPS=""; }
+    while IFS=$'\t' read -r PR ARMED_ITEM; do
+      [ -n "$PR" ] || continue
+      disarm_unreviewed_auto_merge "$ARMED_ITEM" "$PR" \
+        || note_skip "auto-merge could not be disarmed — skipping (fail closed)"
+    done <<<"$ARMED_SKIPS"
+  fi
 fi
 # Asked for by number: a PR that is closed, or not in this repo, must not look reviewed.
 if [ -n "$ONCE_NUM" ] && [ -z "$OPEN_PRS" ]; then
@@ -3248,7 +3277,8 @@ for PR in $OPEN_PRS; do
   # Trade-off: the list answer is the point where trust is decided. A PR that
   # turns into a fork after the list gets this one read-only `gh pr view`. The
   # job checks trust again before the diff fetch. That PR gets no model call
-  # and no write.
+  # and no post. With PRREVIEW_GATE_DISARM_AUTO_MERGE=1 the job can disarm its
+  # auto-merge, as the dispatcher does for a skipped PR.
   if PRE="$("$GH" pr view "$PR" --repo "$REPO" --json "$PRE_FIELDS" 2>/dev/null)"; then
     if [ "$(jq -r '.isDraft' <<<"$PRE" 2>/dev/null)" = true ]; then
       # A named PR must not look reviewed.

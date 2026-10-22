@@ -43,7 +43,8 @@ All notable changes to this project are recorded here. The format follows
   from a fork is skipped otherwise, and nothing is posted on it. The round log
   names a skipped PR by number only. One `gh pr list` call now reads the
   number, the author, the fork flag and the labels, and the filter runs on that
-  answer, so a skipped PR gets no call of its own. The review job checks the
+  answer, so a skipped PR gets no call of its own, except the disarm of an
+  armed auto-merge (see Security). The review job checks the
   rule again before any model call. A PR that `prreview once --pr` names needs
   only a whole number. Every other PR needs a number, a boolean fork flag, an
   author object and a non-empty login. If one is missing or has the wrong
@@ -90,6 +91,16 @@ All notable changes to this project are recorded here. The format follows
   assumes that everyone who can push to the repository is trusted. A
   repository whose workflows build branches from outside input breaks that
   assumption.
+- With `PRREVIEW_GATE_DISARM_AUTO_MERGE=1`, the reviewer turns off an
+  auto-merge that is armed on a PR it skips because of its author. Before, a
+  skipped fork PR kept its auto-merge, and any approve could merge a head that
+  nobody had reviewed. The round now asks for `autoMergeRequest` in the same
+  `gh pr list` call. A skipped PR with armed auto-merge gets one
+  `gh pr merge --disable-auto` call and no other call. A skipped PR without it
+  gets none. Only a user with write access can arm auto-merge. The review job
+  does the same when a PR turns into a fork PR after the list. A head that an
+  earlier `prreview once --pr` reviewed also loses its auto-merge, because the
+  list does not show that review.
 
 ## [0.2.2] - 2026-10-22
 

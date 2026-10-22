@@ -152,7 +152,11 @@ It skips every other PR. In practice, a skipped PR comes from a fork, and its
 author is not on the list. Anyone can open a fork PR, and each push to it would
 start a new model call on your account.
 
-The reviewer posts nothing on a skipped PR. The loop that starts the rounds
+The reviewer posts nothing on a skipped PR. One exception exists. With
+`PRREVIEW_GATE_DISARM_AUTO_MERGE=1`, the reviewer turns off an auto-merge that
+is armed on a skipped PR. That is one `gh pr merge --disable-auto` call, and
+the skipped PR gets nothing else. Only a user with write access to the
+repository can arm auto-merge. The loop that starts the rounds
 applies the same rule to its check, with the same two settings. A skipped PR
 then does not start a round each minute, and the loop keeps its idle schedule.
 The scan of merged PRs does not look at the author. The round log names a
@@ -196,7 +200,8 @@ Four limits apply:
 - The reviewer decides on the list it reads at the start of the repository's
   round. If a PR turns into a fork PR after that read, the reviewer reads the
   PR once with `gh pr view`. The review job then checks the rule again and
-  stops. That PR gets no model call and no write.
+  stops. That PR gets no model call and no post. With
+  `PRREVIEW_GATE_DISARM_AUTO_MERGE=1`, the job also turns off its auto-merge.
 
 ## Terms
 
@@ -933,7 +938,7 @@ even when you run `prreview once` from a terminal. After moving a tool, run
 | `PRREVIEW_GATE_ISSUE_NOTE` | `0` | `1` adds a note when a PR links no issue |
 | `PRREVIEW_GATE_TICKETS` | `0` | `1` opens follow-up issues for some findings that do not block (see [Follow-up issues](#follow-up-issues)); the token then needs to open issues |
 | `PRREVIEW_GATE_ISSUE_MIN_SEVERITY` | `high` | Which of those findings get an issue: `critical`, `high`, `medium` or `low` |
-| `PRREVIEW_GATE_DISARM_AUTO_MERGE` | `0` | `1` turns off an auto-merge that was armed on a head the reviewer has not reviewed yet; the token then needs write access |
+| `PRREVIEW_GATE_DISARM_AUTO_MERGE` | `0` | `1` turns off an auto-merge that was armed on a head the reviewer has not reviewed yet, and on a PR it skips because of its author; the token then needs write access |
 | `PRREVIEW_ALERT_REPO` | empty | `owner/repo` where the loop opens an issue when a round fails, or when `pr-autoreview.sh` itself no longer parses (the token then needs to open issues there); empty only logs it. Use a private repository. Each alert issue records a time when the host was up. |
 | `PRREVIEW_ALERT_REPEAT_HOURS` | `6` | Hours between "Still failing" comments on an alert issue that is still open |
 | `PRREVIEW_LOOP_INTERVAL` | `60` | Seconds between the loop's checks for open PRs; a check that finds any PR the reviewer would read starts a round |

@@ -126,6 +126,7 @@ STUB_EOF
 # list.json answers the open PR list, view-N.json answers `pr view N` (a
 # draft when there is no file), list.rc is the exit code of the list, and
 # merged.json answers the list of merged PRs (empty when there is no file).
+# merge.rc is the exit code of `pr merge` (0 when there is no file).
 cat > "$T/bin/gh" <<STUB_EOF
 #!/usr/bin/env bash
 echo "\$*" >> "$T/gh.calls"
@@ -143,6 +144,7 @@ case "\$1 \$2" in
     esac ;;
   "pr view")
     if [ -f "$T/view-\$3.json" ]; then emit "\$(cat "$T/view-\$3.json")"; else emit '{"isDraft":true}'; fi ;;
+  "pr merge") [ ! -s "$T/merge.rc" ] || exit "\$(cat "$T/merge.rc")" ;;
   "pr comment") echo ok ;;
   "issue list") echo '[]' ;;
   "issue create") echo https://github.com/owner/repo/issues/99 ;;
@@ -235,6 +237,64 @@ is '...after two read-only reads of the PR, the dispatcher and the job' "$(viewe
 has '...and the round ends well'                       "$OUT" 'rc=0'
 OUT="$(run_gate PRREVIEW_GATE_TRUSTED_AUTHORS=mallory)"
 lacks 'the same PR with its author listed passes the job check' "$OUT" 'not reviewed, a fork PR'
+rm -f "$T/view-3.json"
+
+# ── auto-merge on a PR that is skipped ────────────────────────────────────
+# With PRREVIEW_GATE_DISARM_AUTO_MERGE=1, a skipped PR must not keep an armed
+# auto-merge: it merges on anyone's approve. The list holds the field, so the
+# disarm is one `pr merge --disable-auto` call and nothing else. Only the
+# skipped PR gets it.
+ARMED='{"enabledAt":"2026-01-01T00:00:00Z","enabledBy":{"login":"owner"}}'
+set_list "[{\"number\":1,\"title\":\"A secret title\",\"author\":{\"login\":\"alice\"},\"isCrossRepository\":false,\"labels\":[],\"autoMergeRequest\":null},
+           {\"number\":2,\"title\":\"Another secret title\",\"author\":{\"login\":\"mallory\"},\"isCrossRepository\":true,\"labels\":[],\"autoMergeRequest\":$ARMED}]"
+merges() { grep -c '^pr merge ' "$T/gh.calls" | tr -d ' '; }
+OUT="$(run_gate PRREVIEW_GATE_DISARM_AUTO_MERGE=1)"
+is 'disarm on: a skipped fork PR with auto-merge armed gets the disarm call' \
+   "$(grep -c '^pr merge 2 --repo owner/repo --disable-auto$' "$T/gh.calls")" 1
+is '...and that is the only disarm call'                  "$(merges)" 1
+is '...with no pr view for it'                             "$(viewed 2)" 0
+is '...no comment, no review and no issue'                 "$(grep -cE '^(pr comment|pr review|issue )' "$T/gh.calls")" 0
+is '...no diff fetch'                                      "$(grep -c '^api ' "$T/gh.calls")" 0
+is '...and the list call asks for autoMergeRequest too'    "$(grep -c '^pr list --repo owner/repo --state open --limit 1000 --json number,author,isCrossRepository,labels,autoMergeRequest$' "$T/gh.calls")" 1
+has '...the log names the PR by number'                    "$OUT" 'PR #2: auto-merge was armed on a head this gate has not reviewed yet'
+lacks '...and never by title'                              "$OUT" 'secret title'
+has '...and the round ends well'                           "$OUT" 'rc=0'
+OUT="$(run_gate PRREVIEW_GATE_DISARM_AUTO_MERGE=0)"
+is 'disarm off: the same PR gets no call'                  "$(merges)" 0
+is '...and the list call stays as before'                  "$(grep -c '^pr list --repo owner/repo --state open --limit 1000 --json number,author,isCrossRepository,labels$' "$T/gh.calls")" 1
+OUT="$(run_gate)"
+is 'disarm unset: the same PR gets no call'                "$(merges)" 0
+OUT="$(run_gate PRREVIEW_GATE_DISARM_AUTO_MERGE=1 PRREVIEW_GATE_TRUSTED_AUTHORS=mallory)"
+is 'disarm on: a PR the reviewer reads is left to the job'  "$(merges)" 0
+OUT="$(run_gate PRREVIEW_GATE_DISARM_AUTO_MERGE=1 PRREVIEW_ONCE_PR=owner/repo#1)"
+is 'disarm on: a round for a named PR disarms no other PR'  "$(merges)" 0
+set_list '[{"number":2,"author":{"login":"mallory"},"isCrossRepository":true,"labels":[],"autoMergeRequest":null},
+           {"number":4,"author":{"login":"mallory"},"isCrossRepository":true,"labels":[]}]'
+OUT="$(run_gate PRREVIEW_GATE_DISARM_AUTO_MERGE=1)"
+is 'disarm on: a skipped PR without armed auto-merge gets no call' "$(merges)" 0
+is '...whether the field is null or missing'                        "$(viewed 4)" 0
+set_list "[{\"number\":2,\"author\":{\"login\":\"mallory\"},\"isCrossRepository\":true,\"labels\":[],\"autoMergeRequest\":$ARMED}]"
+printf '1\n' > "$T/merge.rc"
+OUT="$(run_gate PRREVIEW_GATE_DISARM_AUTO_MERGE=1)"
+has 'a disarm that fails is reported'                      "$OUT" 'disarming it FAILED'
+has '...the PR is skipped fail closed'                      "$OUT" 'PR #2: auto-merge could not be disarmed'
+has '...and the round fails'                                "$OUT" 'rc=1'
+rm -f "$T/merge.rc"
+# The review job reads the PR again. A PR that turned into a fork PR after the
+# list gets the same disarm from the job, before it returns.
+set_list '[{"number":3,"author":{"login":"alice"},"isCrossRepository":false,"labels":[]}]'
+cat > "$T/view-3.json" <<JSON_EOF
+{"number":3,"headRefOid":"$HEAD40","baseRefOid":"$HEAD40","baseRefName":"main","isDraft":false,
+ "reviews":[],"comments":[],"title":"t","body":"b","additions":1,"deletions":0,"changedFiles":1,
+ "autoMergeRequest":$ARMED,"author":{"login":"mallory"},"isCrossRepository":true}
+JSON_EOF
+OUT="$(run_gate PRREVIEW_GATE_DISARM_AUTO_MERGE=1)"
+has 'a stale list, disarm on: the job stops the fork PR'    "$OUT" 'PR #3: not reviewed, a fork PR whose author is not trusted'
+is '...and disarms its auto-merge once'                      "$(grep -c '^pr merge 3 --repo owner/repo --disable-auto$' "$T/gh.calls")" 1
+is '...with no model call'                                   "$(grep -vc '^--version$' "$T/claude.calls")" 0
+is '...and no diff fetch'                                    "$(grep -c '^api ' "$T/gh.calls")" 0
+OUT="$(run_gate)"
+is 'a stale list, disarm off: the job disarms nothing'       "$(merges)" 0
 rm -f "$T/view-3.json"
 
 # ── the post-merge scan ───────────────────────────────────────────────────

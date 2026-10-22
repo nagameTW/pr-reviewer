@@ -39,12 +39,17 @@ is not trusted, even when its author is on the list. A PR whose author account
 was deleted can come back with no login. The reviewer then skips it, unless
 `prreview once --pr` names it. The review job checks the same rule on its own
 read of the PR, before any model call. The reviewer posts nothing on a skipped
-PR and logs its number only. The list is the point where trust is decided. If a
+PR and logs its number only. One exception exists. With
+`PRREVIEW_GATE_DISARM_AUTO_MERGE=1`, the reviewer turns off an auto-merge that
+is armed on a skipped PR, with one `gh pr merge --disable-auto` call and
+nothing else. Only a user with write access can arm auto-merge, so a stranger
+cannot cause that write. The list is the point where trust is decided. If a
 PR turns into a fork PR after the list, the dispatcher reads it once with `gh
 pr view`, and the job stops it before the diff fetch. That PR gets no model
-call and no write. The loop that starts the rounds counts only the PRs this
-rule admits, so one open fork PR from a stranger does not start a round, and a
-scan of merged PRs, every minute. The scan of merged PRs does not look at the
+call and no post. With the same setting, the job turns off its auto-merge.
+The loop that starts the rounds counts only the PRs this rule admits, so one
+open fork PR from a stranger does not start a round, and a scan of merged PRs,
+every minute. The scan of merged PRs does not look at the
 author. `PRREVIEW_GATE_FORK_PRS=1` turns the rule off. The rule assumes that
 everyone who can push to the repository is trusted. A repository whose
 workflows build branches from outside input, for example with
@@ -126,7 +131,10 @@ positives. It does not stop a diff that was written to fool the model.
 **It cannot merge.** It never approves or merges. Its only merge call is
 `gh pr merge --disable-auto`, which is off by default. With the defaults it
 leaves auto-merge alone. `PRREVIEW_GATE_DISARM_AUTO_MERGE=1` lets it turn off
-an auto-merge armed on a head it has not reviewed yet.
+an auto-merge armed on a head it has not reviewed yet. That includes a PR it
+skips because of its author. A head that an earlier `prreview once --pr`
+reviewed loses its auto-merge too, because the PR list does not show that
+review.
 
 **Scratch files stay private.** Diffs, slices and raw model output are written
 under the reviewer's own work directory, not a shared `/tmp`.
