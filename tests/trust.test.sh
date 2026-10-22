@@ -103,8 +103,12 @@ W="$(trust_warning 3 2>/dev/null)"
 has 'the warning names the count'               "$W" 'WARNING: 3 PR(s) from forks were not reviewed'
 has '...and the setting that reviews them all'  "$W" 'PRREVIEW_GATE_FORK_PRS=1'
 has '...and the command that reviews one'       "$W" 'prreview once --pr owner/repo#N'
-printf 'x\n%s\n[owner__repo#1] WARNING: 9 PR(s) from forks were not reviewed\n' "$W" > "$T/round.log"
-is 'the count is read from the last warning at the start of a line' "$(trust_warning_count "$T/round.log" 2>/dev/null)" 3
+# Three kinds of line: a warning at the start of a line (3, then 7), and a
+# warning behind a job prefix (9 before the 7, 11 after it). The answer is the
+# last one at the start of a line: not the first (3), not the last of all (11).
+W7="$(trust_warning 7 2>/dev/null)"
+printf 'x\n%s\n[owner__repo#1] WARNING: 9 PR(s) from forks were not reviewed\n%s\n[owner__repo#2] WARNING: 11 PR(s) from forks were not reviewed\n' "$W" "$W7" > "$T/round.log"
+is 'the count is read from the last warning at the start of a line' "$(trust_warning_count "$T/round.log" 2>/dev/null)" 7
 is 'a log without the warning counts 0'    "$(trust_warning_count "$T/none.log" 2>/dev/null)" 0
 . lib/loop.sh
 printf '%s\n' "$W" > "$T/summary.log"
