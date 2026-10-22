@@ -766,8 +766,10 @@ works in place of the loop, and a lock stops two rounds from overlapping.
    wrong (`PRREVIEW_REVIEW_APP_SLUG`) and the reviewer does not see its own
    comments. The head then counts as handled: no review, no model call, and a
    `WARNING` line in the log every round. The count file stays while its PR is
-   open and expires two days after the PR closes, like the hold files. If the
-   hold directory cannot be written, the reviewer skips the PR before any model
+   open and expires two days after the PR closes, like the hold files. A repo
+   with 1000 or more open PRs keeps all its count files, because the list of
+   open PRs may be cut off. If the hold directory cannot be written, the
+   reviewer skips the PR before any model
    call and the round fails, so the failure alert runs. A PR on hold after a
    failure waits out its hold (see [When something fails](#when-something-fails)).
 2. **Scan.** Check the PR's title and description against your

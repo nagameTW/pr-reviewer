@@ -546,7 +546,7 @@ fine" '' )
 }
 HR="$T/holdR"; rm -rf "$HR"; mkdir -p "$HR"
 view2 '[]' false > "$T/view-2.json"
-PF="$HR/owner__repo-2-$KEY2.posted"
+PF="$HR/owner__repo+2+$KEY2.posted"
 park "$HR"; OUT="$(run_gate PRREVIEW_ONCE_PR=owner/repo#2 PRREVIEW_GATE_HOLDOFF_DIR="$HR")"
 has 'a verdict is posted'                                     "$OUT" 'review-only verdict comment posted'
 is '...and recorded once'                                     "$(cat "$PF" 2>/dev/null | wc -l | tr -d ' ')" 1
@@ -560,7 +560,7 @@ is '...and no model call'                                     "$(grep -vc '^--ve
 # A failed write of the record does not undo the post. The log says what
 # failed, and the round fails so the failure alert runs: without the record a
 # wrong login list is not bounded for this head.
-HW="$T/holdW"; rm -rf "$HW"; mkdir -p "$HW/owner__repo-2-$KEY2.posted"
+HW="$T/holdW"; rm -rf "$HW"; mkdir -p "$HW/owner__repo+2+$KEY2.posted"
 park "$HW"; OUT="$(run_gate PRREVIEW_ONCE_PR=owner/repo#2 PRREVIEW_GATE_HOLDOFF_DIR="$HW")"
 has 'a record that cannot be written: the verdict is still posted' "$OUT" 'review-only verdict comment posted'
 has '...the log says the record failed'                       "$OUT" 'could not record the post'
@@ -583,9 +583,30 @@ rec9() { ( PRREVIEW_GATE_HOLDOFF_DIR="$HK"; . lib/holdoff.sh; holdoff_posted_rec
 rec9
 touch -d '5 days ago' "$HK"/*.posted 2>/dev/null || touch -t "$(date -d '5 days ago' +%Y%m%d%H%M 2>/dev/null || date -v-5d +%Y%m%d%H%M)" "$HK"/*.posted
 OUT="$(run_gate PRREVIEW_ONCE_PR=owner/repo#2 PRREVIEW_GATE_HOLDOFF_DIR="$HK")"
-is 'an old count for an open PR survives the round'           "$([ -e "$HK/owner__repo-2-$KEY2.posted" ] && echo yes || echo no)" yes
-is '...an old count for a PR that is not open is removed'     "$([ -e "$HK/owner__repo-99-$KEY2.posted" ] && echo yes || echo no)" no
-rm -rf "$HR" "$HW" "$HP" "$HK"; rm -f "$T/view-2.json"
+is 'an old count for an open PR survives the round'           "$([ -e "$HK/owner__repo+2+$KEY2.posted" ] && echo yes || echo no)" yes
+is '...an old count for a PR that is not open is removed'     "$([ -e "$HK/owner__repo+99+$KEY2.posted" ] && echo yes || echo no)" no
+# A list that is as long as the limit may be cut off: an open PR beyond it is
+# not in the list. Such a list proves nothing about the PRs it omits, so the
+# repo keeps all its count files. A shorter list is whole.
+LIMIT="$(sed -n 's/^PR_LIST_LIMIT=\([0-9][0-9]*\)$/\1/p' "$ROOT/pr-autoreview.sh")"
+case "$LIMIT" in ''|*[!0-9]*) bad 'pr-autoreview.sh names the list limit in PR_LIST_LIMIT' 'a number' "$LIMIT"; LIMIT=1000 ;; esac
+cut_run() { # N: a list of N fork PRs from a stranger, so none is read or reviewed
+  set_list "$(jq -nc --argjson n "$1" '[range(1; $n + 1) | {number: ., title: "t", author: {login: "mallory"}, isCrossRepository: true, labels: []}]')"
+  HC="$T/holdC"; rm -rf "$HC"; mkdir -p "$HC"
+  OLDPOSTED="$HC/owner__repo+$(( LIMIT + 500 ))+$KEY2.posted"
+  ( PRREVIEW_GATE_HOLDOFF_DIR="$HC"; . lib/holdoff.sh; holdoff_posted_record "$OLDPOSTED" 1700000000 )
+  touch -d '5 days ago' "$OLDPOSTED" 2>/dev/null || touch -t "$(date -d '5 days ago' +%Y%m%d%H%M 2>/dev/null || date -v-5d +%Y%m%d%H%M)" "$OLDPOSTED"
+  OUT="$(run_gate PRREVIEW_GATE_TRUSTED_AUTHORS=nobody PRREVIEW_GATE_HOLDOFF_DIR="$HC")"
+}
+cp "$T/list.json" "$T/list.keep"
+cut_run "$LIMIT"
+is 'a list as long as the limit: the old count of an unlisted PR survives' "$([ -e "$OLDPOSTED" ] && echo yes || echo no)" yes
+has '...and the log says the list may be cut off'            "$OUT" 'owner/repo: the list of open PRs may be cut off'
+cut_run "$(( LIMIT - 1 ))"
+is 'a list shorter than the limit: the old count of a PR that is not open goes' "$([ -e "$OLDPOSTED" ] && echo yes || echo no)" no
+lacks '...and the log has no cut-off line'                   "$OUT" 'may be cut off'
+cp "$T/list.keep" "$T/list.json"; rm -f "$T/list.keep"
+rm -rf "$HR" "$HW" "$HP" "$HK" "$HC"; rm -f "$T/view-2.json"
 
 # ── the post-merge scan ───────────────────────────────────────────────────
 # The scan reads the merged PRs of the last 48 hours. It comments on a merged

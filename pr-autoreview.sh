@@ -3293,7 +3293,8 @@ $(findings_threshold_note "$TICKET_MIN_SEV" "${N_BELOW:-0}" "$REPO" "$PR")"
 }
 
 # --limit: gh lists 30 by default, so a repo with more open PRs than that
-# would never reach its oldest ones.
+# would never reach its oldest ones. A list as long as the limit may be cut off.
+PR_LIST_LIMIT=1000
 # What the dispatcher's one pre-check call below reads. baseRefOid is there
 # because a stacked PR's key holds it. DEFAULT_BRANCH, read once for this repo
 # above, says which PR is stacked, so this check and the job compute the same
@@ -3308,12 +3309,18 @@ PRE_FIELDS=headRefOid,isDraft,reviews,comments,title,body,baseRefName,baseRefOid
 # the disarm of skipped PRs below.
 PR_LIST_FIELDS=number,author,isCrossRepository,labels
 [ "$GATE_DISARM_AUTO_MERGE" != 1 ] || PR_LIST_FIELDS="$PR_LIST_FIELDS,autoMergeRequest"
-PR_LIST="$("$GH" pr list --repo "$REPO" --state open --limit 1000 --json "$PR_LIST_FIELDS")" \
+PR_LIST="$("$GH" pr list --repo "$REPO" --state open --limit "$PR_LIST_LIMIT" --json "$PR_LIST_FIELDS")" \
   || { echo "$REPO: could not list open PRs — skipping repo (fail closed)"; GATE_DEGRADED=$((GATE_DEGRADED + 1)); continue; }
 # The open PRs of this repo, for the prune at the end of the round. If the
 # list cannot be read, the repo stays out of PRUNE_LISTED and keeps all its
-# count files.
-if PRUNE_ONE="$(jq -r --arg r "$REPO" '.[] | "\($r)#\(.number)"' <<<"$PR_LIST" 2>/dev/null)"; then
+# count files. A list as long as the limit may omit open PRs, so it counts as
+# unknown too.
+# Trade-off: a repo with PR_LIST_LIMIT or more open PRs never prunes its count
+# files while it stays that large. They go by age after the list is shorter.
+PRUNE_N="$(jq -r 'length' <<<"$PR_LIST" 2>/dev/null)" || PRUNE_N=""
+if [ "$PRUNE_N" = "$PR_LIST_LIMIT" ]; then
+  echo "$REPO: the list of open PRs may be cut off at $PR_LIST_LIMIT, so no count file of this repo is pruned"
+elif PRUNE_ONE="$(jq -r --arg r "$REPO" '.[] | "\($r)#\(.number)"' <<<"$PR_LIST" 2>/dev/null)"; then
   PRUNE_LISTED="$PRUNE_LISTED $REPO "
   PRUNE_OPEN="$PRUNE_OPEN$PRUNE_ONE"$'\n'
 fi

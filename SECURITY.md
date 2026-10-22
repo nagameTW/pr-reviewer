@@ -157,7 +157,9 @@ cannot stop a review. The guard on an armed auto-merge still runs for such a
 head.
 
 The count has limits. The file stays while its PR is open and expires two days
-after the PR closes. If the hold directory cannot be written, the reviewer
+after the PR closes. A repo with 1000 or more open PRs keeps all its count
+files until the list is shorter, because the list may omit an open PR. If
+the hold directory cannot be written, the reviewer
 skips the PR before any model call and the round fails. If a record fails after
 a post, the post stays and the round fails. In both cases the failure alert
 runs. A person who deletes the reviewer's

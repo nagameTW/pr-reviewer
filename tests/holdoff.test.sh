@@ -630,9 +630,10 @@ grep -qE '^holdoff_knobs_ok \|\| exit 2$' pr-autoreview.sh \
 # One line per verdict this machine posted for a key. No comment author can
 # write it, so a count from here cannot be forged on GitHub.
 PF="$(holdoff_posted_path o/r 42 "abc123-def456")" || PF=""
-case "$PF" in */o__r-42-abc123-def456.posted) ok "posted path names the owner, the repo, the PR and the key" ;;
+case "$PF" in */o__r+42+abc123-def456.posted) ok "posted path names the owner, the repo, the PR and the key" ;;
   *) fail "unexpected posted path: '$PF'" ;; esac
 holdoff_posted_path o/r 42 'a/b' >/dev/null 2>&1 && fail "a key with a slash became a posted path"
+holdoff_posted_path o/r 42 'a+b' >/dev/null 2>&1 && fail "a key with a plus became a posted path"
 holdoff_posted_path o/r x abc >/dev/null 2>&1 && fail "a bad PR number became a posted path"
 ok "posted path refuses the keys that holdoff_path refuses"
 is "no file counts 0" "$(holdoff_posted_count "$PF")" 0
@@ -692,6 +693,33 @@ holdoff_prune 2
 [ -e "$PO" ] && fail "prune without an open list kept a stale posted file"
 ok "with no open list, prune removes stale posted files as before"
 is "...and the count of a pruned file is 0 again" "$(holdoff_posted_count "$PO")" 0
+
+# Names that look alike must not keep each other: repo r with PR 4, and repo
+# r-4 with any PR. The separator "+" is not a GitHub name character, so the
+# prefix owner__repo+PR+ is exact.
+mk() { for f in "$@"; do holdoff_posted_record "$f" "$NOW"; done; old "$@"; }
+PR4="$(holdoff_posted_path o/r 4 abc)"; PRD4="$(holdoff_posted_path o/r-4 9 abc)"
+mk "$PR4" "$PRD4"
+holdoff_prune 2 "o/r#4"
+[ -e "$PR4" ] || fail "open r#4 did not keep its own count"
+[ -e "$PRD4" ] && fail "open r#4 kept the count of repo r-4"
+ok "open r#4 keeps r#4 and drops the old count of repo r-4"
+mk "$PR4" "$PRD4"
+holdoff_prune 2 "o/r-4#9"
+[ -e "$PRD4" ] || fail "open r-4#9 did not keep its own count"
+[ -e "$PR4" ] && fail "open r-4#9 kept the count of repo r"
+ok "open r-4#9 keeps r-4#9 and drops the old count of repo r"
+mk "$PR4" "$PRD4"
+holdoff_prune 2 "o/r"
+[ -e "$PR4" ] || fail "bare r did not keep its own count"
+[ -e "$PRD4" ] && fail "bare r kept the count of repo r-4"
+ok "a bare owner/repo keeps that repo and not a repo with a longer name"
+P12="$(holdoff_posted_path o/r 12 abc)"; P1="$(holdoff_posted_path o/r 1 abc)"
+mk "$P12" "$P1"
+holdoff_prune 2 "o/r#1"
+[ -e "$P1" ] || fail "open r#1 did not keep its own count"
+[ -e "$P12" ] && fail "open r#1 kept the count of PR 12"
+ok "open r#1 does not keep the count of PR 12"
 
 # Finding 2: the check that the directory can hold the count.
 D2="$TMP/newhold"; rm -rf "$D2"

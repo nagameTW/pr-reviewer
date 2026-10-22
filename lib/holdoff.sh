@@ -211,7 +211,10 @@ holdoff_stuck() {
 
 # The owner and the repo in a form that is safe in a file name: owner__repo.
 # $1 = owner/repo. A GitHub owner has no underscore, so the first "__" splits
-# the two. Nothing is printed for a name outside the GitHub name characters.
+# the two. The count file name joins the stem, the PR and the key with "+",
+# which no GitHub owner, repo name or key holds, so no stem is the prefix of
+# another and a prefix test is exact. Nothing is printed for a name outside
+# the GitHub name characters.
 holdoff_posted_stem() {
   local owner="${1%%/*}" repo="${1#*/}"
   case "$1" in */*) ;; *) return 1 ;; esac
@@ -225,7 +228,7 @@ holdoff_posted_path() {
   local stem
   holdoff_path "$@" >/dev/null || return 1
   stem="$(holdoff_posted_stem "${1-}")" || return 1
-  printf '%s/%s-%s-%s.posted' "$HOLDOFF_DIR" "$stem" "${2-}" "${3-}"
+  printf '%s/%s+%s+%s.posted' "$HOLDOFF_DIR" "$stem" "${2-}" "${3-}"
 }
 
 # Can the count be kept? Makes the hold directory (mode 700, from umask 077) when it is
@@ -267,8 +270,6 @@ holdoff_posted_record() {
 # a repo whose open list is not known (all its count files stay). A count file
 # of any other PR goes by age as the other files do. Without $2, every file
 # goes by age.
-# Trade-off: the match is by file name prefix. A repo named like "r-4" can keep
-# the count of repo "r" PR 4 a little longer. That errs on the side of keeping.
 holdoff_prune() {
   local days="${1:-2}" open="${2-}" f line stem keep
   [ -d "$HOLDOFF_DIR" ] || return 0
@@ -280,8 +281,8 @@ holdoff_prune() {
           [ -n "$line" ] || continue
           stem="$(holdoff_posted_stem "${line%%#*}")" || continue
           case "$line" in
-            *'#'*) case "$f" in "$HOLDOFF_DIR/$stem-${line#*#}-"*) keep=1 ;; esac ;;
-            *)     case "$f" in "$HOLDOFF_DIR/$stem-"*) keep=1 ;; esac ;;
+            *'#'*) case "$f" in "$HOLDOFF_DIR/$stem+${line#*#}+"*) keep=1 ;; esac ;;
+            *)     case "$f" in "$HOLDOFF_DIR/$stem+"*) keep=1 ;; esac ;;
           esac
         done <<<"$open"
         [ "$keep" = 1 ] || rm -f "$f" 2>/dev/null || true
