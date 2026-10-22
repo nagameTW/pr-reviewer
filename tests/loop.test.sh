@@ -54,7 +54,7 @@ rm -f "$NOREPOS"
 # ── loop_open_pr_count sums, and fails toward "there is work" ─────────────
 # The count applies the rule the round applies (lib/trust.sh), so it reads
 # the trust settings from the environment. Start from a known state.
-unset PRREVIEW_GATE_TRUSTED_AUTHORS PRREVIEW_GATE_FORK_PRS
+unset PRREVIEW_GATE_TRUSTED_AUTHORS PRREVIEW_GATE_FORK_PRS PRREVIEW_GATE_DISARM_AUTO_MERGE
 STUB_DIR="$(mktemp -d)"
 mkstub() {  # $1 = body
   printf '#!/usr/bin/env bash\n%s\n' "$1" > "$STUB_DIR/gh"

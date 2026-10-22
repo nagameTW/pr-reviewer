@@ -34,29 +34,29 @@ call. A PR that `prreview once --pr` names is read, whatever its other fields
 hold, when its number is a whole number. Any other PR is read only when its
 record holds a number, a boolean `isCrossRepository`, an author object and a
 non-empty login, and either `isCrossRepository` is false or the login is in
-`PRREVIEW_GATE_TRUSTED_AUTHORS`. A missing field or a wrong type means the PR
-is not trusted, even when its author is on the list. A PR whose author account
-was deleted can come back with no login. The reviewer then skips it, unless
+`PRREVIEW_GATE_TRUSTED_AUTHORS`. A missing field or a wrong type means the PR is
+not trusted, even when its author is on the list. A PR whose author account was
+deleted can come back with no login. The reviewer then skips it, unless
 `prreview once --pr` names it. The review job checks the same rule on its own
 read of the PR, before any model call. The reviewer posts nothing on a skipped
 PR and logs its number only. One exception exists. With
 `PRREVIEW_GATE_DISARM_AUTO_MERGE=1`, the reviewer turns off an auto-merge that
-is armed on a skipped PR, with one `gh pr merge --disable-auto` call and
-nothing else. Only a user with write access can arm auto-merge, so a stranger
-cannot cause that write. The list is the point where trust is decided. If a
-PR turns into a fork PR after the list, the dispatcher reads it once with `gh
-pr view`, and the job stops it before the diff fetch. That PR gets no model
-call and no post. With the same setting, the job turns off its auto-merge.
-The loop that starts the rounds counts only the PRs this rule admits, so one
-open fork PR from a stranger no longer starts a full round, merged-PR scan
-included, every minute. With `PRREVIEW_GATE_DISARM_AUTO_MERGE=1`, a skipped
-fork PR with armed auto-merge counts as work too, so the disarm runs within
-one interval. The scan of merged PRs does not look at the author. `PRREVIEW_GATE_FORK_PRS=1` turns the rule off. The rule assumes that
-everyone who can push to the repository is trusted. A repository whose
-workflows build branches from outside input, for example with
-`pull_request_target`, breaks that assumption. Do not list an account only
-because it contributed once. The list lives in the settings of the machine that
-runs the reviewer.
+is armed on a skipped PR, with one `gh pr merge --disable-auto` call and nothing
+else. Only a user with write access can arm auto-merge, so a stranger cannot
+cause that write. The list is the point where trust is decided. If a PR turns
+into a fork PR after the list, the dispatcher reads it once with `gh pr view`,
+and the job stops it before the diff fetch. That PR gets no model call and no
+post. With the same setting, the job turns off its auto-merge. The loop that
+starts the rounds counts only the PRs this rule admits, so one open fork PR from
+a stranger no longer starts a full round, merged-PR scan included, every minute.
+With `PRREVIEW_GATE_DISARM_AUTO_MERGE=1`, a skipped fork PR with armed
+auto-merge counts as work too, so the disarm runs within one interval. The scan
+of merged PRs does not look at the author. `PRREVIEW_GATE_FORK_PRS=1` turns the
+rule off. The rule assumes that everyone who can push to the repository is
+trusted. A repository whose workflows build branches from outside input, for
+example with `pull_request_target`, breaks that assumption. Do not list an
+account only because it contributed once. The list lives in the settings of the
+machine that runs the reviewer.
 
 **The pull request is data.** The model reads titles, descriptions, diffs and
 repository files with its read-only tools, and the prompt says that none of

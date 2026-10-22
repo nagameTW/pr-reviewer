@@ -159,7 +159,10 @@ the skipped PR gets nothing else. Only a user with write access to the
 repository can arm auto-merge. The loop that starts the rounds
 applies the same rule to its check, with the same two settings. A skipped PR
 then does not start a round each minute, and the loop keeps its idle schedule.
-The loop does not count a draft PR either, because the round skips it.
+The exception is `PRREVIEW_GATE_DISARM_AUTO_MERGE=1` with auto-merge armed on
+the PR: the loop counts that PR as work, draft or not, so the disarm runs
+within one interval. The loop does not count any other draft PR, because the
+round skips it.
 The scan of merged PRs does not look at the author. The round log names a
 skipped PR by number and never by title. A round that skips PRs prints one `WARNING:` line with the
 count, and `prreview status` shows the count for the last round.
@@ -228,7 +231,7 @@ The rest of this README uses these words in one sense each.
 | **Gate** | The name the code and its settings use for the reviewer: `pr-autoreview.sh`, the `PRREVIEW_GATE_*` settings, `gate.log`. It only comments; it does not block or merge anything, which is why its log calls the comment a review-only verdict. |
 | **Head** | The latest commit on a PR's branch. The reviewer reviews heads, not branches. |
 | **Trusted author** | The author of a PR that comes from a branch of the repository itself, or a login in `PRREVIEW_GATE_TRUSTED_AUTHORS`. A PR that `prreview once --pr` names is reviewed as if its author were trusted. |
-| **Round** | One run of `pr-autoreview.sh`. It goes over every listed repo and reviews each PR from a trusted author whose head has no comment yet. The loop checks once a minute for open PRs that the reviewer would read (see [Whose PRs it reviews](#whose-prs-it-reviews)) and starts a round when it finds any. A fork PR that the reviewer skips does not count, and a draft PR does not count. With none to review, the loop starts a round only on every 15th check. The loop's log counts checks, so `[round 12]` there is the 12th check, whether or not a round ran. For a single PR, "round 2" means the second verdict comment on it: a push, an edited title, description or base branch, or (for a stacked PR) a push to its parent branch leads to the next one. |
+| **Round** | One run of `pr-autoreview.sh`. It goes over every listed repo and reviews each PR from a trusted author whose head has no comment yet. The loop checks once a minute for open PRs that the reviewer would read (see [Whose PRs it reviews](#whose-prs-it-reviews)) and starts a round when it finds any. A fork PR that the reviewer skips does not count, unless `PRREVIEW_GATE_DISARM_AUTO_MERGE=1` and auto-merge is armed on it. A draft PR does not count, with the same exception. With none to review, the loop starts a round only on every 15th check. The loop's log counts checks, so `[round 12]` there is the 12th check, whether or not a round ran. For a single PR, "round 2" means the second verdict comment on it: a push, an edited title, description or base branch, or (for a stacked PR) a push to its parent branch leads to the next one. |
 | **Slice** | Part of a large diff, reviewed by its own model call (`PRREVIEW_GATE_CHUNK_*`). |
 | **Verdict** | The first line of the comment: ✅ Approved or ❌ Changes requested. It is text in a comment, not a GitHub review state. |
 | **Blocking finding** | A CRITICAL or HIGH finding that counts toward ❌ Changes requested. MEDIUM and LOW are listed without changing the verdict. |
@@ -477,7 +480,8 @@ line. A value is taken literally: no quotes, nothing expanded. Run
 Once installed, the service looks for open PRs right away and reviews any it
 finds from a trusted author. With no such PR open, it runs a round only every
 15 minutes (`PRREVIEW_LOOP_IDLE_EVERY`), to catch PRs merged in the meantime. An
-open fork PR that the reviewer skips does not start a round, and an open draft PR does not either. If you answered `n`
+open fork PR that the reviewer skips does not start a round, and an open draft PR does not either. The exception is
+`PRREVIEW_GATE_DISARM_AUTO_MERGE=1` with auto-merge armed on the PR. If you answered `n`
 at the service step, nothing reviews until you run `./prreview start`,
 `./prreview run` or `./prreview once`.
 
