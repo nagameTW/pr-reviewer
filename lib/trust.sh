@@ -18,18 +18,35 @@
 # pr_author_trusted JSON ALLOWED TRIGGER
 # JSON is one PR as gh prints it. ALLOWED lists logins, separated by spaces or
 # commas. TRIGGER is the number of the PR that `prreview once --pr` named, or
-# empty. Returns 0 when isCrossRepository is false, when the PR number is
-# TRIGGER, or when the author login is in ALLOWED (letter case does not
-# matter). Returns 1 in every other case, a missing field, a wrong type and
-# text that is not JSON included.
+# empty. Returns 0 in two cases:
+#   1. .number is a whole number and equals TRIGGER. The maintainer named this
+#      PR, so its other fields do not matter.
+#   2. Every one of these holds: .number is a number, .isCrossRepository is a
+#      boolean, .author is an object and .author.login is a non-empty string.
+#      Then either isCrossRepository is false, or the login is in ALLOWED
+#      (letter case does not matter).
+# Returns 1 in every other case, a missing field, a wrong type and text that
+# is not JSON included. The type check comes first, so an allowlisted login
+# cannot excuse a bad fork flag, and a same-repository flag cannot excuse a
+# bad author.
+# Trade-off: a PR whose author account was deleted can come back with no
+# login. The rule then skips it, unless `prreview once --pr` names it.
 pr_author_trusted() {
   local allowed="${2-}"
   allowed="${allowed//,/ }"
   jq -e --arg allowed "$allowed" --arg trigger "${3-}" '
-    .isCrossRepository == false
-    or ($trigger != "" and (.number | tostring) == $trigger)
-    or ((.author.login // "" | ascii_downcase) as $login
-        | $login != "" and ([$allowed | ascii_downcase | scan("[^ \t\n]+")] | any(. == $login)))
+    type == "object" and (
+      ($trigger != "" and (.number | type == "number" and . == floor and tostring == $trigger))
+      or (
+        (.number | type == "number")
+        and (.isCrossRepository | type == "boolean")
+        and (.author | type == "object")
+        and (.author.login | type == "string" and . != "")
+        and (.isCrossRepository == false
+             or ((.author.login | ascii_downcase) as $login
+                 | [$allowed | ascii_downcase | scan("[^ \t\n]+")] | any(. == $login)))
+      )
+    )
   ' <<<"${1-}" >/dev/null 2>&1
 }
 

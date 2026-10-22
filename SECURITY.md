@@ -29,23 +29,28 @@ The project is pre-1.0, so only the latest commit on `main` gets fixes.
 These hold by design. If you can break one, that is a vulnerability.
 
 **Fork PRs are skipped unless the author is trusted.** The reviewer reads the
-author and the `isCrossRepository` field of each open PR with one
-`gh pr list` call. It reads a PR when the field is false, when the author is in
-`PRREVIEW_GATE_TRUSTED_AUTHORS`, or when `prreview once --pr` names the PR.
-The review job checks the same rule on its own read of the PR, before any
-model call. A missing or unreadable field means the PR is not trusted. The
-reviewer posts nothing on a skipped PR and logs its number only. The list is
-the point where trust is decided. If a PR turns into a fork PR after the list,
-the dispatcher reads it once with `gh pr view`, and the job stops it before the
-diff fetch. That PR gets no model call and no write. The loop that starts the
-rounds counts only the PRs this rule admits, so one open fork PR from a
-stranger does not start a round, and a scan of merged PRs, every minute. The
-scan of merged PRs does not look at the author.
-`PRREVIEW_GATE_FORK_PRS=1` turns the rule off. The rule assumes that everyone
-who can push to the repository is trusted. A repository whose workflows build
-branches from outside input, for example with `pull_request_target`, breaks
-that assumption. Do not list an account only because it contributed once. The
-list lives in the settings of the machine that runs the reviewer.
+author and the `isCrossRepository` field of each open PR with one `gh pr list`
+call. A PR that `prreview once --pr` names is read, whatever its other fields
+hold, when its number is a whole number. Any other PR is read only when its
+record holds a number, a boolean `isCrossRepository`, an author object and a
+non-empty login, and either `isCrossRepository` is false or the login is in
+`PRREVIEW_GATE_TRUSTED_AUTHORS`. A missing field or a wrong type means the PR
+is not trusted, even when its author is on the list. A PR whose author account
+was deleted can come back with no login. The reviewer then skips it, unless
+`prreview once --pr` names it. The review job checks the same rule on its own
+read of the PR, before any model call. The reviewer posts nothing on a skipped
+PR and logs its number only. The list is the point where trust is decided. If a
+PR turns into a fork PR after the list, the dispatcher reads it once with `gh
+pr view`, and the job stops it before the diff fetch. That PR gets no model
+call and no write. The loop that starts the rounds counts only the PRs this
+rule admits, so one open fork PR from a stranger does not start a round, and a
+scan of merged PRs, every minute. The scan of merged PRs does not look at the
+author. `PRREVIEW_GATE_FORK_PRS=1` turns the rule off. The rule assumes that
+everyone who can push to the repository is trusted. A repository whose
+workflows build branches from outside input, for example with
+`pull_request_target`, breaks that assumption. Do not list an account only
+because it contributed once. The list lives in the settings of the machine that
+runs the reviewer.
 
 **The pull request is data.** The model reads titles, descriptions, diffs and
 repository files with its read-only tools, and the prompt says that none of
