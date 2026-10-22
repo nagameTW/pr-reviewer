@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # docs/how-it-reviews.md has a table of the standards that checks/*.md cite
-# (section "Standards the checks cite"). This test keeps the table and the
-# checks in step, in both directions:
+# (section "Editions", under "Security standards the checks cite"). This test
+# keeps the table and the checks in step, in both directions:
 #   - every standard and edition that a check cites has a row in the table
 #   - every row in the table is cited by at least one check
 # Each row also needs a date in the "Checked" column. That date records when
@@ -53,7 +53,7 @@ cited() {
 # The table: one "Name|Edition" per row, and the "Checked" cell of each row.
 table() {
   awk -F'|' -v want="$1" '
-    /^### 1\.5 / { on = 1; next }
+    /^### Editions/ { on = 1; next }
     /^#/         { on = 0 }
     on && /^\| / && $2 !~ /^ *(Standard|-+) *$/ {
       for (i = 2; i <= 4; i++) gsub(/^ +| +$/, "", $i)
@@ -74,7 +74,7 @@ table all > "$T/rows"
 
 # An empty list on either side would make both comparisons pass.
 [ -s "$T/cited" ] || { bad "checks/*.md cite at least one standard" "the scan found none"; echo "SOME CHECKS FAILED"; exit 1; }
-[ -s "$T/table" ] || { bad "$DOC has a standards table" "no row found under '### 1.5'"; echo "SOME CHECKS FAILED"; exit 1; }
+[ -s "$T/table" ] || { bad "$DOC has a standards table" "no row found under '### Editions'"; echo "SOME CHECKS FAILED"; exit 1; }
 
 MISSING="$(LC_ALL=C comm -23 "$T/cited" "$T/table")"
 EXTRA="$(LC_ALL=C comm -13 "$T/cited" "$T/table")"
