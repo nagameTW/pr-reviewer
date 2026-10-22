@@ -630,7 +630,7 @@ grep -qE '^holdoff_knobs_ok \|\| exit 2$' pr-autoreview.sh \
 # One line per verdict this machine posted for a key. No comment author can
 # write it, so a count from here cannot be forged on GitHub.
 PF="$(holdoff_posted_path o/r 42 "abc123-def456")" || PF=""
-case "$PF" in */r-42-abc123-def456.posted) ok "posted path is the hold path plus .posted" ;;
+case "$PF" in */o__r-42-abc123-def456.posted) ok "posted path names the owner, the repo, the PR and the key" ;;
   *) fail "unexpected posted path: '$PF'" ;; esac
 holdoff_posted_path o/r 42 'a/b' >/dev/null 2>&1 && fail "a key with a slash became a posted path"
 holdoff_posted_path o/r x abc >/dev/null 2>&1 && fail "a bad PR number became a posted path"
@@ -651,11 +651,61 @@ holdoff_posted_record "$PF" "" && fail "an empty time was recorded"
 mkdir -p "$TMP/hold/dirfile.posted"
 holdoff_posted_record "$TMP/hold/dirfile.posted" "$NOW" 2>/dev/null && fail "a write that fails reported success"
 ok "a write that fails returns non-zero (the caller logs it)"
-touch -d '5 days ago' "$PF" 2>/dev/null || touch -t "$(date -d '5 days ago' +%Y%m%d%H%M 2>/dev/null || date -v-5d +%Y%m%d%H%M)" "$PF"
+# Finding 3: two owners with the same repo name, PR number and key must not
+# share a count.
+PA="$(holdoff_posted_path owner-a/project 7 abc)"
+PB="$(holdoff_posted_path owner-b/project 7 abc)"
+[ -n "$PA" ] && [ -n "$PB" ] && [ "$PA" != "$PB" ] \
+  && ok "owner-a/project and owner-b/project get different posted paths" \
+  || fail "same repo name under two owners shares a posted path: '$PA' '$PB'"
+holdoff_posted_path 'o/r/x' 7 abc >/dev/null 2>&1 && fail "a repo with a slash became a posted path"
+holdoff_posted_path 'o w/r' 7 abc >/dev/null 2>&1 && fail "an owner with a space became a posted path"
+holdoff_posted_path '/r' 7 abc >/dev/null 2>&1 && fail "an empty owner became a posted path"
+holdoff_posted_path 'o/' 7 abc >/dev/null 2>&1 && fail "an empty repo became a posted path"
+ok "posted path refuses an owner or repo outside the GitHub name characters"
+# The hold path keeps the shared base name: its files would be lost on upgrade.
+case "$(holdoff_path owner-a/project 7 abc)" in */project-7-abc) ok "hold path is unchanged" ;;
+  *) fail "hold path changed" ;; esac
+
+# Finding 1: prune keeps the count of an open PR, however old the file is.
+old() { touch -d '5 days ago' "$@" 2>/dev/null || touch -t "$(date -d '5 days ago' +%Y%m%d%H%M 2>/dev/null || date -v-5d +%Y%m%d%H%M)" "$@"; }
+PO="$(holdoff_posted_path o/r 42 abc)"; PC="$(holdoff_posted_path o/r 43 abc)"
+PX="$(holdoff_posted_path o/unlisted 5 abc)"; PY="$(holdoff_posted_path o/gone 5 abc)"
+PN="$(holdoff_posted_path o/r 44 abc)"
+for f in "$PO" "$PC" "$PX" "$PY"; do holdoff_posted_record "$f" "$NOW"; done
+old "$PO" "$PC" "$PX" "$PY"
+holdoff_posted_record "$PN" "$NOW"
+printf 'x' > "$TMP/hold/o-hold"; old "$TMP/hold/o-hold"
+holdoff_prune 2 "$(printf 'o/r#42\no/unlisted\n')"
+[ -e "$PO" ] || fail "prune removed the count of an open PR"
+ok "prune keeps an old posted file while its PR is open"
+[ -e "$PC" ] && fail "prune kept the count of a closed PR"
+ok "prune removes an old posted file for a closed PR"
+[ -e "$PX" ] || fail "prune removed a count of a repo whose open list is unknown"
+ok "a bare owner/repo line keeps every posted file of that repo"
+[ -e "$PY" ] && fail "prune kept the count of a repo that is not listed"
+ok "prune removes an old posted file of a repo that is not listed"
+[ -e "$PN" ] || fail "prune removed a fresh posted file"
+[ -e "$TMP/hold/o-hold" ] && fail "prune kept a stale hold when given an open list"
+ok "other state files are still pruned by age"
 holdoff_prune 2
-[ -e "$PF" ] && fail "prune kept a stale posted file"
-ok "prune removes stale posted files"
-is "...and the count of a pruned file is 0 again" "$(holdoff_posted_count "$PF")" 0
+[ -e "$PO" ] && fail "prune without an open list kept a stale posted file"
+ok "with no open list, prune removes stale posted files as before"
+is "...and the count of a pruned file is 0 again" "$(holdoff_posted_count "$PO")" 0
+
+# Finding 2: the check that the directory can hold the count.
+D2="$TMP/newhold"; rm -rf "$D2"
+HOLDOFF_DIR="$D2" holdoff_dir_writable || fail "a missing directory could not be made"
+is "a missing hold directory is made with mode 700" "$(stat -c %a "$D2" 2>/dev/null || stat -f %Lp "$D2")" 700
+: > "$TMP/notdir"
+HOLDOFF_DIR="$TMP/notdir/hold" holdoff_dir_writable 2>/dev/null && fail "a path below a file counted as writable"
+ok "a hold directory that cannot be made is not writable"
+mkdir -p "$TMP/rodir"; chmod 500 "$TMP/rodir"
+if [ ! -w "$TMP/rodir" ]; then
+  HOLDOFF_DIR="$TMP/rodir" holdoff_dir_writable 2>/dev/null && fail "a read-only directory counted as writable"
+  ok "a read-only hold directory is not writable"
+fi
+chmod 700 "$TMP/rodir"
 
 [ "$RC" = 0 ] && echo "PASS: lib/holdoff.sh"
 exit "$RC"

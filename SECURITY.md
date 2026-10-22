@@ -156,9 +156,11 @@ reviewer writes it only after its own post. An App that prints the marker
 cannot stop a review. The guard on an armed auto-merge still runs for such a
 head.
 
-The count has limits. The file expires after two days, then the head can get
-two more verdicts. If the reviewer cannot write the file, the post stays and
-the bound does not apply to that head. A person who deletes the reviewer's
+The count has limits. The file stays while its PR is open and expires two days
+after the PR closes. If the hold directory cannot be written, the reviewer
+skips the PR before any model call and the round fails. If a record fails after
+a post, the post stays and the round fails. In both cases the failure alert
+runs. A person who deletes the reviewer's
 comments to ask for a new review gets two before the bound stops it. After a
 switch from an App back to your own account, a head that the machine posted for
 twice stays stopped until its author pushes again.

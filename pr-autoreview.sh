@@ -759,6 +759,9 @@ ONCE_ANSWERED=""
 [ -z "$ONCE_NUM" ] || ONCE_ANSWERED="$GATE_SCRATCH/prreview-gate-answered-$$"
 note_answered() { : > "${ONCE_ANSWERED:-/dev/null}" 2>/dev/null || true; }
 
+# For holdoff_prune at the end of the round: the open PRs of each repo whose
+# list this round read, and the repos it read.
+PRUNE_OPEN=""; PRUNE_LISTED=" "
 for REPO in $REPOS_ROTATED; do
 # A named PR (`prreview once --pr`) is the only work of its round.
 [ -z "$ONCE_REPO" ] || [ "$REPO" = "$ONCE_REPO" ] || continue
@@ -1022,6 +1025,13 @@ review_one_pr() { # $1 = PR number, $2 = the worktree the dispatcher made
   POSTED_N="$([ -n "$POSTED_F" ] && holdoff_posted_count "$POSTED_F" || printf '0')"
   if prompt_local_post_bound "$POSTED_N"; then
     echo "PR #$PR: $(prompt_local_post_warning "$POSTED_N")"
+    return 0
+  fi
+  # The count must be writable before the model is called. Else a wrong login
+  # list gives a new verdict every round, and nothing counts them. The round
+  # fails, so the failure alert runs.
+  if [ -n "$POSTED_F" ] && ! holdoff_dir_writable; then
+    note_skip "the hold directory $HOLDOFF_DIR cannot be made or written, so the count that bounds reposts cannot be kept — skipping, no model call (fail closed)"
     return 0
   fi
 
@@ -3189,12 +3199,10 @@ This change or its review matched the sensitive-data scan, or the scan could not
     [ -n "${REPLAY_F:-}" ] && holdoff_verdict_clear "$REPLAY_F"
     echo "PR #$PR: review-only verdict comment posted (verdict=$VERDICT)"
     # Count this post for the key. The post is done, so a record that fails
-    # is logged and nothing more.
-    # Trade-off: without the record, a wrong login list is not bounded for
-    # this head.
+    # cannot undo it. It fails the round, as the count is what bounds reposts.
     if [ -n "${POSTED_F:-}" ]; then
       holdoff_posted_record "$POSTED_F" "$(date +%s)" \
-        || echo "PR #$PR: could not record the post in $POSTED_F; the count that bounds reposts for this head is not kept"
+        || note_skip "could not record the post in $POSTED_F, so the count that bounds reposts for this head is not kept — failing the round"
     fi
     # A withheld-scan notice is not a verdict. Only a verdict answers a named PR.
     RO_POSTED=1
@@ -3302,6 +3310,13 @@ PR_LIST_FIELDS=number,author,isCrossRepository,labels
 [ "$GATE_DISARM_AUTO_MERGE" != 1 ] || PR_LIST_FIELDS="$PR_LIST_FIELDS,autoMergeRequest"
 PR_LIST="$("$GH" pr list --repo "$REPO" --state open --limit 1000 --json "$PR_LIST_FIELDS")" \
   || { echo "$REPO: could not list open PRs — skipping repo (fail closed)"; GATE_DEGRADED=$((GATE_DEGRADED + 1)); continue; }
+# The open PRs of this repo, for the prune at the end of the round. If the
+# list cannot be read, the repo stays out of PRUNE_LISTED and keeps all its
+# count files.
+if PRUNE_ONE="$(jq -r --arg r "$REPO" '.[] | "\($r)#\(.number)"' <<<"$PR_LIST" 2>/dev/null)"; then
+  PRUNE_LISTED="$PRUNE_LISTED $REPO "
+  PRUNE_OPEN="$PRUNE_OPEN$PRUNE_ONE"$'\n'
+fi
 PR_PLAN="$(trust_plan_prs "$PR_LIST" "$TRUSTED_AUTHORS" "$GATE_FORK_PRS" "$ONCE_NUM")" \
   || { echo "$REPO: could not read the list of open PRs — skipping repo (fail closed)"; GATE_DEGRADED=$((GATE_DEGRADED + 1)); continue; }
 OPEN_PRS="$(sed -n 's/^review //p' <<<"$PR_PLAN")"
@@ -3535,7 +3550,12 @@ rm -rf "$QUOTA_DIR" 2>/dev/null || true
 # Superseded holds are junk: once a head moves on, its file can never match a
 # key again. Pruned here rather than on write so a round that dies early cannot
 # skip it, and by age so the directory has a bound.
-holdoff_prune 2
+# A count file (.posted) stays while its PR is open: a repo this round did not
+# list (a named round, a list that failed) keeps all its count files.
+for PRUNE_R in $REPOS_ROTATED; do
+  case "$PRUNE_LISTED" in *" $PRUNE_R "*) ;; *) PRUNE_OPEN="$PRUNE_OPEN$PRUNE_R"$'\n' ;; esac
+done
+holdoff_prune 2 "$PRUNE_OPEN"
 # Heads this round tried that have now failed three times in a row, the
 # review call or the post: counted like a skip, so the round fails and
 # alerts instead of backing off in silence for ever.

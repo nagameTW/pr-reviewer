@@ -546,7 +546,7 @@ fine" '' )
 }
 HR="$T/holdR"; rm -rf "$HR"; mkdir -p "$HR"
 view2 '[]' false > "$T/view-2.json"
-PF="$HR/repo-2-$KEY2.posted"
+PF="$HR/owner__repo-2-$KEY2.posted"
 park "$HR"; OUT="$(run_gate PRREVIEW_ONCE_PR=owner/repo#2 PRREVIEW_GATE_HOLDOFF_DIR="$HR")"
 has 'a verdict is posted'                                     "$OUT" 'review-only verdict comment posted'
 is '...and recorded once'                                     "$(cat "$PF" 2>/dev/null | wc -l | tr -d ' ')" 1
@@ -557,15 +557,35 @@ park "$HR"; OUT="$(run_gate PRREVIEW_ONCE_PR=owner/repo#2 PRREVIEW_GATE_HOLDOFF_
 has 'a third round for the same key: the WARNING line'        "$OUT" 'WARNING: this machine posted 2 verdicts'
 is '...no post'                                               "$(grep -c '^pr comment' "$T/gh.calls")" 0
 is '...and no model call'                                     "$(grep -vc '^--version$' "$T/claude.calls")" 0
-# A failed write of the record does not undo the post. The round finishes, and
-# the log says what failed.
-HW="$T/holdW"; rm -rf "$HW"; mkdir -p "$HW/repo-2-$KEY2.posted"
+# A failed write of the record does not undo the post. The log says what
+# failed, and the round fails so the failure alert runs: without the record a
+# wrong login list is not bounded for this head.
+HW="$T/holdW"; rm -rf "$HW"; mkdir -p "$HW/owner__repo-2-$KEY2.posted"
 park "$HW"; OUT="$(run_gate PRREVIEW_ONCE_PR=owner/repo#2 PRREVIEW_GATE_HOLDOFF_DIR="$HW")"
 has 'a record that cannot be written: the verdict is still posted' "$OUT" 'review-only verdict comment posted'
 has '...the log says the record failed'                       "$OUT" 'could not record the post'
 is '...one comment went out'                                  "$(grep -c '^pr comment' "$T/gh.calls")" 1
-has '...and the round ends well'                              "$OUT" 'rc=0'
-rm -rf "$HR" "$HW" "$HP"; rm -f "$T/view-2.json"
+has '...and the round fails'                                  "$OUT" 'rc=1'
+# A hold directory that cannot be made or written: no model call, no post, and
+# the round fails. The check runs before the model, so no review is paid for
+# that the count could not bound.
+: > "$T/notdir"
+view2 '[]' false > "$T/view-2.json"
+OUT="$(run_gate PRREVIEW_ONCE_PR=owner/repo#2 PRREVIEW_GATE_HOLDOFF_DIR="$T/notdir/hold")"
+has 'a hold directory that cannot be written: the log says so' "$OUT" 'hold directory'
+is '...with no model call'                                    "$(grep -vc '^--version$' "$T/claude.calls")" 0
+is '...and no post'                                           "$(grep -c '^pr comment' "$T/gh.calls")" 0
+has '...and the round fails'                                  "$OUT" 'rc=1'
+# The end-of-round prune keeps the count of an open PR and drops the count of
+# a PR that is not open, however old both files are.
+HK="$T/holdK"; rm -rf "$HK"; mkdir -p "$HK"; rec "$HK" 2
+rec9() { ( PRREVIEW_GATE_HOLDOFF_DIR="$HK"; . lib/holdoff.sh; holdoff_posted_record "$(holdoff_posted_path owner/repo 99 "$KEY2")" 1700000000 ) }
+rec9
+touch -d '5 days ago' "$HK"/*.posted 2>/dev/null || touch -t "$(date -d '5 days ago' +%Y%m%d%H%M 2>/dev/null || date -v-5d +%Y%m%d%H%M)" "$HK"/*.posted
+OUT="$(run_gate PRREVIEW_ONCE_PR=owner/repo#2 PRREVIEW_GATE_HOLDOFF_DIR="$HK")"
+is 'an old count for an open PR survives the round'           "$([ -e "$HK/owner__repo-2-$KEY2.posted" ] && echo yes || echo no)" yes
+is '...an old count for a PR that is not open is removed'     "$([ -e "$HK/owner__repo-99-$KEY2.posted" ] && echo yes || echo no)" no
+rm -rf "$HR" "$HW" "$HP" "$HK"; rm -f "$T/view-2.json"
 
 # ── the post-merge scan ───────────────────────────────────────────────────
 # The scan reads the merged PRs of the last 48 hours. It comments on a merged

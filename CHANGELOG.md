@@ -116,8 +116,13 @@ All notable changes to this project are recorded here. The format follows
   next push: no review, no model call, no job, and one `WARNING` line that
   says it does not see its own comments and names the setting. No comment
   author can change this count. The guard on an armed auto-merge still runs.
-  The count file expires with the other hold files, after two days. If the
-  reviewer cannot write the count file, the post stays and the log says so.
+  The count file stays while its PR is open. After the PR closes, it expires
+  with the other hold files, after two days. Before a model call, the
+  reviewer checks that the hold directory can be written. If it cannot, the
+  reviewer skips the PR and the round fails, so the failure alert runs. If
+  a record fails after a post, the post stays and the round fails. The count
+  file name holds the owner and the repo, so two owners with the same repo
+  name never share a count.
   After a switch from an App back to your own account, a head that the
   machine posted for twice stays stopped until the next push.
 
