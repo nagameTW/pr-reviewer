@@ -282,9 +282,9 @@ prompt_head_verdict() {
 # whose first line carries $2 but are not in $3, space-separated,
 # deduplicated. The first line, as in prompt_gate_bodies: any bot that quotes
 # a comment (a CI summary, a changelog bot) could carry the marker further
-# down, and this answer stops the review. A person
-# cannot post under an App login, so a hit means the gate identity list is
-# wrong (REVIEW_APP_SLUG typo, the App renamed), not a copied marker.
+# down. A person cannot post under an App login, so a hit is a bot that
+# repeats the marker, or the gate login list is wrong (REVIEW_APP_SLUG typo,
+# the App renamed). The job writes a warning and reviews the head.
 # Empty on unparseable input.
 prompt_foreign_app_authors() {
   jq -r --arg k "${2-}" --arg allowed "${3-}" '

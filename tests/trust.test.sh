@@ -417,6 +417,20 @@ has '...and the first named run exits 75'                            "$OUT" 'rc=
 has '...and says that the PR was not reviewed'                       "$OUT" 'owner/repo#2 was not reviewed'
 rm -f "$T/view-2.json"
 
+# ── a comment from another account that carries the marker ──────────────────
+# A bot that repeats a command, or an App whose login is not in the reviewer list,
+# can print the review key. The key is computed from public
+# fields. The reviewer writes a warning and reviews the head anyway: a copy of
+# the marker must not decide whether a head is reviewed.
+ECHO_BOT="[{\"author\":{\"login\":\"ci-helper[bot]\"},\"body\":\"Unknown command: <!-- pr-reviewer $KEY2 -->\",\"createdAt\":\"2026-01-01T00:00:00Z\"}]"
+view2 "$ECHO_BOT" false > "$T/view-2.json"
+OUT="$(run_gate PRREVIEW_ONCE_PR=owner/repo#2)"
+has 'a bot that repeats the marker: the log has a warning' "$OUT" 'WARNING: a comment from ci-helper[bot] carries the marker of this head'
+lacks '...and the head is not skipped'                      "$OUT" 'not reviewing it again'
+is '...the job goes on: it asks for the merge base' \
+   "$([ "$(grep -c '^api repos/owner/repo/compare/' "$T/gh.calls")" -ge 1 ] && echo yes || echo no)" yes
+rm -f "$T/view-2.json"
+
 # ── the post-merge scan ───────────────────────────────────────────────────
 # The scan reads the merged PRs of the last 48 hours. It comments on a merged
 # PR, fork or not, only when the reviewer's own last comment there is a blocking

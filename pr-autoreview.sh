@@ -1000,13 +1000,17 @@ review_one_pr() { # $1 = PR number, $2 = the worktree the dispatcher made
     fi
     return 0
   fi
-  # This head's marker from an App outside PRIOR_AUTHORS: the identity list
-  # is wrong, so the review below would be re-run and re-posted every round.
-  # Not reviewing is the safe direction: no second verdict on the same head.
+  # A comment from an App outside PRIOR_AUTHORS carries this head's marker.
+  # The key comes from public fields, and a bot can repeat text that a person
+  # wrote, so the marker does not prove that the reviewer posted it. Write a
+  # warning and review the head. If the App is the reviewer's own and the login
+  # list is wrong, the head is reviewed again each round until the list is
+  # right.
+  # Trade-off: a wrong REVIEW_APP_SLUG costs one review per round for each such
+  # head. The old rule skipped the head and let a bot stop its review.
   FOREIGN_APPS="$(prompt_foreign_app_authors "$INFO" "$MARKER $KEY" "$PRIOR_AUTHORS")"
   if [ -n "$FOREIGN_APPS" ]; then
-    note_skip "WARNING — this head's marker was posted by $FOREIGN_APPS, which is not in the gate identity list ($PRIOR_AUTHORS); wrong REVIEW_APP_SLUG or a changed App login — not reviewing it again"
-    return 0
+    echo "PR #$PR: WARNING: a comment from $FOREIGN_APPS carries the marker of this head. $FOREIGN_APPS is not in the list of reviewer logins ($PRIOR_AUTHORS). The reviewer ignores that comment and reviews the head. If $FOREIGN_APPS is your own App, check PRREVIEW_REVIEW_APP_SLUG."
   fi
 
   # ── Did reviewing this exact head already fail? (lib/holdoff.sh) ─────────

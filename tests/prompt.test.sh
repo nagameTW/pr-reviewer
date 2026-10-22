@@ -295,9 +295,10 @@ is 'gate bodies: an empty allowlist admits no one' \
    "$(prompt_gate_bodies "$GATE_MIX" '')" ''
 is 'gate bodies: unparseable input yields nothing' \
    "$(prompt_gate_bodies 'not json' "$GATE_AUTHORS")" ''
-# prompt_foreign_app_authors: this head's marker from an App the list does not
-# name means the list is wrong. A person's copy, another head's marker and a
-# listed App do not count.
+# prompt_foreign_app_authors names the Apps whose comment carries this head's
+# marker and that the list does not name. The job writes a warning for them
+# and reviews the head (tests/trust.test.sh). A person's copy, another head's
+# marker and a listed App do not count.
 FOREIGN_MIX='{"reviews":[{"author":{"login":"app/review-bot"},"body":"<!-- pr-reviewer k1 -->"}],"comments":[{"author":{"login":"newreview-bot[bot]"},"body":"<!-- pr-reviewer k1 -->"},{"author":{"login":"app/newreview-bot"},"body":"<!-- pr-reviewer k1 -->"},{"author":{"login":"mallory"},"body":"<!-- pr-reviewer k1 -->"},{"author":{"login":"other[bot]"},"body":"<!-- pr-reviewer k0 -->"}]}'
 is 'foreign apps: an unlisted App posting this head marker is named, both login shapes' \
    "$(prompt_foreign_app_authors "$FOREIGN_MIX" 'pr-reviewer k1' "$GATE_AUTHORS")" 'app/newreview-bot newreview-bot[bot]'
