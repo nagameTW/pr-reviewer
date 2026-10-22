@@ -54,43 +54,41 @@
 <rect class="mask" x="315" y="260" width="86" height="16" rx="2"/><text class="t-arrow" x="358" y="272" text-anchor="middle">CALL FAILS</text>
 <rect class="mask" x="535" y="244" width="42" height="16" rx="2"/><text class="t-arrow" x="556" y="256" text-anchor="middle">NONE</text>
 <rect class="mask" x="604" y="242" width="64" height="16" rx="2"/><text class="t-arrow" x="636" y="254" text-anchor="middle">REFUTED</text>
-<rect class="mask" x="731" y="244" width="70" height="16" rx="2"/><text class="t-arrow" x="766" y="256" text-anchor="middle">SURVIVES</text>
-<g data-box="24 128 128 64">
-<rect class="raised" x="24" y="128" width="128" height="64" rx="6"/>
-<text class="t-name" x="36" y="150">Any round</text>
-<text class="t-sub" x="36" y="170">no blockers,</text>
-<text class="t-sub" x="36" y="186">about to approve</text>
+<rect class="mask" x="730" y="244" width="70" height="16" rx="2"/><text class="t-arrow" x="765" y="256" text-anchor="middle">SURVIVES</text>
+<g data-box="24 124 128 72">
+<rect class="raised" x="24" y="124" width="128" height="72" rx="6"/>
+<text class="t-name" x="36" y="146" textLength="70.0" lengthAdjust="spacing">Any round</text>
+<text class="t-sub" y="166" data-r="140"><tspan x="36" textLength="13.3" lengthAdjust="spacing">no</tspan><tspan x="55.7" textLength="48.0" lengthAdjust="spacing">blockers,</tspan><tspan x="110" textLength="30.0" lengthAdjust="spacing">about</tspan></text>
+<text class="t-sub" y="182"><tspan x="36" textLength="10.0" lengthAdjust="spacing">to</tspan><tspan x="49.3" textLength="43.4" lengthAdjust="spacing">approve</tspan></text>
 </g>
-<g class="focal" data-box="184 80 248 160"><rect class="hero focal-r" x="184" y="80" width="248" height="160" rx="6"/><text class="t-name" x="196" y="102">Red team</text><text class="t-sub" x="196" y="120">One more call argues</text><text class="t-sub" x="196" y="136">the approval is wrong.</text><circle class="bullet" cx="200" cy="154" r="3"/><text class="t-sub" x="210" y="158">parts of the diff that disagree</text><circle class="bullet" cx="200" cy="170" r="3"/><text class="t-sub" x="210" y="174">a limit at the wrong level</text><circle class="bullet" cx="200" cy="186" r="3"/><text class="t-sub" x="210" y="190">an error returned as success</text><circle class="bullet" cx="200" cy="202" r="3"/><text class="t-sub" x="210" y="206">a branch deciding from other input</text><circle class="bullet" cx="200" cy="218" r="3"/><text class="t-sub" x="210" y="222">a rule the repo's own docs pin</text></g>
+<g class="focal" data-box="184 80 248 160"><rect class="hero focal-r" x="184" y="80" width="248" height="160" rx="6"/><text class="t-name" x="196" y="102" textLength="63.0" lengthAdjust="spacing">Red team</text><text class="t-sub" y="120" data-r="420"><tspan x="196" textLength="22.7" lengthAdjust="spacing">One</tspan><tspan x="226.7" textLength="27.3" lengthAdjust="spacing">more</tspan><tspan x="262" textLength="18.0" lengthAdjust="spacing">call</tspan><tspan x="288" textLength="36.7" lengthAdjust="spacing">argues</tspan><tspan x="332.7" textLength="16.7" lengthAdjust="spacing">the</tspan><tspan x="357.3" textLength="46.0" lengthAdjust="spacing">approval</tspan><tspan x="411.3" textLength="8.7" lengthAdjust="spacing">is</tspan></text><text class="t-sub" y="136"><tspan x="196" textLength="36.0" lengthAdjust="spacing">wrong.</tspan></text><circle class="bullet" cx="200" cy="154" r="3"/><text class="t-sub" x="210" y="158" textLength="152.0" lengthAdjust="spacing">parts of the diff that disagree</text><circle class="bullet" cx="200" cy="170" r="3"/><text class="t-sub" x="210" y="174" textLength="128.7" lengthAdjust="spacing">a limit at the wrong level</text><circle class="bullet" cx="200" cy="186" r="3"/><text class="t-sub" x="210" y="190" textLength="152.7" lengthAdjust="spacing">an error returned as success</text><circle class="bullet" cx="200" cy="202" r="3"/><text class="t-sub" x="210" y="206" textLength="182.0" lengthAdjust="spacing">a branch deciding from other input</text><circle class="bullet" cx="200" cy="218" r="3"/><text class="t-sub" x="210" y="222" textLength="159.0" lengthAdjust="spacing">a rule the repo's own docs pin</text></g>
 <g data-box="464 112 128 96"><polygon class="diamond" points="528,112 592,160 528,208 464,160"/><text class="t-name" x="528" y="164" text-anchor="middle">Candidates?</text></g>
 <text class="t-eye" x="528" y="100" text-anchor="middle">CRITICAL or HIGH</text>
 <g data-box="640 112 216 96">
 <rect class="raised" x="640" y="112" width="216" height="96" rx="6"/>
-<text class="t-name" x="652" y="134">Refutation</text>
-<text class="t-sub" x="652" y="154">One call per candidate,</text>
-<text class="t-sub" x="652" y="170">up to 3. The same call</text>
-<text class="t-sub" x="652" y="186">as any blocking finding.</text>
+<text class="t-name" x="652" y="134" textLength="69.2" lengthAdjust="spacing">Refutation</text>
+<text class="t-sub" y="154" data-r="844"><tspan x="652" textLength="22.7" lengthAdjust="spacing">One</tspan><tspan x="678.2" textLength="18.0" lengthAdjust="spacing">call</tspan><tspan x="699.7" textLength="17.3" lengthAdjust="spacing">per</tspan><tspan x="720.6" textLength="55.4" lengthAdjust="spacing">candidate,</tspan><tspan x="779.4" textLength="13.3" lengthAdjust="spacing">up</tspan><tspan x="796.3" textLength="10.0" lengthAdjust="spacing">to</tspan><tspan x="809.8" textLength="10.0" lengthAdjust="spacing">3.</tspan><tspan x="823.3" textLength="20.7" lengthAdjust="spacing">The</tspan></text>
+<text class="t-sub" y="170"><tspan x="652" textLength="29.3" lengthAdjust="spacing">same</tspan><tspan x="684.7" textLength="18.0" lengthAdjust="spacing">call</tspan><tspan x="706" textLength="12.7" lengthAdjust="spacing">as</tspan><tspan x="722" textLength="19.3" lengthAdjust="spacing">any</tspan><tspan x="744.7" textLength="44.0" lengthAdjust="spacing">blocking</tspan><tspan x="792" textLength="38.7" lengthAdjust="spacing">finding.</tspan></text>
 </g>
 <g data-box="24 296 576 64">
 <rect class="raised" x="24" y="296" width="576" height="64" rx="6"/>
-<text class="t-name" x="36" y="318">Approval stands</text>
-<text class="t-sub" x="36" y="338">No candidates, a refuted candidate, or a failed or timed-out call.</text>
+<text class="t-name" x="36" y="318" textLength="109.7" lengthAdjust="spacing">Approval stands</text>
+<text class="t-sub" y="338"><tspan x="36" textLength="15.3" lengthAdjust="spacing">No</tspan><tspan x="54.7" textLength="61.4" lengthAdjust="spacing">candidates,</tspan><tspan x="119.4">a</tspan><tspan x="129.4" textLength="37.3" lengthAdjust="spacing">refuted</tspan><tspan x="170" textLength="55.4" lengthAdjust="spacing">candidate,</tspan><tspan x="228.7" textLength="10.7" lengthAdjust="spacing">or</tspan><tspan x="242.7">a</tspan><tspan x="252.7" textLength="28.7" lengthAdjust="spacing">failed</tspan><tspan x="284.7" textLength="10.7" lengthAdjust="spacing">or</tspan><tspan x="298.7" textLength="50.0" lengthAdjust="spacing">timed-out</tspan><tspan x="352.1" textLength="21.3" lengthAdjust="spacing">call.</tspan></text>
 </g>
 <g data-box="640 296 216 64">
 <rect class="alert-node" x="640" y="296" width="216" height="64" rx="6"/>
-<text class="t-name" x="652" y="318">Survivor: posted</text>
-<text class="t-sub" x="652" y="338">marked "raised by the red team"</text>
+<text class="t-name" x="652" y="318" textLength="111.2" lengthAdjust="spacing">Survivor: posted</text>
+<text class="t-sub" y="338"><tspan x="652" textLength="40.0" lengthAdjust="spacing">marked</tspan><tspan x="695.3" textLength="36.9" lengthAdjust="spacing">"raised</tspan><tspan x="735.6" textLength="12.7" lengthAdjust="spacing">by</tspan><tspan x="751.6" textLength="16.7" lengthAdjust="spacing">the</tspan><tspan x="771.6" textLength="17.3" lengthAdjust="spacing">red</tspan><tspan x="792.3" textLength="30.9" lengthAdjust="spacing">team"</tspan></text>
 </g>
 <g data-box="24 392 408 72">
 <rect class="optional" x="24" y="392" width="408" height="72" rx="6"/>
-<text class="t-title" x="40" y="416">Off by default.</text>
-<text class="t-sub" x="40" y="436"><tspan class="t-code">prreview set PRREVIEW_GATE_REDTEAM 1</tspan> turns it on.</text>
+<text class="t-title" x="40" y="416" textLength="94.1" lengthAdjust="spacing">Off by default.</text>
+<text class="t-sub" y="436"><tspan x="40" class="t-code" textLength="57.8" lengthAdjust="spacing">prreview</tspan><tspan x="105" class="t-code" textLength="21.7" lengthAdjust="spacing">set</tspan><tspan x="133.9" class="t-code" textLength="151.6" lengthAdjust="spacing">PRREVIEW_GATE_REDTEAM</tspan><tspan x="292.7" class="t-code">1</tspan><tspan x="303.3" textLength="26.7" lengthAdjust="spacing">turns</tspan><tspan x="333.3" textLength="6.0" lengthAdjust="spacing">it</tspan><tspan x="342.6" textLength="16.7" lengthAdjust="spacing">on.</tspan></text>
 </g>
 <g data-box="448 392 408 72">
 <rect class="strip" x="448" y="392" width="408" height="72" rx="6"/>
-<text class="t-title" x="464" y="416">Refutation only removes findings.</text>
-<text class="t-sub" x="464" y="436">The red team is the one step that looks</text>
-<text class="t-sub" x="464" y="452">for a defect the review missed.</text>
+<text class="t-title" x="464" y="416" textLength="225.5" lengthAdjust="spacing">Refutation only removes findings.</text>
+<text class="t-sub" y="436"><tspan x="464" textLength="20.7" lengthAdjust="spacing">The</tspan><tspan x="488" textLength="17.3" lengthAdjust="spacing">red</tspan><tspan x="508.7" textLength="26.7" lengthAdjust="spacing">team</tspan><tspan x="538.7" textLength="8.7" lengthAdjust="spacing">is</tspan><tspan x="550.7" textLength="16.7" lengthAdjust="spacing">the</tspan><tspan x="570.7" textLength="20.0" lengthAdjust="spacing">one</tspan><tspan x="594" textLength="22.7" lengthAdjust="spacing">step</tspan><tspan x="620" textLength="20.0" lengthAdjust="spacing">that</tspan><tspan x="643.3" textLength="28.0" lengthAdjust="spacing">looks</tspan><tspan x="674.7" textLength="14.0" lengthAdjust="spacing">for</tspan><tspan x="692">a</tspan><tspan x="702" textLength="32.7" lengthAdjust="spacing">defect</tspan><tspan x="738" textLength="16.7" lengthAdjust="spacing">the</tspan><tspan x="758" textLength="34.7" lengthAdjust="spacing">review</tspan><tspan x="796" textLength="41.3" lengthAdjust="spacing">missed.</tspan></text>
 </g>
 </g>
 </svg>

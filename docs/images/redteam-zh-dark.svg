@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 928 424" xmlns="http://www.w3.org/2000/svg" xml:lang="zh-TW" role="img" aria-labelledby="redteam-github-zh-dark-title redteam-github-zh-dark-desc" id="redteam-github-zh-dark-root">
+<title id="redteam-github-zh-dark-title">核准前的選用紅隊</title>
+<desc id="redteam-github-zh-dark-desc">某一輪無會擋下核准的問題、即將核准時，紅隊多呼叫一次模型，主張這個核准是錯的。最多 3 個候選問題，各再檢查一次是否誤判。確認不是誤判的候選問題才貼出，其餘情況核准維持不變。</desc>
+<defs>
+      <style>#redteam-github-zh-dark-root { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", Helvetica, Arial, sans-serif; color: #F0F6FC; }
+      #redteam-github-zh-dark-root .page { max-width: 1000px; width: 100%; }
+      #redteam-github-zh-dark-root .diagram-container { width: 100%; overflow-x: auto; }
+      #redteam-github-zh-dark-root .diagram-container { overflow-x: visible; }
+      #redteam-github-zh-dark-root .bg { fill: #0D1117; }
+      #redteam-github-zh-dark-root .edge-frame { fill: none; stroke: #656C76; stroke-width: 2; }
+      #redteam-github-zh-dark-root text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", Helvetica, Arial, sans-serif; fill: #F0F6FC; font-size: 12px; }
+      #redteam-github-zh-dark-root .t-name { font-size: 14px; font-weight: 600; }
+      #redteam-github-zh-dark-root .t-name-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; font-weight: 700; }
+      #redteam-github-zh-dark-root .t-sub { fill: #9198A1; }
+      #redteam-github-zh-dark-root .t-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+      #redteam-github-zh-dark-root .t-eye { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", Helvetica, Arial, sans-serif; font-size: 11px; letter-spacing: .08em; fill: #9198A1; }
+      #redteam-github-zh-dark-root .t-arrow { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", Helvetica, Arial, sans-serif; font-size: 11px; letter-spacing: .04em; fill: #9198A1; }
+      #redteam-github-zh-dark-root .t-alert { fill: #F85149; font-weight: 700; }
+      #redteam-github-zh-dark-root .t-chip { fill: #0D1117; font-weight: 700; }
+      #redteam-github-zh-dark-root .t-title { font-size: 14px; font-weight: 700; }
+      #redteam-github-zh-dark-root .mask { fill: #0D1117; }
+      #redteam-github-zh-dark-root .node { fill: #151B23; stroke: #656C76; stroke-width: 1.2; }
+      #redteam-github-zh-dark-root .raised { fill: #0D1117; stroke: #656C76; stroke-width: 1; }
+      #redteam-github-zh-dark-root .hero { fill: #111D2E; stroke: #4493F8; stroke-width: 2.4; }
+      #redteam-github-zh-dark-root .optional { fill: none; stroke: #656C76; stroke-width: 1.2; stroke-dasharray: 5 4; }
+      #redteam-github-zh-dark-root .zone { fill: none; stroke: #656C76; stroke-width: 1; stroke-dasharray: 4 4; }
+      #redteam-github-zh-dark-root .strip { fill: #151B23; stroke: #656C76; stroke-width: 1.2; }
+      #redteam-github-zh-dark-root .bar { fill: #DA3633; }
+      #redteam-github-zh-dark-root .alert-node { fill: #0D1117; stroke: #DA3633; stroke-width: 2; stroke-dasharray: 6 4; }
+      #redteam-github-zh-dark-root .edge { fill: none; stroke: #4493F8; stroke-width: 1.6; }
+      #redteam-github-zh-dark-root .edge-dash { fill: none; stroke: #4493F8; stroke-width: 1.4; stroke-dasharray: 5 4; }
+      #redteam-github-zh-dark-root .edge-alert { fill: none; stroke: #DA3633; stroke-width: 1.6; }
+      #redteam-github-zh-dark-root .mk { fill: #4493F8; }
+      #redteam-github-zh-dark-root .mk-alert { fill: #DA3633; }
+      #redteam-github-zh-dark-root .chip { fill: #F0F6FC; }
+      #redteam-github-zh-dark-root .dot { fill: #F0F6FC; }
+      #redteam-github-zh-dark-root .bullet { fill: #9198A1; }
+      #redteam-github-zh-dark-root .diamond { fill: #0D1117; stroke: #656C76; stroke-width: 1.4; }</style>
+<marker id="redteam-github-zh-dark-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon class="mk" points="0 0, 8 3, 0 6"/></marker>
+<marker id="redteam-github-zh-dark-arrow-alert" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon class="mk-alert" points="0 0, 8 3, 0 6"/></marker>
+</defs>
+<rect class="bg" width="928" height="424"/>
+<rect class="edge-frame" x="1" y="1" width="926" height="422" rx="8"/>
+<g transform="translate(0,-56)">
+<path class="edge" d="M200,152 H232" marker-end="url(#redteam-github-zh-dark-arrow)"/>
+<path class="edge" d="M480,152 H512" marker-end="url(#redteam-github-zh-dark-arrow)"/>
+<path class="edge" d="M640,152 H688" marker-end="url(#redteam-github-zh-dark-arrow)"/>
+<path class="edge-dash" d="M356,224 V288" marker-end="url(#redteam-github-zh-dark-arrow)"/>
+<path class="edge-dash" d="M576,200 V288" marker-end="url(#redteam-github-zh-dark-arrow)"/>
+<path class="edge-dash" d="M728,200 V248 Q728,256 720,256 H648 Q640,256 640,264 V288" marker-end="url(#redteam-github-zh-dark-arrow)"/>
+<path class="edge-alert" d="M856,200 V288" marker-end="url(#redteam-github-zh-dark-arrow-alert)"/>
+<rect class="mask" x="652" y="126" width="24" height="16" rx="2"/><text class="t-arrow" x="664" y="138" text-anchor="middle">有</text>
+<rect class="mask" x="377" y="248" width="58" height="16" rx="2"/><text class="t-arrow" x="406" y="260" text-anchor="middle">呼叫失敗</text>
+<rect class="mask" x="592" y="236" width="24" height="16" rx="2"/><text class="t-arrow" x="604" y="248" text-anchor="middle">無</text>
+<rect class="mask" x="649" y="234" width="70" height="16" rx="2"/><text class="t-arrow" x="684" y="246" text-anchor="middle">確認是誤判</text>
+<rect class="mask" x="766" y="236" width="82" height="16" rx="2"/><text class="t-arrow" x="807" y="248" text-anchor="middle">確認不是誤判</text>
+<g data-box="24 116 176 72">
+<rect class="raised" x="24" y="116" width="176" height="72" rx="6"/>
+<text class="t-name" x="36" y="138">任一輪</text>
+<text class="t-sub" y="158" data-r="188"><tspan x="36 48.8 61.6 74.4 87.2 100 112.8 125.6 138.4 150.4 163.2 176">無會擋下核准的問題，本輪</tspan></text>
+<text class="t-sub" y="174"><tspan x="36 48 60 72 84">即將核准。</tspan></text>
+</g>
+<g class="focal" data-box="232 80 248 144"><rect class="hero focal-r" x="232" y="80" width="248" height="144" rx="6"/><text class="t-name" x="244" y="102">紅隊</text><text class="t-sub" y="120"><tspan x="244 256 268 280 292 304 316 328 340 352 364 376 388 400 412 424 436 448">多呼叫一次模型，主張這個核准是錯的。</tspan></text><circle class="bullet" cx="248" cy="138" r="3"/><text class="t-sub" x="258" y="142">diff 中彼此矛盾的部分</text><circle class="bullet" cx="248" cy="154" r="3"/><text class="t-sub" x="258" y="158">套用範圍錯誤的限制</text><circle class="bullet" cx="248" cy="170" r="3"/><text class="t-sub" x="258" y="174">被當成成功結果回傳的錯誤</text><circle class="bullet" cx="248" cy="186" r="3"/><text class="t-sub" x="258" y="190">根據其他輸入決定結果的判斷分支</text><circle class="bullet" cx="248" cy="202" r="3"/><text class="t-sub" x="258" y="206">repo 文件已明文規定的規則</text></g>
+<g data-box="512 104 128 96"><polygon class="diamond" points="576,104 640,152 576,200 512,152"/><text class="t-name" x="576" y="156" text-anchor="middle">候選問題</text></g>
+<text class="t-eye" x="576" y="92" text-anchor="middle">嚴重度為 CRITICAL 或 HIGH</text>
+<g data-box="688 104 216 96">
+<rect class="raised" x="688" y="104" width="216" height="96" rx="6"/>
+<text class="t-name" x="700" y="126">再次檢查是否誤判</text>
+<text class="t-sub" y="146" data-r="892"><tspan x="700 712.9 725.8 738.8 751.7 764.6 777.5 790.5 803.4 816.3 829.2 842.2 854.2 867.1 880">每個候選問題呼叫一次模型，最多</tspan></text>
+<text class="t-sub" y="162" data-r="892"><tspan x="700">3</tspan><tspan x="710.8 722.8 734.9 747 759 771.1 783.2 795.3 807.4 819.5 831.6 843.7 855.8 867.9 880">次。呼叫方式與檢查會擋下核准的</tspan></text>
+<text class="t-sub" y="178"><tspan x="700 712 724 736 748 760">問題時相同。</tspan></text>
+</g>
+<g data-box="24 288 624 64">
+<rect class="raised" x="24" y="288" width="624" height="64" rx="6"/>
+<text class="t-name" x="36" y="310">核准維持不變</text>
+<text class="t-sub" y="330"><tspan x="36 48 60 72 84 96 108 120 132 144 156 168 180 192 204 216 228 240 252 264 276 288 300 312 324 336 348 360 372 384 396">有三種情況：無候選問題；再次檢查後確認是誤判；呼叫失敗或逾時。</tspan></text>
+</g>
+<g data-box="688 288 216 64">
+<rect class="alert-node" x="688" y="288" width="216" height="64" rx="6"/>
+<text class="t-name" x="700" y="310">再次檢查後確認不是誤判</text>
+<text class="t-sub" y="330"><tspan x="700 712 724 736 748 760 772 784 796 808 820 832 844 856 868 880">貼出該問題，標示為「紅隊提出」。</tspan></text>
+</g>
+<g data-box="24 384 432 72">
+<rect class="optional" x="24" y="384" width="432" height="72" rx="6"/>
+<text class="t-title" x="40" y="408">預設關閉。</text>
+<text class="t-sub" y="428"><tspan x="40 52">執行</tspan><tspan x="67.3" class="t-code" textLength="57.8" lengthAdjust="spacing">prreview</tspan><tspan x="132.3" class="t-code" textLength="21.7" lengthAdjust="spacing">set</tspan><tspan x="161.2" class="t-code" textLength="151.6" lengthAdjust="spacing">PRREVIEW_GATE_REDTEAM</tspan><tspan x="320" class="t-code">1</tspan><tspan x="330.6 342.6 354.6">開啟。</tspan></text>
+</g>
+<g data-box="472 384 432 72">
+<rect class="strip" x="472" y="384" width="432" height="72" rx="6"/>
+<text class="t-title" x="488" y="408">再次檢查是否誤判只會移除問題。</text>
+<text class="t-sub" y="428"><tspan x="488 500 512 524 536 548 560 572 584 596 608 620 632 644 656">只有紅隊會尋找審查遺漏的缺陷。</tspan></text>
+</g>
+</g>
+</svg>
