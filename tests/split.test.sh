@@ -91,8 +91,8 @@ is  'gate: 41 counted files plus 10 localization files ask for a split' "$(rc me
 is  'gate: the raw count of 50 would have asked for a split' "$(rc merge_size_allowed 100 "$(printf '%s\n%s\n' "$P40" "$L10" | grep -c '')" 2000 40)" 1
 is  'l10n: the localization files stay in the list the slices are built from' "$(printf '%s\n%s\n' "$P40" "$L10" | grep -c 'locales')" 10
 has 'request: names the files that do not count' '10 are localization data files: they do not count toward the file limit and are still reviewed' "$(split_request_text 2543 52 2000 40 "$FILES" 10)"
-is  'request: no localization sentence when none were skipped' "$(case "$(split_request_text 2543 12 2000 40 "$FILES")" in *localization*) echo yes;; *) echo no;; esac)" no
-is  'request: a zero skipped count adds no sentence' "$(case "$(split_request_text 2543 12 2000 40 "$FILES" 0)" in *localization*) echo yes;; *) echo no;; esac)" no
+is  'request: no localization sentence when none were skipped' "$(split_request_text 2543 12 2000 40 "$FILES" | grep -c localization)" 0
+is  'request: a zero skipped count adds no sentence' "$(split_request_text 2543 12 2000 40 "$FILES" 0 | grep -c localization)" 0
 
 # ── the claim section for the prompt ──────────────────────────────────────
 SEC="$(split_claim_section claim "$(split_exempt_claim "$BODY_CLAIM")" N0NCE)"
