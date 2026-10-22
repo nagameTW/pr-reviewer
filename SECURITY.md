@@ -97,15 +97,17 @@ was refused. Before these flags, `Bash` was in the tool set. In the same
 check, the shell commands `ls`, `cat`, `git log` and `git show` ran inside the
 clone without an allow rule.
 
-**The merge base sets the rules.** The review tree is the PR's merge base with
-the diff applied, and convention files such as `CLAUDE.md` are read as they are
-at the PR's merge base. For a PR based on another branch, the merge base is on
-that branch, so each convention file the tree has is replaced with the default
-branch's version, or removed when the default branch does not have it. A file
-that only the default branch has is not added. If a step of the replacement
-fails, the PR is not reviewed that round. The match is exact in file name
-case, so a PR's edit to a differently cased file such as `readme.md` is not
-restored. The author's branch is never checked out.
+**The default branch sets the rules.** The review tree is the PR's merge base
+with the diff applied. Convention files (`CLAUDE.md`, `CLAUDE.local.md`,
+`AGENTS.md`, `.mcp.json`, `.claude/`, README, CONTRIBUTING and
+`.github/review-checks.md`) come from the newest commit of the default branch
+for every PR, matched in any letter case. The copy comes after the diff is
+applied. A file the default branch lacks is removed, and a file only the
+default branch has is added. This also covers a PR based on another branch,
+whose parent branch is not protected. If a step of the copy fails, the PR is
+not reviewed that round. A file outside this list stays as the PR has it. An
+old branch is reviewed with today's rules, and there is no switch to turn that
+off. The author's branch is never checked out.
 
 **Comments with PR text or model output are scanned.** Every comment that
 carries PR text or model output is checked against the operator's

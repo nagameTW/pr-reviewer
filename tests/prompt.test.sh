@@ -383,14 +383,14 @@ is 'linked issue: an empty body yields nothing, not an error' \
 is 'repo context: prints a sentence' "$(prompt_repo_context >/dev/null && echo yes)" 'yes'
 is 'repo context: PRREVIEW_GATE_REPO_CONTEXT replaces the conventions sentence' "$(PRREVIEW_GATE_REPO_CONTEXT='mine' prompt_repo_context | cut -d' ' -f1)" 'mine'
 is 'repo context: the review-checks sentence stays when it is set' "$(PRREVIEW_GATE_REPO_CONTEXT='mine' prompt_repo_context | grep -c 'review-checks.md')" '1'
-# Where the convention files come from. For a PR based on another branch the
-# harness replaces the convention files the tree already has with the default
-# branch's versions, or removes them. It adds none (pr-autoreview.sh walks
-# `git ls-files` of the checked-out tree). The text must say no more than that.
+# Where the convention files come from. For every PR the harness copies them
+# from the newest commit of the default branch, after the diff is applied
+# (pr-autoreview.sh, tree_force_convention_files). It removes the ones the
+# default branch lacks. The text must say that, and must not say the branch
+# point or the base branch.
 CTX="$(prompt_repo_context)"
-is 'repo context: it does not claim that all of the files come from the default branch' "$(grep -c 'All of them come from the default branch' <<<"$CTX")" '0'
-has '...at the branch point for a PR into the default branch' 'For a PR into the default branch, they are as they were at the commit the author branched from.' "$CTX"
-has '...and replaced or removed for a stacked PR' 'For a PR based on another branch, the convention files the tree already has are replaced with the versions on the newest commit of the default branch, or removed when the default branch does not have them.' "$CTX"
+has 'repo context: every PR gets the files from the newest commit of the default branch' 'For every PR, the harness copies these files from the newest commit of the default branch into the tree before the review, and removes any that the default branch does not have.' "$CTX"
+is 'repo context: it does not say the branch point' "$(grep -c 'branched from' <<<"$CTX")" '0'
 is 'repo context: it never says the base branch' "$(grep -c 'base branch' <<<"$CTX")" '0'
 
 # ── prompt_tree_clause: the model must be told what it is standing in ──────

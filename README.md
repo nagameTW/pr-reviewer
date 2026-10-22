@@ -20,11 +20,11 @@ posts one comment with a verdict and the findings.
   your code is never run. MCP servers and slash commands are off. This needs
   Claude Code 2.1.305 or later.
 - **A PR's edits to convention files are reverted.** `CLAUDE.md`, `AGENTS.md`
-  and the repo's other convention files are read as they are at the PR's
-  merge base. For a PR based on another branch, each one the tree has is
-  replaced with the default branch's version, or removed when the default
-  branch does not have it. The match is exact in file name case, so an edit to
-  a file such as `readme.md` is not reverted.
+  and the repo's other convention files come from the newest commit of the
+  default branch, for every PR. A file the default branch does not have is
+  removed from the tree. The match ignores file name case, so `readme.md` is
+  covered too. The copy comes after the PR's diff is applied. An old branch is
+  therefore reviewed with today's rules.
 - **It tries to prove itself wrong.** Each blocking finding, up to six a
   round, gets a second call that argues against it, and a finding that call
   refutes is dropped.
@@ -119,8 +119,9 @@ It does:
   are skipped until they are marked ready.
 - Read the repo the way a reviewer would: the whole tree at the PR's merge base
   with the PR's diff applied, plus the conventions the repo writes down for
-  itself (`CLAUDE.md` or `AGENTS.md`, then `README` and `CONTRIBUTING`, and
-  `.github/review-checks.md` if the repo has one).
+  itself, taken from the default branch (`CLAUDE.md` or `AGENTS.md`, then
+  `README` and `CONTRIBUTING`, and `.github/review-checks.md` if the repo has
+  one).
 - Split big diffs into slices and review each one with the full checklist.
 - Make one refutation call per blocking finding (up to six a round), which
   tries to prove the finding wrong, and drop the ones it refutes.
@@ -307,11 +308,11 @@ Two more places add rules for a single repo:
   repo wants on every PR. The model applies each one like a numbered item,
   with the same severities.
 
-Files in the repo are read as they are at the PR's merge base, so a PR cannot
-loosen a check in the same diff it is reviewed against. For a PR based on
-another branch, the ones the tree has are replaced with the default branch's
-versions, so the parent branch cannot loosen a check either. This holds only
-when the file name matches in exact case.
+These files are read from the newest commit of the default branch, so a PR
+cannot loosen a check in the same diff it is reviewed against. A parent branch
+cannot loosen a check either. The file name can be in any letter case. A change
+to the checks takes effect for every open PR at its next review, including old
+branches. Merge it first when a PR must be judged by the new checks.
 
 A `.github/review-checks.md` can be as short as this:
 
@@ -768,12 +769,13 @@ works in place of the loop, and a lock stops two rounds from overlapping.
    them, before any model call.
 3. **Build.** Update the local clone of the repo, add a per-PR worktree, check
    out the merge base of the PR in it, and apply the PR's diff on top. The
-   author's branch is never checked out, and the convention files are restored
-   from the merge base, matched by exact file name case. For a PR based on
-   another branch, each one the tree has is replaced with the default branch's
-   version, or removed when the default branch does not have it. A file that
-   only the default branch has is not added. If a step of the replacement
-   fails, the round skips that PR and tries again next round.
+   author's branch is never checked out. Then, for every PR, the convention
+   files are copied from the newest commit of the default branch, matched
+   without regard to file name case. A file the tree has and the default
+   branch lacks is removed. A file only the default branch has is added. The
+   copy comes after the diff, so a convention file that is newer on the default
+   branch cannot make the diff fail to apply. If a step of the copy fails, the
+   round skips that PR and tries again next round.
    The diff is fetched once, for the exact head commit the verdict will name,
    and the list of changed files is read from that same diff. A push that
    lands during the round cannot swap in another head. If the merge base
@@ -784,11 +786,11 @@ works in place of the loop, and a lock stops two rounds from overlapping.
    `AGENTS.md -> CLAUDE.md`, is fine. Any other symlink stops the review: one
    that points outside the clone, into `.git` or nowhere; one to a folder,
    since a path through a folder link can climb out with `..`; and one from a
-   convention file (`CLAUDE.md`, `AGENTS.md`, anything under `.claude/`, a
-   README or CONTRIBUTING file, `.github/review-checks.md`) to anything but
-   another convention file the base branch already has under exactly that
-   name, since the PR could
-   edit that file and so write the rules it is judged by. The model's
+   convention file (`CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, `.mcp.json`,
+   anything under `.claude/`, a README or CONTRIBUTING file,
+   `.github/review-checks.md`) to anything but another convention file that git
+   tracks, since the PR could edit any other file and so write the rules it is
+   judged by. The model's
    read access is limited by path, and a link can lead it past that limit. A
    symlink the PR adds gets a comment asking the author to fix or remove it. One already on the
    base branch stops every PR against that branch with no comment: the round
@@ -1033,7 +1035,7 @@ Who controls each input, and how the reviewer treats it:
 | --- | --- | --- |
 | PR title and description, the title and body of the issue the PR links | The PR author, or whoever wrote the issue | Data. A match with your sensitive patterns stops the review |
 | The diff and every file the PR adds or changes | The PR author | Data, read with read-only tools and never run. Symlinks are checked first |
-| Convention files: `CLAUDE.md`, `AGENTS.md`, `.claude/`, README, CONTRIBUTING, `.github/review-checks.md` | The PR's merge base. For a PR based on another branch, the default branch | Rules the review follows. A PR's edits to them are reverted before the review, when the file name matches in exact case |
+| Convention files: `CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, `.mcp.json`, `.claude/`, README, CONTRIBUTING, `.github/review-checks.md` | The newest commit of the default branch, for every PR | Rules the review follows. A PR's edits to them are replaced before the review, with the file name matched in any letter case. Any other file in the repo stays as the PR has it |
 | The checklist, the settings, the sensitive-data patterns | You | Rules. They live outside the reviewed repo |
 | The model's answer | The model, after reading all of the above | Untrusted. Shape-checked, blocking findings argued against, scanned before it is posted |
 | Who can make it spend model budget | Anyone who can push a branch to a watched repo, and the logins in `PRREVIEW_GATE_TRUSTED_AUTHORS` | The reviewer skips a PR from a fork unless its author is trusted or you name the PR with `prreview once --pr`. For the PRs it reads, each push, each edit of the PR's title, description or base branch, and each push to the parent branch of a stacked PR, starts a new round that costs model usage. An edit of the title, description or base branch on an unchanged head waits for `PRREVIEW_GATE_PR_COOLDOWN_MIN` (10 minutes by default) after the reviewer's last comment, so repeated edits cost one review per cooldown. A push to the PR branch never waits. A push to the parent branch of a stacked PR can wait up to the cooldown |
@@ -1067,13 +1069,13 @@ Who controls each input, and how the reviewer treats it:
   starts with `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN` and
   `GITHUB_ENTERPRISE_TOKEN` empty. The model has no shell to read them with,
   so this is an extra layer only.
-- **The merge base sets the rules.** The tree is the merge base plus the diff,
-  and convention files, `.github/review-checks.md` included, are read as they
-  are at the PR's merge base. For a PR based on another branch, each one the
-  tree has is replaced with the default branch's version, or removed when the
-  default branch does not have it. A file that only the default branch has is
-  not added. The match is exact in file name case, so a PR's edit to a
-  differently cased file such as `readme.md` is not restored.
+- **The default branch sets the rules.** The tree is the merge base plus the
+  diff, and convention files, `.github/review-checks.md` included, come from
+  the newest commit of the default branch for every PR. The match ignores file
+  name case. A file the default branch lacks is removed. A file only the
+  default branch has is added. A file outside that list, such as a file under
+  `docs/` or a workflow, stays as the PR has it. An old branch is reviewed with
+  today's rules. This is intended, and there is no switch to turn it off.
 - **Scratch files stay out of `/tmp`.** The diff, the slices and every raw
   model answer live under `PRREVIEW_GATE_WORKROOT`, not in a shared temp directory
   another process could rewrite between steps.
