@@ -146,7 +146,8 @@ cat > "$FAKE/gh" <<'EOF'
 #!/usr/bin/env bash
 case "$1 $2" in
   "--version"*) printf 'gh version %s (2024-11-27)\n' "${FAKE_GH_VERSION:-2.63.0}" ;;
-  "auth status") exit 0 ;;
+  "auth status") exit "${FAKE_GH_AUTH_RC:-0}" ;;
+  "auth login") echo login >> "${FAKE_GH_LOGIN_LOG:-/dev/null}" ;;
   "api user") echo me ;;
   "repo list") printf 'me/api\nme/web\n' ;;
   "repo view") r="${3#https://github.com/}"; [ "$r" != me/old ] || r=me/new
@@ -635,5 +636,99 @@ is 'restart on Linux fails when the unit cannot be enabled again' "$RC" 1
 is '...and does not restart it half-way' "$(grep -c -- '--user restart' "$T/systemctl.log")" 0
 printf '#!/bin/sh\ncase "$*" in *start*|*enable*|*is-active*) exit 3 ;; esac\n' > "$T/sysd/systemctl"
 has 'prreview start that fails says so' "$("${PRREVIEW_ENV[@]}" PRREVIEW_PLATFORM=linux PATH="$T/sysd:$FAKE:$PATH" bash "$ROOT/prreview" start 2>&1)" 'did not start'
+
+
+# ── arguments, --help and --version ───────────────────────────────────────
+# A home with the service installed and a systemctl stub that logs every call:
+# a command that reads its arguments wrongly shows up as a logged call or as
+# a unit file that is gone.
+SVC="$T/svc-home"; mkdir -p "$SVC/.config/systemd/user" "$T/svc-bin"
+printf '[Unit]\n' > "$SVC/.config/systemd/user/$PRREVIEW_SERVICE_NAME.service"
+printf '#!/bin/sh\necho "$*" >> "%s"\n' "$T/svc.log" > "$T/svc-bin/systemctl"; chmod +x "$T/svc-bin/systemctl"
+: > "$T/svc.log"
+svc() { "${PRREVIEW_ENV[@]}" HOME="$SVC" PRREVIEW_PLATFORM=linux PATH="$T/svc-bin:$FAKE:$PATH" bash "$ROOT/prreview" "$@"; }
+UNIT_FILE="$SVC/.config/systemd/user/$PRREVIEW_SERVICE_NAME.service"
+OUT="$(svc uninstall --help 2>&1)"; RC=$?
+is 'uninstall --help exits 0' "$RC" 0
+has '...prints the usage line' "$OUT" 'usage: prreview uninstall'
+is '...and leaves the installed service in place' "$([ -f "$UNIT_FILE" ] && echo kept || echo removed)" kept
+is '...and sends nothing to the service manager' "$(cat "$T/svc.log")" ''
+OUT="$(svc stop --whatever 2>&1)"; RC=$?
+is 'stop with an unknown argument exits 2' "$RC" 2
+has '...names the argument' "$OUT" 'unknown argument: --whatever'
+is '...and sends nothing to the service manager' "$(cat "$T/svc.log")" ''
+
+# Every subcommand, with one argument it does not take. A command that needs
+# a name or a repository gets a valid one first.
+CFG_SVC="$SVC/.config/pr-reviewer/config"
+for cmd in setup run once status logs repos get unset checks start stop restart uninstall version help; do
+  case "$cmd" in
+    get|unset) args=(parallel --bogus-arg) ;;
+    *) args=(--bogus-arg) ;;
+  esac
+  OUT="$(svc "$cmd" "${args[@]}" 2>&1 </dev/null)"; RC=$?
+  is "$cmd rejects an unknown argument with exit 2" "$RC" 2
+  has "...$cmd names it" "$OUT" 'unknown argument: --bogus-arg'
+  [ "$cmd" = help ] || has "...$cmd prints its own usage line" "$OUT" "usage: prreview $cmd"
+done
+for args in 'repos list --bogus-arg' 'repos add me/x --bogus-arg' 'repos remove me/x --bogus-arg' 'checks path --bogus-arg' 'checks add 50-x --bogus-arg' 'checks remove 5 --bogus-arg' 'run --service --bogus-arg' 'logs -f --bogus-arg' 'once --pr me/api#1 --bogus-arg'; do
+  # shellcheck disable=SC2086
+  OUT="$(svc $args 2>&1 </dev/null)"; RC=$?
+  is "'$args' exits 2" "$RC" 2
+  has "...and names the extra argument" "$OUT" 'unknown argument: --bogus-arg'
+done
+is 'no unknown argument sent anything to the service manager' "$(cat "$T/svc.log")" ''
+is '...or removed the unit file' "$([ -f "$UNIT_FILE" ] && echo kept || echo removed)" kept
+is '...or wrote a settings file' "$([ -e "$CFG_SVC" ] && echo written || echo none)" none
+
+# --help and -h, anywhere among the arguments, print the usage and do nothing.
+for cmd in setup run once status logs repos set get unset checks start stop restart uninstall version; do
+  for flag in --help -h; do
+    OUT="$(svc "$cmd" "$flag" 2>"$T/help.err" </dev/null)"; RC=$?
+    is "$cmd $flag exits 0" "$RC" 0
+    has "...and prints 'usage: prreview $cmd'" "$OUT" "usage: prreview $cmd"
+    is "...with nothing on stderr" "$(cat "$T/help.err")" ''
+  done
+done
+has 'repos add --help prints the usage of repos' "$(svc repos add --help 2>&1)" 'usage: prreview repos'
+has 'help --help prints the whole list' "$(svc help --help 2>&1)" 'prreview checks path'
+is 'no --help sent anything to the service manager' "$(cat "$T/svc.log")" ''
+is '...or removed the unit file' "$([ -f "$UNIT_FILE" ] && echo kept || echo removed)" kept
+is '...or wrote a settings file' "$([ -e "$CFG_SVC" ] && echo written || echo none)" none
+# set takes any value after the name, so --help there is a value.
+has 'set takes -h as a value after the name' "$(svc set PRREVIEW_GATE_PARALLEL -h 2>&1)" 'takes a whole number'
+
+TOP_RELEASE="$(grep -m1 -E '^## \[[0-9]' CHANGELOG.md | sed 's/^## \[\([^]]*\)\].*/\1/')"
+is 'the CHANGELOG has a release to read the version from' "$([ -n "$TOP_RELEASE" ] && echo found)" found
+is 'prreview --version prints the newest release in the CHANGELOG' "$(prreview --version 2>&1)" "prreview $TOP_RELEASE"
+is 'prreview version prints the same' "$(prreview version 2>&1)" "prreview $TOP_RELEASE"
+has 'help lists the version command' "$(prreview help)" 'prreview version'
+
+# ── gh login messages ─────────────────────────────────────────────────────
+: > "$T/login.log"
+OUT="$(printf 'y\n' | FAKE_GH_AUTH_RC=1 FAKE_GH_LOGIN_LOG="$T/login.log" "$TIMEOUT_BIN" 30 "${PRREVIEW_ENV[@]}" bash "$ROOT/prreview" setup 2>&1)"
+is 'setup without a terminal does not start gh auth login' "$(cat "$T/login.log")" ''
+has '...and prints the command to run' "$OUT" 'gh auth login'
+OUT="$(printf 'n\n' | FAKE_GH_AUTH_RC=1 prreview setup 2>&1)"
+has '...and stops at the GitHub step, as it does at the Claude Code login' "$OUT" "setup stopped at 'GitHub'"
+has 'a repository gh cannot see, with gh logged out, says to run gh auth login' \
+   "$(FAKE_GH_AUTH_RC=1 prreview repos add nobody/else 2>&1)" 'gh auth login'
+has '...in setup too' "$(printf 'nobody/else\nn\n' | FAKE_GH_AUTH_RC=1 prreview setup 2>&1)" 'gh auth login'
+case "$(prreview repos add nobody/else 2>&1)" in
+  *'gh auth login'*) bad 'with gh logged in, the repository message does not blame the login' 'no gh auth login' 'it was there' ;;
+  *) ok 'with gh logged in, the repository message does not blame the login' ;;
+esac
+printf '#!/bin/sh\nexit 1\n' > "$T/failgh"; chmod +x "$T/failgh"
+OUT="$(PRREVIEW_GATE_REPOS=a/b GH_BIN="$T/failgh" bash "$ROOT/pr-autoreview.sh" 2>&1)"
+has 'the gate that cannot tell its account says to run gh auth login' "$OUT" 'gh auth login'
+case "$OUT" in *—*) bad '...and has no em dash' 'no em dash' "$OUT" ;; *) ok '...and has no em dash' ;; esac
+
+# ── names and editors ─────────────────────────────────────────────────────
+OUT="$(prreview set bogus 1 2>&1)"
+has 'set with an unknown name says where the names are' "$OUT" 'docs/configuration.md'
+has '...and still names the one it refused' "$OUT" 'not a setting name: bogus'
+OUT="$(TEST_EDITOR="$T/no-such-editor" prreview checks add 52-noeditor </dev/null 2>&1)"
+has 'an editor that does not run names EDITOR' "$OUT" 'EDITOR'
+has '...and VISUAL, which prreview reads next' "$OUT" 'VISUAL'
 
 if [ "$FAILED" -eq 0 ]; then echo "PASS: prreview"; else echo "FAIL: prreview"; exit 1; fi

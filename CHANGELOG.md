@@ -138,6 +138,23 @@ All notable changes to this project are recorded here. The format follows
 
 ### Fixed
 
+- Every `prreview` command rejects an argument it does not take. It prints
+  `unknown argument: X` and the usage line of that command, exits with code 2,
+  and changes nothing. Before, `prreview uninstall --help` removed the
+  background service, and `prreview run --help` started the loop.
+- Every `prreview` command takes `--help` and `-h`. It prints the usage and
+  exits 0 with no side effect. `prreview version` and `prreview --version`
+  print the newest release in this file.
+- `prreview setup` does not start `gh auth login` when stdin is not a
+  terminal and gh is not logged in. It prints the command and stops at the
+  GitHub step, as it does at the Claude Code login.
+- When `gh auth status` fails, "cannot see owner/repo with this gh login"
+  says to run `gh auth login`. The gate message "could not tell which GitHub
+  account" says it too, and it has no em dash.
+- `prreview set` with a name that is not a setting points to
+  `docs/configuration.md`.
+- When the editor for `prreview checks add` does not run, the error names
+  `EDITOR` and `VISUAL`.
 - Review findings often cited the wrong line. The model read the raw diff
   with the Read tool, which prints a line number in front of each line, and
   it copied that number instead of the line in the source file. In a bench of
