@@ -268,7 +268,13 @@ setup_github() {
     "${GH_BIN:-gh}" auth login || return 1
   fi
   say "gh is logged in as $("${GH_BIN:-gh}" api user --jq .login 2>/dev/null || echo '?')."
-  # The reviewer clones with `gh repo clone`, which follows this setting.
+  return 0
+}
+
+# The reviewer clones with `gh repo clone`, which follows git_protocol, and
+# the background service has no ssh-agent. Asked only where the service is
+# installed or started, since the answer changes gh for every program.
+offer_https_for_service() {
   [ "$("${GH_BIN:-gh}" config get git_protocol -h github.com 2>/dev/null)" = ssh ] || return 0
   say "gh clones over ssh. The background service has no ssh-agent to unlock your key (a systemd user service gets none), so its clones can fail; over https, gh signs in with its own login."
   if yes_no "Switch gh to https ('gh config set git_protocol https -h github.com')?" y; then
@@ -444,14 +450,17 @@ setup_checks() {
 SETUP_DONE="Done. 'prreview run' reviews from this terminal until you stop it; 'prreview once' does one round."
 SETUP_DONE_RUNNING="Done. The service is running; 'prreview logs -f' follows it."
 setup_service() {
-  local where="$PLATFORM" state
+  local where="$PLATFORM" state default=y
   case "$where" in
     macos) where="launchd (starts at login)" ;;
     linux) where="a systemd user service (starts at login)" ;;
     wsl) where="a systemd user service inside WSL" ;;
     *) say "No background service on this system. Run 'prreview run' yourself."; return 0 ;;
   esac
-  if ! yes_no "Run the reviewer in the background with $where?" y; then
+  # A service that is not installed yet comments on every open PR as soon as
+  # it starts, so installing it is a choice. One that is installed stays.
+  [ "$(prreview_service_state "$PLATFORM")" != "not installed" ] || default=n
+  if ! yes_no "Run the reviewer in the background with $where?" "$default"; then
     # One that is already running still holds the old settings.
     restart_if_running
     state="$(prreview_service_state "$PLATFORM")"
@@ -462,6 +471,7 @@ setup_service() {
     esac
     return 0
   fi
+  offer_https_for_service
   prreview_service_install "$PLATFORM" "$PRREVIEW_HOME" "$LOG" || return 1
   # systemctl enable --now leaves a running service alone; it read its
   # settings when it started, so restart it (launchd's reinstall already did).
@@ -669,6 +679,8 @@ cmd_start() {
   # would restart it every 30 seconds for nothing.
   [ -n "${PRREVIEW_GATE_REPOS:-$(setting PRREVIEW_GATE_REPOS)}" ] || die "no repositories are set; run prreview setup first"
   state="$(prreview_service_state "$PLATFORM")"
+  # Trade-off: with gh on ssh, start asks, so it needs a terminal or piped answers.
+  [ "$state" = running ] || offer_https_for_service
   case "$state" in
     running) say "Already running." ;;
     "not installed") prreview_service_install "$PLATFORM" "$PRREVIEW_HOME" "$LOG" && say "Installed and started." ;;

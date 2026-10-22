@@ -50,8 +50,8 @@ models. Current costs can differ.
 
 It is plain bash on top of `gh`, `git`, `jq` and the `claude` CLI. There is no
 server and no webhook: a loop polls once a minute, and each round is one run
-of `pr-autoreview.sh`. `prreview setup` walks you through the settings and installs
-the loop as a background service.
+of `pr-autoreview.sh`. `prreview setup` walks you through the settings and, if you
+say yes, installs the loop as a background service.
 
 ## Contents
 
@@ -250,7 +250,9 @@ chooses one the same way it does for the built-in items.
   over the protocol `gh config get git_protocol` reports and fetches with
   `gh`'s own login. With `ssh`, the background service has to use your SSH
   key with no prompt and possibly no ssh-agent (a systemd user service gets
-  none), so `prreview setup` offers to switch `gh` to `https`.
+  none), so `prreview setup` offers to switch `gh` to `https` when you choose
+  the background service. `prreview start` offers it too, when it installs or
+  starts the service. The switch changes `gh` for all programs, not only this one.
 - **[Claude Code](https://code.claude.com/docs/en/overview) 2.1.305
   or later**, the `claude` CLI, logged in. `prreview setup` checks both, with
   `claude --version` and `claude auth status`, and the reviewer refuses to start
@@ -352,8 +354,6 @@ brackets:
 2. **Claude Code.** Checks that `claude` is logged in (`claude auth status`),
    and stops if it is not.
 3. **GitHub.** Checks `gh` is logged in, and offers to run `gh auth login`.
-   If `gh` clones over `ssh`, offers to switch it to `https` (see
-   [Requirements](#requirements)).
 4. **Repositories.** Lists up to 30 repositories of your own account; pick by
    number, or type `owner/repo` for any other, such as an organization's.
 5. **Who posts.** Your `gh` account, or a GitHub App (see
@@ -369,8 +369,13 @@ brackets:
 9. **Checklist.** Offers to copy `checks/` to
    `~/.config/pr-reviewer/checks`, so you can add and remove items
    without touching the clone.
-10. **Background service.** Installs a launchd agent on macOS or a systemd
-    user service on Linux, and starts it. It starts again at every login,
+10. **Background service.** Asks whether to install a launchd agent on macOS or
+    a systemd user service on Linux. The answer defaults to `n` while no
+    service is installed, and to `y` once one is. On `y`, the service starts
+    at once and reviews the open PRs of your repositories. If `gh` clones
+    over `ssh`, setup first offers to switch it to `https` (see
+    [Requirements](#requirements)). On `n`, setup does not ask about `gh`
+    and does not change it. An installed service starts again at every login,
     checks for new PRs every minute, and restarts if it stops. On Linux,
     systemd stops a user service when you log out and does not start it at
     boot; run `sudo loginctl enable-linger "$USER"` once to keep it running.
@@ -383,7 +388,9 @@ line. A value is taken literally: no quotes, nothing expanded. Run
 
 Once installed, the service looks for open PRs right away and reviews any it
 finds. With none open, it runs a round only every 15 minutes
-(`PRREVIEW_LOOP_IDLE_EVERY`), to catch PRs merged in the meantime.
+(`PRREVIEW_LOOP_IDLE_EVERY`), to catch PRs merged in the meantime. If you
+answered `n` at the service step, nothing reviews until you run
+`./prreview start`, `./prreview run` or `./prreview once`.
 
 ```bash
 ./prreview status    # the main settings, service state, the last log lines
@@ -414,9 +421,9 @@ ROUND USAGE: 3 call(s)  in=28 out=6978 cache_read=347346 cache_write=40101  cost
 ```
 
 Run it again without pushing anything and the PR is skipped: the head already
-has its comment. For the same reason, `./prreview once` right after setup usually
-prints `this head was already handled` for every PR, because the service got
-there first. If it prints `another pr-autoreview run holds … — exiting`, the
+has its comment. For the same reason, with the service installed,
+`./prreview once` right after setup usually prints
+`this head was already handled` for every PR, because the service got there first. If it prints `another pr-autoreview run holds … — exiting`, the
 service is in the middle of a round. `./prreview logs -f` shows that round, or run
 `./prreview stop` first to try `once` on its own and `./prreview start` afterwards; a
 stopped service stays stopped.

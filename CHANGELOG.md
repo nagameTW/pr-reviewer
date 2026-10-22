@@ -18,6 +18,18 @@ All notable changes to this project are recorded here. The format follows
   skip the lint step. It prints the versions of bash, gh, git, jq and flock
   first, and it runs every test with the bash that runs it.
 
+- `prreview setup` no longer installs the background service by default. The
+  question defaults to `n` while no service is installed, and to `y` once one
+  is, so pressing Enter keeps what you have. A new service reviews every open
+  PR in the listed repositories as soon as it starts, so installing it is now
+  a choice. To install it later, run `prreview start`.
+- The question that switches `gh` to `https` moved from the GitHub step to the
+  service. It is asked only when `gh` clones over `ssh` and you answer `y` to
+  the service question, or when `prreview start` installs or starts the
+  service. The switch changes `gh` for all programs, so a user who answers `n`
+  no longer sees it, and `gh config set` is not called. `prreview start` now
+  needs a terminal or piped answers when `gh` clones over `ssh`.
+
 - The reviewer finds `gtimeout` and `gsha256sum` on its own. At startup it uses
   `timeout` or `gtimeout` for deadlines. It uses `sha256sum`, `gsha256sum` or
   `shasum -a 256` for the review key digest, whichever it finds first. When only

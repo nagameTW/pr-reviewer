@@ -334,11 +334,63 @@ prreview set checks "$T/team" >/dev/null
 printf '\n\n\n\nn\n' | prreview setup >/dev/null 2>&1
 is 'setup keeps a checklist chosen with prreview set checks' "$(prreview get checks)" "$T/team"
 prreview set checks "$MYCHECKS" >/dev/null
-# gh set to clone over ssh: setup explains the service's missing ssh-agent
-# and, on yes, switches gh to https.
-OUT="$(printf 'y\n\n\n\n\nn\n' | FAKE_GH_PROTOCOL=ssh FAKE_GH_SET_LOG="$T/ghset.log" prreview setup 2>&1)"
-has 'setup warns when gh clones over ssh' "$OUT" 'no ssh-agent'
-is '...and switches it to https on yes' "$(cat "$T/ghset.log" 2>/dev/null)" 'config set git_protocol https -h github.com'
+# ── the service question and the gh https question ───────────────────────
+# The service question defaults to n while no service is installed and to y
+# while one is. The https question belongs to the service: it is asked only
+# where the service is installed or started. The unit file in $H decides
+# "installed"; this systemctl logs its calls and succeeds, so a started
+# service reads as running.
+D2="$T/d2"; mkdir -p "$D2"
+printf '#!/bin/sh\necho "$*" >> "%s"\n' "$D2/systemctl.log" > "$D2/systemctl"; chmod +x "$D2/systemctl"
+UNIT_FILE="$H/.config/systemd/user/$PRREVIEW_SERVICE_NAME.service"
+# d2 <gh git_protocol> <prreview arguments>: on Linux; gh records config set.
+d2() {
+  local proto="$1"; shift
+  "${PRREVIEW_ENV[@]}" PRREVIEW_PLATFORM=linux PATH="$D2:$FAKE:$PATH" FAKE_GH_PROTOCOL="$proto" FAKE_GH_SET_LOG="$D2/ghset.log" bash "$ROOT/prreview" "$@"
+}
+d2_reset() { rm -f "$UNIT_FILE" "$D2/ghset.log"; : > "$D2/systemctl.log"; }
+# Five answers for the steps before the service question: Enter for the
+# repositories, who posts, parallel and model; n for the patterns file.
+D2_STEPS='\n\n\n\nn\n'
+
+d2_reset
+OUT="$(printf "${D2_STEPS}\n" | d2 ssh setup 2>&1)"
+has 'the service question defaults to n while no service is installed' "$OUT" 'starts at login)? (y/n) [n]: '
+is '...so Enter installs nothing' "$([ -e "$UNIT_FILE" ] && echo installed || echo none)" none
+is '...asks nothing about gh, though it clones over ssh' "$(grep -c 'no ssh-agent' <<<"$OUT")" 0
+is '...and does not call gh config set' "$(cat "$D2/ghset.log" 2>/dev/null)" ''
+
+d2_reset
+OUT="$(printf "${D2_STEPS}n\n" | d2 ssh setup 2>&1)"
+is 'n to the service question does not call gh config set' "$(cat "$D2/ghset.log" 2>/dev/null)" ''
+
+d2_reset; mkdir -p "$(dirname "$UNIT_FILE")"; : > "$UNIT_FILE"
+OUT="$(printf "${D2_STEPS}\n" | d2 https setup 2>&1)"
+has 'the service question defaults to y while a service is installed' "$OUT" 'starts at login)? (y/n) [y]: '
+has '...so Enter reinstalls it and restarts it' "$(cat "$D2/systemctl.log")" "--user restart $PRREVIEW_SERVICE_NAME"
+
+d2_reset
+OUT="$(printf "${D2_STEPS}y\ny\n" | d2 ssh setup 2>&1)"
+has 'y to the service question: setup warns when gh clones over ssh' "$OUT" 'no ssh-agent'
+is '...and switches gh to https on yes' "$(cat "$D2/ghset.log" 2>/dev/null)" 'config set git_protocol https -h github.com'
+is '...before it installs the service' "$([ -e "$UNIT_FILE" ] && echo installed || echo none)" installed
+
+d2_reset
+printf "${D2_STEPS}y\nn\n" | d2 ssh setup >/dev/null 2>&1
+is 'n to the https question leaves gh alone' "$(cat "$D2/ghset.log" 2>/dev/null)" ''
+is '...and the service is installed anyway' "$([ -e "$UNIT_FILE" ] && echo installed || echo none)" installed
+
+d2_reset
+printf 'y\n' | d2 ssh start >/dev/null 2>&1
+is 'start asks about https where it installs the service, and switches on yes' "$(cat "$D2/ghset.log" 2>/dev/null)" 'config set git_protocol https -h github.com'
+is '...and installs it' "$([ -e "$UNIT_FILE" ] && echo installed || echo none)" installed
+d2_reset
+printf 'n\n' | d2 ssh start >/dev/null 2>&1
+is 'start with n to the https question leaves gh alone' "$(cat "$D2/ghset.log" 2>/dev/null)" ''
+is '...and still installs the service' "$([ -e "$UNIT_FILE" ] && echo installed || echo none)" installed
+OUT="$(d2 ssh start </dev/null 2>&1)"
+has 'start asks nothing when the service already runs' "$OUT" 'Already running'
+rm -f "$UNIT_FILE"
 
 # ── setup with a GitHub App ───────────────────────────────────────────────
 # curl answers for an App that can see me/api but not acme/web; the key is
