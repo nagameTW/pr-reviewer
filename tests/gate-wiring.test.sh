@@ -36,6 +36,8 @@ if [ "$(grep -n 'prompt_head_handled' <<<"$DISPATCH" | cut -d: -f1)" -lt "$(grep
 else
   bad 'the handled-head check runs before the worktree is created, from one pre-check call' "$(grep -n -E 'prompt_head_handled|worktree add|PRE=' <<<"$DISPATCH")"
 fi
+before 'the cooldown decides before the worktree is created' 'cooldown_decide "$CD_HEAD"' 'git -C "$CLONE_DIR" worktree add --detach' pr-autoreview.sh
+before 'the cooldown comes after the handled-head check' 'prompt_head_handled "$PRE"' 'cooldown_decide "$CD_HEAD"' pr-autoreview.sh
 pin    'binary files are excluded by path so the text changes still apply' 'apply --whitespace=nowarn ${BIN_EXCLUDES[@]+"${BIN_EXCLUDES[@]}"} "$DIFF"' pr-autoreview.sh
 pin    'the model is told which binary files are missing from the tree' 'TREE_CLAUSE="$(prompt_tree_clause "$DIFF_APPLIED" "$TREE_AT")$TREE_CONV_NOTE$TREE_BIN_NOTE"' pr-autoreview.sh
 pin    '...and so are the red team, in the tree text it shares with the review' 'redteam_prompt "$REPO" "$PR" "$DIFF" "$TREE_CLAUSE$STACKED_CLAUSE" "$RT_PRIOR"' pr-autoreview.sh

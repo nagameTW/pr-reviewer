@@ -93,6 +93,16 @@ All notable changes to this project are recorded here. The format follows
   key is the same through all three hash commands, so no open PR is reviewed
   again. If no timeout command or no hash command is found, the reviewer stops
   at startup and names the missing tool.
+- A PR whose head is unchanged waits when its title, description or base
+  branch changed and the reviewer's last comment on the PR is younger than
+  `PRREVIEW_GATE_PR_COOLDOWN_MIN` minutes (10 by default). The log says why.
+  A push to the PR branch never waits. For a stacked PR, a push to the parent
+  branch can wait up to the cooldown, because the cooldown compares only the
+  PR head. `0` turns the wait off. A value that is not a whole
+  number is refused by `prreview set` and by the reviewer. `prreview once
+  --pr` ignores the cooldown, so a named PR still ends with a verdict or with
+  exit code 75. If the time of the comment cannot be read, the PR is reviewed
+  and the log says so. The reviewer keeps no file for this.
 - Every PR now gets its convention files from the newest commit of the default
   branch. Before, a PR into the default branch got them at its merge base, and
   only a PR based on another branch got the default branch's. The files are

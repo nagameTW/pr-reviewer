@@ -111,8 +111,12 @@ It does:
   it has already commented on is skipped until the author pushes again, or
   edits the PR's title, description or base branch. For a PR based on another branch
   (a stacked PR), a push to that parent branch counts too. Each of these is a
-  new review, and a new model call. Draft PRs are skipped until they are marked
-  ready.
+  new review, and a new model call. An edit of the title, description or
+  base branch that leaves the head unchanged waits until the reviewer's last comment is 10
+  minutes old (`PRREVIEW_GATE_PR_COOLDOWN_MIN`). A push to the PR branch never
+  waits. For a stacked PR, a push to the parent branch can wait up to the
+  cooldown, because the cooldown compares only the PR head. Draft PRs
+  are skipped until they are marked ready.
 - Read the repo the way a reviewer would: the whole tree at the PR's merge base
   with the PR's diff applied, plus the conventions the repo writes down for
   itself, taken from the default branch (`CLAUDE.md` or `AGENTS.md`, then
@@ -232,7 +236,7 @@ The rest of this README uses these words in one sense each.
 | **Gate** | The name the code and its settings use for the reviewer: `pr-autoreview.sh`, the `PRREVIEW_GATE_*` settings, `gate.log`. It only comments; it does not block or merge anything, which is why its log calls the comment a review-only verdict. |
 | **Head** | The latest commit on a PR's branch. The reviewer reviews heads, not branches. |
 | **Trusted author** | The author of a PR that comes from a branch of the repository itself, or a login in `PRREVIEW_GATE_TRUSTED_AUTHORS`. A PR that `prreview once --pr` names is reviewed as if its author were trusted. |
-| **Round** | One run of `pr-autoreview.sh`. It goes over every listed repo and reviews each PR from a trusted author whose head has no comment yet. The loop checks once a minute for open PRs that the reviewer would read (see [Whose PRs it reviews](#whose-prs-it-reviews)) and starts a round when it finds any. A fork PR that the reviewer skips does not count, unless `PRREVIEW_GATE_DISARM_AUTO_MERGE=1` and auto-merge is armed on it. A draft PR does not count, with the same exception. With none to review, the loop starts a round only on every 15th check. The loop's log counts checks, so `[round 12]` there is the 12th check, whether or not a round ran. For a single PR, "round 2" means the second verdict comment on it: a push, an edited title, description or base branch, or (for a stacked PR) a push to its parent branch leads to the next one. |
+| **Round** | One run of `pr-autoreview.sh`. It goes over every listed repo and reviews each PR from a trusted author whose head has no comment yet. The loop checks once a minute for open PRs that the reviewer would read (see [Whose PRs it reviews](#whose-prs-it-reviews)) and starts a round when it finds any. A fork PR that the reviewer skips does not count, unless `PRREVIEW_GATE_DISARM_AUTO_MERGE=1` and auto-merge is armed on it. A draft PR does not count, with the same exception. With none to review, the loop starts a round only on every 15th check. The loop's log counts checks, so `[round 12]` there is the 12th check, whether or not a round ran. For a single PR, "round 2" means the second verdict comment on it: a push, an edited title, description or base branch, or (for a stacked PR) a push to its parent branch leads to the next one. An edit that leaves the head unchanged waits for the cooldown first (`PRREVIEW_GATE_PR_COOLDOWN_MIN`). So can a push to the parent branch of a stacked PR. |
 | **Slice** | Part of a large diff, reviewed by its own model call (`PRREVIEW_GATE_CHUNK_*`). |
 | **Verdict** | The first line of the comment: ✅ Approved or ❌ Changes requested. It is text in a comment, not a GitHub review state. |
 | **Blocking finding** | A CRITICAL or HIGH finding that counts toward ❌ Changes requested. MEDIUM and LOW are listed without changing the verdict. |
@@ -417,7 +421,10 @@ export XDG_RUNTIME_DIR=/run/user/$(id -u) # in the reviewer's session
 > Comments post as your own `gh` account unless you set up a
 > [GitHub App](#posting-as-a-github-app). Each push, each edit of a PR's
 > title, description or base branch, and each push to the parent branch of a
-> stacked PR, starts a new round that costs model usage. To try it first, list
+> stacked PR, starts a new round that costs model usage. An edit that leaves
+> the head unchanged waits 10 minutes after the reviewer's last comment
+> (`PRREVIEW_GATE_PR_COOLDOWN_MIN`). So can a push to the parent branch of a
+> stacked PR. To try it first, list
 > one repo that you own.
 
 ### 1. Get the code
@@ -881,7 +888,9 @@ The reviewer does not post a verdict it could not reach. What happens instead:
   named `<repo>-<PR number>-*` in
   `~/.cache/pr-reviewer/review-holdoff/`. A new push, or an
   edited title, description or base branch, or a push to the parent branch of a
-  stacked PR, starts over with no hold.
+  stacked PR, starts over with no hold. The cooldown for an edited title,
+  description or base branch, or a push to the parent branch of a stacked PR
+  (`PRREVIEW_GATE_PR_COOLDOWN_MIN`), is a separate wait.
 - **Posting the comment fails.** The finished comment is kept, and the head
   goes on the same hold as above (5 minutes, doubling on repeats). The next
   attempt after that posts the kept comment without calling the model again.
@@ -950,6 +959,7 @@ even when you run `prreview once` from a terminal. After moving a tool, run
 | `PRREVIEW_GATE_HOLDOFF_QUOTA` | `1800` | Seconds a head waits after a usage-limit error |
 | `PRREVIEW_GATE_HOLDOFF_MAX` | `3600` | Longest wait after repeated failures |
 | `PRREVIEW_GATE_HOLDOFF_DIR` | `~/.cache/pr-reviewer/review-holdoff` | Where those holds are kept, along with verdicts waiting to be posted again |
+| `PRREVIEW_GATE_PR_COOLDOWN_MIN` | `10` | Minutes a PR waits after the reviewer's last comment when its title, description or base branch changed and the head is the same. A push to the PR branch never waits. A push to the parent branch of a stacked PR can wait, because only the head is compared. A whole number; `0` turns the wait off. `prreview once --pr` ignores it |
 | `PRREVIEW_GATE_PARALLEL` | `2` | PRs reviewed at the same time |
 | `PRREVIEW_GATE_CALL_CAP` | `8` | Model calls in flight for one PR |
 | `PRREVIEW_GATE_ROUND_BUDGET` | `900` | Seconds a round may spend starting new reviews |
@@ -1028,7 +1038,7 @@ Who controls each input, and how the reviewer treats it:
 | Convention files: `CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, `.mcp.json`, `.claude/`, README, CONTRIBUTING, `.github/review-checks.md` | The newest commit of the default branch, for every PR | Rules the review follows. A PR's edits to them are replaced before the review, with the file name matched in any letter case. Any other file in the repo stays as the PR has it |
 | The checklist, the settings, the sensitive-data patterns | You | Rules. They live outside the reviewed repo |
 | The model's answer | The model, after reading all of the above | Untrusted. Shape-checked, blocking findings argued against, scanned before it is posted |
-| Who can make it spend model budget | Anyone who can push a branch to a watched repo, and the logins in `PRREVIEW_GATE_TRUSTED_AUTHORS` | The reviewer skips a PR from a fork unless its author is trusted or you name the PR with `prreview once --pr`. For the PRs it reads, each push, each edit of the PR's title, description or base branch, and each push to the parent branch of a stacked PR, starts a new round that costs model usage |
+| Who can make it spend model budget | Anyone who can push a branch to a watched repo, and the logins in `PRREVIEW_GATE_TRUSTED_AUTHORS` | The reviewer skips a PR from a fork unless its author is trusted or you name the PR with `prreview once --pr`. For the PRs it reads, each push, each edit of the PR's title, description or base branch, and each push to the parent branch of a stacked PR, starts a new round that costs model usage. An edit of the title, description or base branch on an unchanged head waits for `PRREVIEW_GATE_PR_COOLDOWN_MIN` (10 minutes by default) after the reviewer's last comment, so repeated edits cost one review per cooldown. A push to the PR branch never waits. A push to the parent branch of a stacked PR can wait up to the cooldown |
 
 - **The PR is data.** The model reads the diff, the PR's title and
   description, and the repo's files with its read-only tools, and the prompt
@@ -1122,7 +1132,10 @@ The largest first round at the defaults can make up to 16 review calls, 6
 refutation calls and 1 repair call. No run measured what that round costs.
 Every push starts a new round, and so does an edit to the PR's title,
 description or base branch. For a stacked PR, so does a push to its parent
-branch. The reviewer skips PRs from forks unless the author is trusted, so only
+branch. An edit that leaves the head unchanged waits until the reviewer's last
+comment is `PRREVIEW_GATE_PR_COOLDOWN_MIN` minutes old (10 by default, 0 turns
+it off). A push to the PR branch never waits. A push to the parent branch of a
+stacked PR can wait up to the cooldown. The reviewer skips PRs from forks unless the author is trusted, so only
 people who can push to a watched repo, and the logins you list, can start
 these rounds.
 

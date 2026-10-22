@@ -129,6 +129,7 @@ STUB_EOF
 # A gh that answers from files in \$T and writes every call to gh.calls.
 # list.json answers the open PR list, view-N.json answers `pr view N` (a
 # draft when there is no file) and view-N.K.json answers its K-th call,
+# view-N.K.rc is the exit code of that call (it prints nothing),
 # list.rc is the exit code of the list, and
 # merged.json answers the list of merged PRs (empty when there is no file).
 # merge.rc is the exit code of `pr merge` (0 when there is no file).
@@ -149,6 +150,7 @@ case "\$1 \$2" in
     esac ;;
   "pr view")
     k="\$(grep -c "^pr view \$3 " "$T/gh.calls")"
+    [ ! -f "$T/view-\$3.\$k.rc" ] || exit "\$(cat "$T/view-\$3.\$k.rc")"
     if [ -f "$T/view-\$3.\$k.json" ]; then emit "\$(cat "$T/view-\$3.\$k.json")"
     elif [ -f "$T/view-\$3.json" ]; then emit "\$(cat "$T/view-\$3.json")"; else emit '{"isDraft":true}'; fi ;;
   "api "*)
@@ -417,6 +419,76 @@ has '...and the first named run exits 75'                            "$OUT" 'rc=
 has '...and says that the PR was not reviewed'                       "$OUT" 'owner/repo#2 was not reviewed'
 rm -f "$T/view-2.json"
 
+# ── the same-head cooldown ────────────────────────────────────────────────
+# The head has not moved, only the title or the description changed (so the
+# key differs from the key in the reviewer's last comment), and that comment is
+# younger than PRREVIEW_GATE_PR_COOLDOWN_MIN: the dispatcher skips the PR and
+# says why, with no worktree and no second read. A named PR is never skipped.
+set_list '[{"number":2,"author":{"login":"mallory"},"isCrossRepository":true,"labels":[]}]'
+cd_comment() { # SHA SECONDS_AGO: a verdict of the reviewer on SHA, for an older key
+  jq -nc --arg k "$1-000000000000" --arg t "$(jq -nr --argjson s "$2" '(now - $s | floor | todate)')" \
+    '[{author:{login:"owner"},body:("<!-- pr-reviewer " + $k + " -->\n\n> **Automated review: ✅ Approved**"),createdAt:$t}]'
+}
+cd_comment_at() { # SHA TIME: the same, with the time as given
+  jq -nc --arg k "$1-000000000000" --arg t "$2" \
+    '[{author:{login:"owner"},body:("<!-- pr-reviewer " + $k + " -->\n\n> **Automated review: ✅ Approved**"),createdAt:$t}]'
+}
+view2 "$(cd_comment "$HEAD40" 60)" false > "$T/view-2.json"
+OUT="$(run_gate PRREVIEW_GATE_FORK_PRS=1)"
+# The test builds the comment, then the gate reads the clock a moment later, and
+# the build rounds down to a whole second. On a slow runner the comment is 61 s
+# or 62 s old, not 60 s. The two numbers in the log must still add up to 600 s.
+has 'cooldown: the log says the PR waits and why'      "$OUT" "PR #2: same head as the reviewer's last comment, and that comment is "
+CD_LOG="$(printf '%s\n' "$OUT" | sed -n 's/.*that comment is \([0-9]*\) s old\. Waiting \([0-9]*\) s more.*/\1 \2/p')"
+is  '...the age is about 60 s and age plus wait is 600 s' "$(set -- $CD_LOG; [ "$#" -eq 2 ] && [ "$1" -ge 60 ] && [ "$1" -le 70 ] && [ $(($1 + $2)) -eq 600 ] && echo yes)" yes
+has '...and the setting that changes it'               "$OUT" 'PRREVIEW_GATE_PR_COOLDOWN_MIN=10'
+is  '...and the job did not start (the check and one re-read of the head)' "$(viewed 2)" 2
+has '...and the round ends well'                       "$OUT" 'rc=0'
+OUT="$(run_gate PRREVIEW_GATE_FORK_PRS=1 PRREVIEW_GATE_PR_COOLDOWN_MIN=0)"
+lacks 'cooldown 0: no wait'                            "$OUT" 'same head'
+is  '...and the job starts'                            "$([ "$(viewed 2)" -ge 2 ] && echo yes)" yes
+OUT="$(run_gate PRREVIEW_GATE_FORK_PRS=1 PRREVIEW_GATE_PR_COOLDOWN_MIN=1)"
+lacks 'cooldown 1 min, comment 60 s old: no wait'      "$OUT" 'same head'
+view2 "$(cd_comment "$HEAD40" 3600)" false > "$T/view-2.json"
+OUT="$(run_gate PRREVIEW_GATE_FORK_PRS=1)"
+lacks 'after the cooldown: no wait'                    "$OUT" 'same head'
+is  '...and the job starts'                            "$([ "$(viewed 2)" -ge 2 ] && echo yes)" yes
+view2 "$(cd_comment 2222222222222222222222222222222222222222 60)" false > "$T/view-2.json"
+OUT="$(run_gate PRREVIEW_GATE_FORK_PRS=1)"
+lacks 'a new head: no wait'                            "$OUT" 'same head'
+is  '...and the job starts'                            "$([ "$(viewed 2)" -ge 2 ] && echo yes)" yes
+view2 "$(cd_comment_at "$HEAD40" '')" false > "$T/view-2.json"
+OUT="$(run_gate PRREVIEW_GATE_FORK_PRS=1)"
+has 'an unreadable time: the log says it is not applied' "$OUT" 'could not read when the reviewer commented'
+lacks '...and there is no wait'                        "$OUT" 'same head'
+is  '...and the job starts'                            "$([ "$(viewed 2)" -ge 2 ] && echo yes)" yes
+# A push between the dispatcher's read and the skip: the skip is decided on
+# the first read, so one more read of the head must confirm it. A head that
+# moved, or a re-read that fails, means no skip.
+view2 "$(cd_comment "$HEAD40" 60)" false > "$T/view-2.1.json"
+jq -nc '{headRefOid:"2222222222222222222222222222222222222222"}' > "$T/view-2.2.json"; rm -f "$T/view-2.json"
+OUT="$(run_gate PRREVIEW_GATE_FORK_PRS=1)"
+lacks 'a head that moved before the skip: no wait'     "$OUT" 'same head'
+is  '...and the job starts (a third read)'             "$([ "$(viewed 2)" -ge 3 ] && echo yes)" yes
+rm -f "$T/view-2.2.json"; echo 1 > "$T/view-2.2.rc"
+OUT="$(run_gate PRREVIEW_GATE_FORK_PRS=1)"
+lacks 'a re-read that fails: no wait'                  "$OUT" 'same head'
+is  '...and the job starts (a third read)'             "$([ "$(viewed 2)" -ge 3 ] && echo yes)" yes
+rm -f "$T/view-2.1.json" "$T/view-2.2.rc"
+# A named PR asked for a review: it gets one, and the round keeps its rule
+# (0 only after a verdict). The dispatcher reads the fresh comment, the job
+# reads a draft, which shows that the job started.
+view2 "$(cd_comment "$HEAD40" 60)" false > "$T/view-2.1.json"; view2 '[]' true > "$T/view-2.2.json"; rm -f "$T/view-2.json"
+OUT="$(run_gate PRREVIEW_ONCE_PR=owner/repo#2)"
+lacks 'a named PR: no wait'                            "$OUT" 'same head'
+has '...the job starts'                                "$OUT" '[owner__repo#2] PR #2: is a draft, not reviewed until it is ready'
+has '...and the round exits 75 as it does without a verdict' "$OUT" 'rc=75'
+rm -f "$T/view-2.1.json" "$T/view-2.2.json"
+OUT="$(run_gate PRREVIEW_GATE_PR_COOLDOWN_MIN=abc)"
+has 'a cooldown that is not a number stops the gate'   "$OUT" 'PRREVIEW_GATE_PR_COOLDOWN_MIN must be a whole number of minutes'
+has '...with exit code 2'                              "$OUT" 'rc=2'
+rm -f "$T/view-2.json"
+
 # ── the post-merge scan ───────────────────────────────────────────────────
 # The scan reads the merged PRs of the last 48 hours. It comments on a merged
 # PR, fork or not, only when the reviewer's own last comment there is a blocking
@@ -598,5 +670,9 @@ has 'PRREVIEW_GATE_ONCE_WAIT refuses 5m'        "$(setting set PRREVIEW_GATE_ONC
 has 'PRREVIEW_GATE_ONCE_WAIT refuses a negative number' "$(setting set PRREVIEW_GATE_ONCE_WAIT -1)" 'takes a whole number'
 has 'PRREVIEW_GATE_ONCE_WAIT shows its default' "$(setting get PRREVIEW_GATE_ONCE_WAIT)" '300'
 has 'PRREVIEW_GATE_ONCE_WAIT takes 0 (do not wait)' "$(setting set PRREVIEW_GATE_ONCE_WAIT 0)" 'PRREVIEW_GATE_ONCE_WAIT=0'
+has 'PRREVIEW_GATE_PR_COOLDOWN_MIN refuses a word'   "$(setting set PRREVIEW_GATE_PR_COOLDOWN_MIN soon)" 'takes a whole number'
+has 'PRREVIEW_GATE_PR_COOLDOWN_MIN refuses a negative number' "$(setting set PRREVIEW_GATE_PR_COOLDOWN_MIN -1)" 'takes a whole number'
+has 'PRREVIEW_GATE_PR_COOLDOWN_MIN shows its default' "$(setting get PRREVIEW_GATE_PR_COOLDOWN_MIN)" '10'
+has 'PRREVIEW_GATE_PR_COOLDOWN_MIN takes 0 (off)'     "$(setting set PRREVIEW_GATE_PR_COOLDOWN_MIN 0)" 'PRREVIEW_GATE_PR_COOLDOWN_MIN=0'
 
 if [ "$FAILED" -eq 0 ]; then echo "PASS: trust"; else echo "FAIL: trust"; exit 1; fi
