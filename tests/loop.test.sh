@@ -173,6 +173,26 @@ is 'an answer that is not a list still counts as work' "$(count)" '3'
 stub_list '[null,{"number":9,"isDraft":true}]'
 is 'an entry that is not an object is not dropped as a draft' "$(count)" '3'
 
+# With PRREVIEW_GATE_DISARM_AUTO_MERGE=1 the round disarms an armed auto-merge
+# on a skipped fork PR, so that PR is work: the round must run within one
+# interval. Without the setting the round does nothing for it.
+ARMED='{"enabledBy":{"login":"maint"},"mergeMethod":"SQUASH"}'
+stub_list "[{\"number\":2,\"author\":{\"login\":\"stranger\"},\"isCrossRepository\":true,\"autoMergeRequest\":$ARMED}]"
+is 'a skipped fork PR with armed auto-merge counts 1 per repo when disarm is 1' \
+   "$( export PRREVIEW_GATE_DISARM_AUTO_MERGE=1; count )" '3'
+is '...and counts 0 when disarm is 0' \
+   "$( export PRREVIEW_GATE_DISARM_AUTO_MERGE=0; count )" '0'
+is '...and counts 0 when disarm is unset' "$(count)" '0'
+stub_list '[{"number":2,"author":{"login":"stranger"},"isCrossRepository":true,"autoMergeRequest":null}]'
+is 'a skipped fork PR with auto-merge null counts 0 when disarm is 1' \
+   "$( export PRREVIEW_GATE_DISARM_AUTO_MERGE=1; count )" '0'
+stub_list '[{"number":2,"author":{"login":"stranger"},"isCrossRepository":true}]'
+is 'a skipped fork PR with no auto-merge field counts 0 when disarm is 1' \
+   "$( export PRREVIEW_GATE_DISARM_AUTO_MERGE=1; count )" '0'
+stub_list "[{\"number\":1,\"author\":{\"login\":\"maint\"},\"isCrossRepository\":false,\"autoMergeRequest\":$ARMED}]"
+is 'a PR the round reviews counts 1 once, armed or not' \
+   "$( export PRREVIEW_GATE_DISARM_AUTO_MERGE=1; count )" '3'
+
 # One list call for each repo, and it carries what the rule reads. The default
 # limit of gh is 30; the round asks for 1000, and so does the count, or a
 # trusted PR behind 30 forks would not be seen.
@@ -181,6 +201,10 @@ count >/dev/null
 is  'one list call for each repo' "$(wc -l < "$STUB_DIR/args" | tr -d ' ')" '3'
 has 'the list call reads the number, author, fork flag and draft flag' '--json number,author,isCrossRepository,isDraft' "$(cat "$STUB_DIR/args")"
 has 'the list call asks for the same limit as the round' '--limit 1000' "$(cat "$STUB_DIR/args")"
+is  'the list call does not ask for auto-merge by default' "$(grep -c autoMergeRequest "$STUB_DIR/args")" '0'
+: > "$STUB_DIR/args"
+( export PRREVIEW_GATE_DISARM_AUTO_MERGE=1; count >/dev/null )
+has 'the list call asks for auto-merge when disarm is 1' '--json number,author,isCrossRepository,isDraft,autoMergeRequest' "$(cat "$STUB_DIR/args")"
 
 # The loop and the round read the same process environment, and
 # `prreview run` fills that from the settings file before it starts the loop

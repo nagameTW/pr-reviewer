@@ -18,7 +18,10 @@ All notable changes to this project are recorded here. The format follows
   any value that is not `owner/repo#N` for a repository on your list. It
   exits 0 only when the reviewer has a verdict (approve or request changes)
   on the current head. A notice alone, such as the title format reminder or
-  the sensitive-data notice, gives 75 on every run.
+  the sensitive-data notice, gives 75 on every run. `PRREVIEW_GATE_ONCE_WAIT=0`
+  means do not wait: the round tries the lock once with `flock -n`.
+  `PRREVIEW_ONCE_PR` is set by `prreview once --pr` only. The loop clears it
+  for every round, and `prreview set` and the settings file refuse it.
 - `PRREVIEW_GATE_TRUSTED_AUTHORS` lists the logins whose fork PRs are
   reviewed. `PRREVIEW_GATE_FORK_PRS=1` reviews every PR, as before.
 - `prreview status` shows how many PRs the last round skipped. A round that
@@ -57,13 +60,13 @@ All notable changes to this project are recorded here. The format follows
   skips it, unless `prreview once --pr` names it. Set `PRREVIEW_GATE_FORK_PRS=1`
   to bring back the old behavior. A fork PR that was open before the upgrade
   keeps its earlier comment, and its new heads are skipped.
-- `prreview once --pr` exits 0 only when the reviewer has a comment on the
-  current head, from this run or an earlier one. Before, it also exited 0 for
-  a draft and for a PR that a check skipped, such as the title format check.
-  Now it prints the reason and exits 75, the code of a lock that stays held.
-  A PR that is not open still exits 1. A notice, such as the title format
-  reminder, is a comment too. The first run on such a head exits 75. A second
-  run finds the notice and exits 0.
+- `prreview once --pr` exits 0 only when the reviewer has a verdict (approve
+  or request changes) on the current head, from this run or an earlier one.
+  Before, it also exited 0 for a draft and for a PR that a check skipped,
+  such as the title format check. Now it prints the reason and exits 75, the
+  code of a lock that stays held. A PR that is not open still exits 1. A
+  notice alone, such as the title format reminder, is not a verdict. It gives
+  75 on every run.
 - The loop starts a round only when an open PR passes the same rule. Before,
   it counted every open PR, so one fork PR left open started a round each
   minute, with the scan of merged PRs and up to ten reads each time. The count
@@ -73,8 +76,12 @@ All notable changes to this project are recorded here. The format follows
   wrong type counts 0. A draft PR counts 0 too, because the round skips it.
   Only a boolean `isDraft` that is true makes a PR a draft. If the field is
   missing or has another type, the PR counts, and the round decides. The count
-  asks for `isDraft` in the same `gh pr list` call. A list the loop cannot read
-  counts as work. The scan of merged PRs does not look at the author. The count needs `jq`. If `jq` is
+  asks for `isDraft` in the same `gh pr list` call. With
+  `PRREVIEW_GATE_DISARM_AUTO_MERGE=1`, it asks for `autoMergeRequest` too, and
+  a skipped fork PR with auto-merge armed counts as work. The round then runs
+  within one interval and turns the auto-merge off. A list the loop cannot
+  read counts as work. The scan of merged PRs does not look at the author. The
+  count needs `jq`. If `jq` is
   missing, the loop stops at startup and names it, as it does for the timeout
   command.
 - The reviewer finds `gtimeout` and `gsha256sum` on its own. At startup it uses
@@ -89,15 +96,6 @@ All notable changes to this project are recorded here. The format follows
 
 ### Fixed
 
-- `PRREVIEW_GATE_ONCE_WAIT=0` means do not wait. The round uses `flock -n` for
-  it, so every `flock` port gives the same result. `prreview set` already
-  refuses a value that is not a whole number.
-- A value of `PRREVIEW_ONCE_PR` in the environment no longer reaches the
-  rounds of the loop. Before, such a value named one PR in every round. The
-  round then reviewed only that PR, whatever its author, and skipped the scan
-  of merged PRs. `review-loop.sh` and `prreview run` now clear the variable for
-  every round. `prreview set` and the settings file refuse it as a setting.
-  Only `prreview once --pr` sets it.
 - With `PRREVIEW_GATE_VERIFY_LINES=1`, the line-number check failed on bash
   3.2, the bash that macOS ships. Bash 3.2 ended a command substitution at the
   `)` of a `case` pattern and printed a syntax error. The loop that counts the

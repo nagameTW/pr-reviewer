@@ -52,7 +52,9 @@ loop_without_drafts() {
 # and each round pays for the merged-PR scan. The scan itself stays unfiltered.
 # A draft PR does not count, because the round skips it. Only a boolean true
 # is a draft. A missing or non-boolean isDraft counts as not a draft, so the
-# round decides.
+# round decides. With PRREVIEW_GATE_DISARM_AUTO_MERGE=1 the call also reads
+# autoMergeRequest, and a skipped PR with armed auto-merge counts as work,
+# because the round disarms it.
 # The loop needs lib/trust.sh sourced and jq on PATH. The call asks for the
 # same limit as the round. It reads the fields that the rule needs (number,
 # author, isCrossRepository) and isDraft. The round reads the labels too, and
@@ -68,15 +70,29 @@ loop_without_drafts() {
 # Trade-off: trust_plan_prs runs one jq call per PR, about 1000 calls for a
 # repository at the limit, once per interval.
 loop_open_pr_count() {
-  local script="${1-}" gh="${2:-gh}" repos r list plan n total=0
+  local script="${1-}" gh="${2:-gh}" repos r list plan n armed fields total=0
   repos="$(loop_repos_of "$script")" || { printf '1\n'; return 0; }
+  fields=number,author,isCrossRepository,isDraft
+  # The round disarms auto-merge on skipped PRs only with this setting, and
+  # then it asks for the field in its own list call. Do the same here.
+  [ "${PRREVIEW_GATE_DISARM_AUTO_MERGE-}" != 1 ] || fields="$fields,autoMergeRequest"
   for r in $repos; do
     # An empty answer is not an empty list: jq reads no input as no entries.
-    if list="$("$gh" pr list --repo "$r" --state open --limit 1000 --json number,author,isCrossRepository,isDraft 2>/dev/null)" \
+    if list="$("$gh" pr list --repo "$r" --state open --limit 1000 --json "$fields" 2>/dev/null)" \
        && [ -n "${list//[[:space:]]/}" ] \
        && list="$(loop_without_drafts "$list" 2>/dev/null)" \
        && plan="$(trust_plan_prs "$list" "${PRREVIEW_GATE_TRUSTED_AUTHORS-}" "${PRREVIEW_GATE_FORK_PRS-}" "" 2>/dev/null)"; then
       n="$(printf '%s\n' "$plan" | grep -c '^review ' || true)"
+      if [ "${PRREVIEW_GATE_DISARM_AUTO_MERGE-}" = 1 ]; then
+        # A skipped PR with armed auto-merge is work: the round disarms it.
+        # GitHub turns auto-merge off on a draft, so drafts need no check.
+        armed="$(jq -r --arg skips "$(printf '%s\n' "$plan" | sed -n 's/^skip //p')" '
+            ($skips | split("\n")) as $s
+            | [.[] | select(.autoMergeRequest != null and ((.number | tostring) as $n | any($s[]; . == $n)))]
+            | length' <<<"$list" 2>/dev/null)" || armed=1
+        case "$armed" in '' | *[!0-9]*) armed=1 ;; esac
+        n=$((n + armed))
+      fi
     else
       n=1
     fi

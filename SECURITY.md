@@ -48,9 +48,10 @@ PR turns into a fork PR after the list, the dispatcher reads it once with `gh
 pr view`, and the job stops it before the diff fetch. That PR gets no model
 call and no post. With the same setting, the job turns off its auto-merge.
 The loop that starts the rounds counts only the PRs this rule admits, so one
-open fork PR from a stranger does not start a round, and a scan of merged PRs,
-every minute. The scan of merged PRs does not look at the
-author. `PRREVIEW_GATE_FORK_PRS=1` turns the rule off. The rule assumes that
+open fork PR from a stranger no longer starts a full round, merged-PR scan
+included, every minute. With `PRREVIEW_GATE_DISARM_AUTO_MERGE=1`, a skipped
+fork PR with armed auto-merge counts as work too, so the disarm runs within
+one interval. The scan of merged PRs does not look at the author. `PRREVIEW_GATE_FORK_PRS=1` turns the rule off. The rule assumes that
 everyone who can push to the repository is trusted. A repository whose
 workflows build branches from outside input, for example with
 `pull_request_target`, breaks that assumption. Do not list an account only

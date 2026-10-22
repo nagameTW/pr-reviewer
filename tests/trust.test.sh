@@ -291,7 +291,7 @@ set_list '[{"number":2,"author":{"login":"mallory"},"isCrossRepository":true,"la
            {"number":4,"author":{"login":"mallory"},"isCrossRepository":true,"labels":[]}]'
 OUT="$(run_gate PRREVIEW_GATE_DISARM_AUTO_MERGE=1)"
 is 'disarm on: a skipped PR without armed auto-merge gets no call' "$(merges)" 0
-is '...whether the field is null or missing'                        "$(viewed 4)" 0
+is '...whether the field is null or missing'                        "$(grep -c '^pr merge 4 ' "$T/gh.calls")" 0
 set_list "[{\"number\":2,\"author\":{\"login\":\"mallory\"},\"isCrossRepository\":true,\"labels\":[],\"autoMergeRequest\":$ARMED}]"
 printf '1\n' > "$T/merge.rc"
 OUT="$(run_gate PRREVIEW_GATE_DISARM_AUTO_MERGE=1)"
