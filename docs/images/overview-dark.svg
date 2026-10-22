@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 880 528" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="overview-github-dark-title overview-github-dark-desc" id="overview-github-dark-root">
+<title id="overview-github-dark-title">Where pr-reviewer runs</title>
+<desc id="overview-github-dark-desc">pr-reviewer runs on your machine, reads open pull requests through gh, has Claude Code review a per-PR worktree with read-only tools, scans text against your sensitive-patterns file, and posts one comment per new head.</desc>
+<defs>
+      <style>#overview-github-dark-root { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; color: #F0F6FC; }
+      #overview-github-dark-root .page { max-width: 1000px; width: 100%; }
+      #overview-github-dark-root .diagram-container { width: 100%; overflow-x: auto; }
+      #overview-github-dark-root .diagram-container { overflow-x: visible; }
+      #overview-github-dark-root .bg { fill: #0D1117; }
+      #overview-github-dark-root .edge-frame { fill: none; stroke: #656C76; stroke-width: 2; }
+      #overview-github-dark-root text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #F0F6FC; font-size: 12px; }
+      #overview-github-dark-root .t-name { font-size: 14px; font-weight: 600; }
+      #overview-github-dark-root .t-name-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; font-weight: 700; }
+      #overview-github-dark-root .t-sub { fill: #9198A1; }
+      #overview-github-dark-root .t-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+      #overview-github-dark-root .t-eye { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; letter-spacing: .12em; fill: #9198A1; }
+      #overview-github-dark-root .t-arrow { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; letter-spacing: .06em; fill: #9198A1; }
+      #overview-github-dark-root .t-alert { fill: #F85149; font-weight: 700; }
+      #overview-github-dark-root .t-chip { fill: #0D1117; font-weight: 700; }
+      #overview-github-dark-root .t-title { font-size: 14px; font-weight: 700; }
+      #overview-github-dark-root .mask { fill: #0D1117; }
+      #overview-github-dark-root .node { fill: #151B23; stroke: #656C76; stroke-width: 1.2; }
+      #overview-github-dark-root .raised { fill: #0D1117; stroke: #656C76; stroke-width: 1; }
+      #overview-github-dark-root .hero { fill: #111D2E; stroke: #4493F8; stroke-width: 2.4; }
+      #overview-github-dark-root .optional { fill: none; stroke: #656C76; stroke-width: 1.2; stroke-dasharray: 5 4; }
+      #overview-github-dark-root .zone { fill: none; stroke: #656C76; stroke-width: 1; stroke-dasharray: 4 4; }
+      #overview-github-dark-root .strip { fill: #151B23; stroke: #656C76; stroke-width: 1.2; }
+      #overview-github-dark-root .bar { fill: #DA3633; }
+      #overview-github-dark-root .alert-node { fill: #0D1117; stroke: #DA3633; stroke-width: 2; stroke-dasharray: 6 4; }
+      #overview-github-dark-root .edge { fill: none; stroke: #4493F8; stroke-width: 1.6; }
+      #overview-github-dark-root .edge-dash { fill: none; stroke: #4493F8; stroke-width: 1.4; stroke-dasharray: 5 4; }
+      #overview-github-dark-root .edge-alert { fill: none; stroke: #DA3633; stroke-width: 1.6; }
+      #overview-github-dark-root .mk { fill: #4493F8; }
+      #overview-github-dark-root .mk-alert { fill: #DA3633; }
+      #overview-github-dark-root .chip { fill: #F0F6FC; }
+      #overview-github-dark-root .dot { fill: #F0F6FC; }
+      #overview-github-dark-root .bullet { fill: #9198A1; }
+      #overview-github-dark-root .diamond { fill: #0D1117; stroke: #656C76; stroke-width: 1.4; }</style>
+<marker id="overview-github-dark-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon class="mk" points="0 0, 8 3, 0 6"/></marker>
+<marker id="overview-github-dark-arrow-alert" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon class="mk-alert" points="0 0, 8 3, 0 6"/></marker>
+</defs>
+<rect class="bg" width="880" height="528"/>
+<rect class="edge-frame" x="1" y="1" width="878" height="526" rx="8"/>
+<g transform="translate(0,-28)">
+<rect class="hero" x="264" y="56" width="376" height="368" rx="8"/>
+<text class="t-eye" x="280" y="78">YOUR MACHINE</text>
+<text class="t-eye" x="24" y="150">GITHUB</text>
+<text class="t-eye" x="712" y="150">MODEL</text>
+<path class="edge" d="M184,212 H284" marker-end="url(#overview-github-dark-arrow)"/>
+<path class="edge" d="M284,244 H184" marker-end="url(#overview-github-dark-arrow)"/>
+<path class="edge" d="M620,212 H712" marker-end="url(#overview-github-dark-arrow)"/>
+<path class="edge" d="M712,244 H620" marker-end="url(#overview-github-dark-arrow)"/>
+<path class="edge" d="M452,156 V180" marker-end="url(#overview-github-dark-arrow)"/>
+<path class="edge" d="M362,276 V300" marker-end="url(#overview-github-dark-arrow)"/>
+<path class="edge" d="M542,300 V276" marker-end="url(#overview-github-dark-arrow)"/>
+<rect class="mask" x="203" y="190" width="42" height="16" rx="2"/><text class="t-arrow" x="224" y="202" text-anchor="middle">READ</text>
+<rect class="mask" x="203" y="250" width="42" height="16" rx="2"/><text class="t-arrow" x="224" y="262" text-anchor="middle">POST</text>
+<rect class="mask" x="648" y="190" width="56" height="16" rx="2"/><text class="t-arrow" x="676" y="202" text-anchor="middle">PROMPT</text>
+<rect class="mask" x="652" y="250" width="48" height="16" rx="2"/><text class="t-arrow" x="676" y="262" text-anchor="middle">REPLY</text>
+<rect class="mask" x="462" y="160" width="56" height="16" rx="2"/><text class="t-arrow" x="490" y="172" text-anchor="middle">STARTS</text>
+<rect class="mask" x="370" y="280" width="56" height="16" rx="2"/><text class="t-arrow" x="398" y="292" text-anchor="middle">BUILDS</text>
+<rect class="mask" x="549" y="280" width="42" height="16" rx="2"/><text class="t-arrow" x="570" y="292" text-anchor="middle">SCAN</text>
+<g data-box="24 164 160 112">
+<rect class="node" x="24" y="164" width="160" height="112" rx="6"/>
+<text class="t-name" x="36" y="186">Pull request</text>
+<text class="t-sub" x="36" y="206">open, not a draft,</text>
+<text class="t-sub" x="36" y="222">in a repo from</text>
+<text class="t-sub" x="36" y="238"><tspan class="t-code">PRREVIEW_GATE_REPOS</tspan></text>
+</g>
+<g data-box="284 92 336 64">
+<rect class="raised" x="284" y="92" width="336" height="64" rx="6"/>
+<text class="t-name-code" x="296" y="114">review-loop.sh</text>
+<text class="t-sub" x="296" y="134">polls once a minute while a PR is open</text>
+</g>
+<g data-box="284 180 336 96">
+<rect class="raised" x="284" y="180" width="336" height="96" rx="6"/>
+<text class="t-name-code" x="296" y="202">pr-autoreview.sh</text>
+<text class="t-sub" x="296" y="222">one round: each new head gets one review</text>
+<text class="t-sub" x="296" y="238">up to 2 PRs at the same time</text>
+</g>
+<g data-box="284 300 156 96">
+<rect class="raised" x="284" y="300" width="156" height="96" rx="6"/>
+<text class="t-name" x="296" y="322">Per-PR worktree</text>
+<text class="t-sub" x="296" y="342">merge base + PR diff,</text>
+<text class="t-sub" x="296" y="358">rules files from the</text>
+<text class="t-sub" x="296" y="374">default branch</text>
+</g>
+<g data-box="464 300 156 96">
+<rect class="raised" x="464" y="300" width="156" height="96" rx="6"/>
+<text class="t-name" x="476" y="322">Sensitive patterns</text>
+<text class="t-sub" x="476" y="342">your regex list.</text>
+<text class="t-sub" x="476" y="358">Scans PR text and</text>
+<text class="t-sub" x="476" y="374">each comment</text>
+</g>
+<g data-box="712 164 144 112">
+<rect class="node" x="712" y="164" width="144" height="112" rx="6"/>
+<text class="t-name" x="724" y="186">Claude Code</text>
+<text class="t-sub" x="724" y="206"><tspan class="t-code">claude -p</tspan>, headless</text>
+<text class="t-sub" x="724" y="222">Read, Grep, Glob on</text>
+<text class="t-sub" x="724" y="238">the worktree only.</text>
+<text class="t-sub" x="724" y="254">No shell, no web.</text>
+</g>
+<g data-box="24 444 408 88">
+<rect class="optional" x="24" y="444" width="408" height="88" rx="6"/>
+<text class="t-title" x="40" y="468">Fork PRs from untrusted authors: skipped</text>
+<text class="t-sub" x="40" y="488">A fork PR is reviewed only if its author is in</text>
+<text class="t-sub" x="40" y="504"><tspan class="t-code">PRREVIEW_GATE_TRUSTED_AUTHORS</tspan>, you run</text>
+<text class="t-sub" x="40" y="520"><tspan class="t-code">prreview once --pr</tspan>, or you set <tspan class="t-code">PRREVIEW_GATE_FORK_PRS=1</tspan>.</text>
+</g>
+<g data-box="448 444 408 88">
+<rect class="strip" x="448" y="444" width="408" height="88" rx="6"/>
+<rect class="bar" x="448" y="444" width="6" height="88" rx="2"/>
+<text class="t-title" x="468" y="468">It never approves or merges.</text>
+<text class="t-sub" x="468" y="488">Its only merge call is <tspan class="t-code">gh pr merge --disable-auto</tspan>,</text>
+<text class="t-sub" x="468" y="504">off by default. A verdict is a comment,</text>
+<text class="t-sub" x="468" y="520">not a GitHub approval.</text>
+</g>
+</g>
+</svg>

@@ -59,7 +59,12 @@ scan_patterns_load() {
 # status into "clean" — on an outbound scan that means a body nobody could
 # check goes out as if it had been checked. Callers must treat 2 like a hit.
 scan_text() {
-  local pf="${1-}" text="${2-}" rc
+  local pf="${1-}" text="${2-}" rc zw
+  # The reviewer puts a zero-width space into model text so that a mention or
+  # a command does not act (lib/findings.sh, findings_escape_prose). The scan
+  # reads the text without it, so that the escape does not hide a match.
+  zw=$'\342\200\213'
+  text="${text//$zw/}"
   # -s as well as -r: `grep -f` with an EMPTY pattern file matches nothing and
   # exits 1, which reads as "clean". The load-time check cannot cover a file
   # emptied afterwards, and this is the one direction that must never happen

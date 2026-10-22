@@ -27,5 +27,5 @@
 
 - [ ] `bash tests/run-all.sh` ends with `ALL PASS`
 - [ ] New checks have a test that fails without them
-- [ ] I updated the README if behavior or configuration changed
-- [ ] I added a line under `[Unreleased]` in CHANGELOG.md
+- [ ] If behavior or configuration changed, the README and `docs/configuration.md` describe the change
+- [ ] CHANGELOG.md has a line under `[Unreleased]`

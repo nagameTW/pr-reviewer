@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Tests for lib/tree.sh: tree_has_symlinks, tree_revert_convention_files.
+# Tests for lib/tree.sh: tree_has_symlinks, tree_revert_convention_files,
+# tree_force_convention_files.
 # No network, no gh, no model call: run  bash tests/tree.test.sh
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
@@ -62,9 +63,13 @@ refuses 'a link to a directory inside the tree' ../sub docs/subdir
 refuses 'a convention file that links to a file outside the convention set' f sub/CLAUDE.md
 refuses '...named in another case' f sub/claude.md
 refuses '...anywhere under .claude/' ../sub/f .claude/rules.md
-# Only a file git tracks under an exact-case convention name is restored, so
-# neither a lookalike in another case nor an untracked one will do.
-refuses '...to a file named like one in another case' ../docs/claude.md sub/CLAUDE.md
+# Only a file git tracks under a convention name is restored, so an untracked
+# one will not do.
+# Names are matched in any letter case, the way the restore matches them, so
+# a link to docs/claude.md is a link to a convention file the restore handles.
+# This case once refused it, back when only exact-case names were restored.
+LC="$TMP/link-to-lowercase-conv"; inside_fixture "$LC"; ln -s ../docs/claude.md "$LC/sub/CLAUDE.md"; git -C "$LC" add -A
+tree_has_symlinks "$LC" >/dev/null && fail "a convention link to a tracked convention file named in another case must pass: $(tree_has_symlinks "$LC")"
 # A tracked convention link must not vouch for its own target: that holds
 # only while the id is the link's own, not the file it leads to.
 TL="$TMP/tracked-conv-link"; inside_fixture "$TL"; echo x > "$TL/docs/x.md"
@@ -234,6 +239,75 @@ tree_revert_convention_files "$REPO" \
 [ "$(cat "$REPO/newsrc.py")" = "a brand new source file" ] \
   || fail "an untracked NON-convention file must survive — the guard must not delete every untracked path"
 
+# ── the convention files of every PR come from the default branch ──────────
+# The flow of pr-autoreview.sh on throwaway repos: the tree is at the merge
+# base, the PR's diff is applied, the PR's own convention files are reverted,
+# and the convention files of origin/main are copied in. Names are lowercase
+# in every fixture, so the match has to work in any letter case.
+flow_fixture() { # $1 = directory; leaves a tree at the merge base with the PR applied
+  local d="$1"
+  g() { git -C "$d" -c user.email=t@example.com -c user.name=t -c commit.gpgsign=false "$@"; }
+  mkdir -p "$d/.github"; git init -q "$d"
+  printf 'old readme\n' > "$d/readme.md"
+  printf 'checklist v1\n' > "$d/.github/review-checks.md"
+  printf 'code 1\n' > "$d/src.py"
+  g add -A; g commit -qm merge-base
+  git -C "$d" branch pr
+  # The default branch moves on: a newer readme and a newer checklist.
+  printf 'default readme\n' > "$d/readme.md"
+  printf 'checklist v2\n' > "$d/.github/review-checks.md"
+  printf 'default notes\n' > "$d/notes.md"
+  g add -A; g commit -qm default-moves; git -C "$d" update-ref refs/remotes/origin/main HEAD
+  # The PR edits the readme, adds convention files and edits code.
+  g checkout -q pr
+  printf 'pr readme\n' > "$d/readme.md"
+  printf 'pr rules\n' > "$d/contributing.md"
+  printf 'pr local rules\n' > "$d/claude.local.md"
+  printf '{"pr":1}\n' > "$d/.mcp.json"
+  printf 'code 2\n' > "$d/src.py"
+  g add -A; g commit -qm pr; git -C "$d" diff HEAD~1 HEAD > "$d.patch"
+  g checkout -q --detach pr~1
+  git -C "$d" apply "$d.patch" || fail "the fixture's patch must apply to the merge base"
+}
+FL="$TMP/flow"; flow_fixture "$FL"
+git -C "$FL" checkout -q -f --detach origin/main || fail "the fixture could not check out the default branch"
+git -C "$FL" apply --check "$FL.patch" 2>/dev/null \
+  && fail "the fixture must show why the copy comes after the diff: the diff does not apply to the newer default branch"
+flow_fixture "$TMP/flow2"; FL="$TMP/flow2"
+tree_revert_convention_files "$FL"; RC=$?
+[ "$RC" = 0 ] || fail "the PR wrote convention files, the revert must report a hit (got $RC)"
+tree_force_convention_files "$FL" origin/main || fail "copying the convention files must work: ${TREE_CONV_ERR-}"
+[ "$(cat "$FL/readme.md")" = "default readme" ] \
+  || fail "a readme.md the PR modified must come from the default branch (got: $(cat "$FL/readme.md"))"
+[ "$(cat "$FL/.github/review-checks.md")" = "checklist v2" ] \
+  || fail "the checklist of the default branch is newer than the merge base's: the review must get the newer one"
+[ -e "$FL/contributing.md" ] && fail "a contributing.md that the PR adds must be removed"
+[ -e "$FL/claude.local.md" ] && fail "a claude.local.md that the PR adds must be removed"
+[ -e "$FL/.mcp.json" ] && fail "a .mcp.json that the PR adds must be removed"
+[ "$(cat "$FL/src.py")" = "code 2" ] || fail "a file that is no convention file keeps the PR's change"
+[ -e "$FL/notes.md" ] && fail "a file that is no convention file is not copied from the default branch"
+[ -z "$(git -C "$FL" ls-files -- contributing.md claude.local.md .mcp.json)" ] \
+  || fail "a convention file that the default branch lacks must leave the index too"
+[ "${TREE_CONV_FORCED-}" = 1 ] || fail "TREE_CONV_FORCED must say that files were copied"
+# A convention file that only the default branch has comes in even when the
+# tree never had it (the checklist of a PR cut before the default branch got one).
+NC="$TMP/flow-new-checklist"; mkdir -p "$NC/.github"; git init -q "$NC"
+printf 'code\n' > "$NC/src.py"
+git -C "$NC" add -A; git -C "$NC" -c user.email=t@example.com -c user.name=t commit -qm base
+printf 'new checklist\n' > "$NC/.github/review-checks.md"
+git -C "$NC" add -A; git -C "$NC" -c user.email=t@example.com -c user.name=t commit -qm default
+git -C "$NC" update-ref refs/remotes/origin/main HEAD; git -C "$NC" checkout -q --detach HEAD~1
+tree_force_convention_files "$NC" origin/main || fail "copying into a tree that lacks the file must work: ${TREE_CONV_ERR-}"
+[ "$(cat "$NC/.github/review-checks.md" 2>/dev/null)" = "new checklist" ] \
+  || fail "a checklist that only the default branch has must be copied into the tree"
+# A ref that does not resolve is an error with a reason, not a tree without rules.
+tree_force_convention_files "$NC" origin/nope; RC=$?
+[ "$RC" = 1 ] || fail "an unresolvable ref must return 1 (got $RC)"
+grep -qF 'cannot resolve origin/nope' <<<"${TREE_CONV_ERR-}" || fail "the error must name the ref (got: ${TREE_CONV_ERR-})"
+ERR="$( ( tree_force_convention_files ) 2>&1 )"; RC=$?
+[ "$RC" -ne 0 ] && grep -qF "tree_force_convention_files needs a directory" <<<"$ERR" \
+  || fail "tree_force_convention_files with no argument must name itself in the error (got: $ERR)"
+
 # ── both functions must NAME themselves in a missing-argument error, not
 #    just crash on a bare unbound-variable message (the
 #    ${1:?...} guards added for exactly that have no assertion anywhere in
@@ -280,4 +354,4 @@ tree_binary_paths "$TMP/glob.diff" >/dev/null && fail "a binary path with a glob
 printf 'not a patch\n' > "$TMP/junk.diff"
 tree_binary_paths "$TMP/junk.diff" >/dev/null && fail "a patch git cannot read must be refused"
 
-echo "PASS: lib/tree.sh (tree_has_symlinks, tree_revert_convention_files, tree_binary_paths)"
+echo "PASS: lib/tree.sh (tree_has_symlinks, tree_revert_convention_files, tree_force_convention_files, tree_binary_paths)"

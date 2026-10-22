@@ -26,6 +26,8 @@ All notable changes to this project are recorded here. The format follows
   reviewed. `PRREVIEW_GATE_FORK_PRS=1` reviews every PR, as before.
 - `prreview status` shows how many PRs the last round skipped. A round that
   skips PRs prints one `WARNING:` line with the count.
+- `README.zh-TW.md` is a translation of `README.md`. It states the same
+  facts.
 
 ### Changed
 
@@ -93,6 +95,46 @@ All notable changes to this project are recorded here. The format follows
   key is the same through all three hash commands, so no open PR is reviewed
   again. If no timeout command or no hash command is found, the reviewer stops
   at startup and names the missing tool.
+- A PR whose head is unchanged waits when its title, description or base
+  branch changed and the reviewer's last comment on the PR is younger than
+  `PRREVIEW_GATE_PR_COOLDOWN_MIN` minutes (10 by default). The log says why.
+  A push to the PR branch never waits. For a stacked PR, a push to the parent
+  branch can wait up to the cooldown, because the cooldown compares only the
+  PR head. `0` turns the wait off. A value that is not a whole
+  number is refused by `prreview set` and by the reviewer. `prreview once
+  --pr` ignores the cooldown, so a named PR still ends with a verdict or with
+  exit code 75. If the time of the comment cannot be read, the PR is reviewed
+  and the log says so. The reviewer keeps no file for this.
+- Every PR now gets its convention files from the newest commit of the default
+  branch. Before, a PR into the default branch got them at its merge base, and
+  only a PR based on another branch got the default branch's. The files are
+  `CLAUDE.md`, `AGENTS.md`, anything under `.claude/`, README, CONTRIBUTING and
+  `.github/review-checks.md`, and now also `CLAUDE.local.md` and `.mcp.json`.
+  The reviewer copies them after it applies the PR's diff, so a newer file on
+  the default branch cannot make the diff fail. A file the default branch
+  lacks is removed from the review tree, and a file only the default branch
+  has is added. Names match in any letter case, so an edit to `readme.md` is
+  reverted too. Before, only the exact case counted. A stacked PR that changes
+  README is reviewed with its diff applied now. Before, it fell back to a
+  review against the base branch. There is no switch to turn this off. An old
+  branch is reviewed with today's rules, and a PR is reviewed again under new
+  rules only when something else starts a new round. This is intended. A
+  symlink from a convention file now needs a target that git tracks under
+  any letter case of a convention name. The note to the model says that a path
+  the default branch lacks is absent from the tree. The log line about the
+  copy appears only when a convention file changed.
+- The README is shorter and the details moved to `docs/`. It names the tool
+  `prreview` throughout and has a four-step Quick start. "Trust and cost" and
+  "Status and limits" come before Quick start, and the Contents list is gone.
+  The settings summary lists names only. `docs/configuration.md` holds every
+  setting with its default, and `tests/prreview.test.sh` checks that file
+  instead of the README. `docs/operations.md` holds one round in detail,
+  failures and holds, and where the files live. `docs/github-app.md` and
+  `docs/windows.md` hold the App and WSL2 steps. `docs/comparison.md` is new.
+  The diagrams are light and dark SVGs that follow the reader's theme. A table
+  of the 13 checklist items replaces `docs/images/checks.svg`.
+- An Approved comment has a second banner line: "Automated review, not a
+  GitHub approval." A Changes requested banner is unchanged.
 
 ### Fixed
 
@@ -101,6 +143,36 @@ All notable changes to this project are recorded here. The format follows
   `)` of a `case` pattern and printed a syntax error. The loop that counts the
   lines of each cited file now writes the pattern with a leading `(`. The check
   is off by default.
+- A comment from an App that was not the reviewer, with the marker of a head
+  on its first line, stopped the review of that head for good. The marker is
+  computed from public fields, and a bot that repeats a command can print it.
+  Now the reviewer writes a `WARNING` line to the log and reviews the head.
+  After a switch from a GitHub App back to your own account, each head with
+  one App comment gets one new review, and the log has a warning for it.
+  Any number of such comments never stops a review.
+- A wrong App login list (`PRREVIEW_REVIEW_APP_SLUG`) hides the reviewer's own
+  comments from it, so each round would review and post again. The reviewer
+  now keeps a count on the machine: one line in the hold directory
+  (`PRREVIEW_GATE_HOLDOFF_DIR`) for each verdict it posted for a head. At two
+  verdicts for one head, the reviewer treats the head as handled until the
+  next push: no review, no model call, no job, and one `WARNING` line that
+  says it does not see its own comments and names the setting. No comment
+  author can change this count. The guard on an armed auto-merge still runs.
+  The count file stays while its PR is open. The reviewer removes it once its
+  PR is not open and the file is three days old or more, as it does the other
+  hold files. A repo with 1000 or more open
+  PRs keeps all its count files, because a list that long may omit an open
+  PR. Before a model call, the
+  reviewer checks that the hold directory can be written. If it cannot, or if the
+  file name cannot be built for the owner and repo, the reviewer skips the PR
+  and the round fails, so the failure alert runs. An owner login with an
+  underscore (Enterprise Managed User) is allowed. If
+  a record fails after a post, the post stays and the round fails. The count
+  file name holds the owner, the repo, the PR and the key, joined with `+`,
+  so two owners with the same repo name never share a count, and repo `r`
+  never shares one with repo `r-4`.
+  After a switch from an App back to your own account, a head that the
+  machine posted for twice stays stopped until the next push.
 
 ### Security
 
@@ -130,6 +202,26 @@ All notable changes to this project are recorded here. The format follows
   does the same when a PR turns into a fork PR after the list. A head that an
   earlier `prreview once --pr` reviewed also loses its auto-merge, because the
   list does not show that review.
+- The reviewer escapes the model's words before it posts them. A pull request
+  can steer those words, and they go out under the reviewer's login. In the
+  summary, the findings, the follow-up tickets, the refutation notes and the
+  list of unverified items, the reviewer now puts a zero-width space into an
+  `@name` (so it does not notify), a line that starts with `/command` or `bors` (so a bot does not
+  read a command), the words `Automated review:` before a verdict emoji (so
+  they do not look like the banner), and a line that starts with `- **HIGH**`
+  or `- ~~**` (so a later round does not read it as a finding). An `@` in a
+  closed fenced code block and the file path of a finding stay as they are.
+  The sensitive-data scan now ignores U+200B, so the escape cannot hide a
+  match. Links and images are not changed.
+- The token of a GitHub App is now for the one repository of the PR. Before,
+  the token request had no body, and the token reached every repository of
+  the installation.
+- `SECURITY.md` has a paragraph on token scope. It says to give the reviewer
+  the smallest scope that reads the repositories and comments on pull
+  requests. It names the settings that need more: `PRREVIEW_GATE_TICKETS=1` and
+  `PRREVIEW_ALERT_REPO` need permission to open issues, and
+  `PRREVIEW_GATE_DISARM_AUTO_MERGE=1` needs write access to the repository. It
+  also says which login each of these calls uses.
 
 ## [0.2.2] - 2026-10-22
 

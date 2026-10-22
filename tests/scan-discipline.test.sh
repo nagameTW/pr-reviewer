@@ -224,9 +224,10 @@ want 'the verify prompt still branches on whether the diff was applied' \
 # write the files the prompt calls the project's conventions (CLAUDE.md,
 # AGENTS.md, .claude/skills/), i.e. to supply its own review rules. Three
 # versions of that guard were wrong before this one, and none of them was
-# pinned by anything — so pin the guard's existence and its shape: git
-# pathspecs, never a regex over the diff, because that is the axis it kept
-# failing on (root-anchored, then blind to C-quoted non-ASCII headers).
+# pinned by anything — so pin the guard's existence and its shape: a
+# regex over the file names git lists, never a pathspec and never the text of
+# the diff, because that is the axis it kept failing on (root-anchored, then
+# blind to C-quoted non-ASCII headers).
 #
 # Lives in lib/tree.sh —
 # checked the same way merge_base_allowed is checked below: the SHAPE is
@@ -247,8 +248,9 @@ else
   # The subdirectory case is the one three versions of this guard missed, and
   # it is missed by writing a GIT PATHSPEC instead of matching the path: a
   # pathspec wildcard only tail-matches, so '*/.claude' finds nothing at all.
-  grep -qF -- '*/.claude/*' <<<"$conv_win" || WORDING_MISSING="$WORDING_MISSING
-  the convention-file guard no longer matches .claude/ below the repo root (a git pathspec cannot)"
+  # The set is a regex over the path, and it must match .claude/ at any depth.
+  grep -qF -- '(^|/)\.claude/' lib/tree.sh || WORDING_MISSING="$WORDING_MISSING
+  the convention set no longer matches .claude/ below the repo root (a git pathspec cannot)"
 fi
 
 # The gate's OWN call site must cross-reference $PR_FILES before trusting a
@@ -265,9 +267,9 @@ if [ -z "$GATE_CONV_CALL" ]; then
   pr-autoreview.sh no longer calls tree_revert_convention_files with an argument at its TREE_CONV_NOTE call site"
 else
   gcc_ln="$(cut -d: -f1 <<<"$GATE_CONV_CALL")"
-  # Eight lines: the call is followed by its could-not-tell branch
-  # before the cross-check.
-  gcc_win="$(sed -n "${gcc_ln},$((gcc_ln + 8))p" pr-autoreview.sh)"
+  # Sixteen lines: the call is followed by its could-not-tell branch and the
+  # copy from the default branch before the cross-check.
+  gcc_win="$(sed -n "${gcc_ln},$((gcc_ln + 16))p" pr-autoreview.sh)"
   grep -qF 'PR_FILES' <<<"$gcc_win" || WORDING_MISSING="$WORDING_MISSING"$'\n'"  pr-autoreview.sh's TREE_CONV_NOTE call site no longer cross-references \$PR_FILES — an untracked convention file would show TREE_CONV_NOTE on every PR again"
 fi
 # Anchored on the CALL SHAPE, not on the name appearing anywhere in the
@@ -380,36 +382,29 @@ grep -qF 'STACKED_CLAUSE="$(prompt_stacked_clause "$DEFAULT_BRANCH" "$TREE_AT" "
   echo "FAIL: pr-autoreview.sh no longer passes TREE_AT and DIFF_APPLIED to prompt_stacked_clause — it will tell the model the diff is in a tree the apply never reached"
   exit 1; }
 
-# ── a stacked base must not supply the conventions ───────────────────────
-# The tree now follows the PR's own base, and a base off the default branch is
-# an UNPROTECTED ref. The revert further down cannot help there: it walks what
-# the PATCH created and what the PATCH modified, and a CLAUDE.md the PARENT
-# branch committed is in neither — `git checkout -- <path>` would restore the
-# parent's version, which is still the author's. So anyone able to push a
-# feature branch could commit their own rules to it, open a PR based on it,
-# and have the gate read those rules as the project's from its own cwd.
+# ── no base may supply the conventions ───────────────────────────────────
+# The tree follows the PR's own base, and a base off the default branch is an
+# UNPROTECTED ref. The revert cannot help there: it walks what the PATCH
+# created and what the PATCH modified, and a CLAUDE.md the PARENT branch
+# committed is in neither. So anyone able to push a feature branch could
+# commit their own rules to it, open a PR based on it, and have the gate read
+# those rules as the project's. Every PR takes the convention files from the
+# default branch (tree_force_convention_files), after the diff is applied.
 #
-# Two things are pinned. The forced checkout has to exist and has to name the
-# default branch as its source; and the pathspec has to be the form that
-# actually matches, because `*/.claude` matches NOTHING — a pathspec wildcard
-# only tail-matches, the same trap three versions of the revert below fell in.
-# Anchored on the line the guard prints when it fires, not on the phrase
-# "stacked base" — the fail-closed branch a few lines above says that too, and
-# anchoring there put the window above the code it was meant to check.
-CONV_WIN="$(grep -nF 'convention files forced back to' pr-autoreview.sh | head -1 | cut -d: -f1)"
-if [ -z "$CONV_WIN" ]; then
-  echo "FAIL: pr-autoreview.sh no longer forces the convention files off a stacked base — a parent branch can supply the review rules"
-  exit 1
-fi
-conv_force="$(sed -n "$(( CONV_WIN > 90 ? CONV_WIN - 90 : 1 )),${CONV_WIN}p" pr-autoreview.sh)"
-grep -qF -- 'checkout "origin/$DEFAULT_BRANCH" --' <<<"$conv_force" || {
-  echo "FAIL: the stacked-base convention guard no longer takes the files from origin/\$DEFAULT_BRANCH"; exit 1; }
-grep -qF -- "'*/.claude/*'" <<<"$conv_force" || {
-  echo "FAIL: the stacked-base convention guard lost the '*/.claude/*' pathspec — '*/.claude' matches nothing, a pathspec wildcard only tail-matches"; exit 1; }
-grep -qF -- 'rm -q --cached' <<<"$conv_force" || {
-  echo "FAIL: the stacked-base convention guard deletes the file but leaves the parent's blob in the index — the revert loop below lists it and checks it straight back out"; exit 1; }
-grep -qF -- 'rev-parse --verify' <<<"$conv_force" || {
-  echo "FAIL: the stacked-base convention guard no longer checks that origin/\$DEFAULT_BRANCH resolves — every path would take the rm arm and the tree would end up with no conventions at all"; exit 1; }
+# Pinned: pr-autoreview.sh makes the call with origin/$DEFAULT_BRANCH on both
+# paths (diff applied, diff not applied), and the function keeps the three
+# steps that went wrong before: the ref is checked first, the index is cleared
+# with the disk, and the file comes from the ref.
+n_force="$(grep -c 'tree_force_convention_files "\$REPO_DIR" "origin/\$DEFAULT_BRANCH"' pr-autoreview.sh)"
+[ "$n_force" = 2 ] || {
+  echo "FAIL: pr-autoreview.sh calls tree_force_convention_files $n_force time(s), expected 2 (diff applied, and diff not applied on a base tree) — a base branch can supply the review rules"; exit 1; }
+force_fn="$(sed -n '/^tree_force_convention_files()/,/^}/p' lib/tree.sh)"
+grep -qF -- 'checkout "$ref" --' <<<"$force_fn" || {
+  echo "FAIL: the convention guard no longer takes the files from the default branch"; exit 1; }
+grep -qF -- 'rm -q --cached' <<<"$force_fn" || {
+  echo "FAIL: the convention guard deletes the file but leaves the parent's blob in the index — a later checkout writes it straight back out"; exit 1; }
+grep -qF -- 'rev-parse --verify' <<<"$force_fn" || {
+  echo "FAIL: the convention guard no longer checks that the default branch resolves — every path would take the rm arm and the tree would end up with no conventions at all"; exit 1; }
 
 # ── the review tree is NOT gated on merge_base_allowed ────────────────────
 # It needs its own check because the tree choice and this base check
@@ -449,7 +444,7 @@ if [ -n "$TREE_GATED" ]; then
 fi
 
 # ── fifth class: the linked issue text is scanned before the model can read it ──
-# The README promises that a pattern match in the title or body of the issue
+# docs/operations.md promises that a pattern match in the title or body of the issue
 # the PR links stops the review. The issue text goes into the intent file that
 # the model Reads, so the scan must run before that write. The real block
 # runs here, lifted out of the script. Stubs stand in for gh, the post and

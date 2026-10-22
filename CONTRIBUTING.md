@@ -52,7 +52,8 @@ the suite in the `bash:3.2` Docker image.
   earlier rounds, `findings.sh` filters and renders what the model returns,
   `review-spec.sh` reads the checklist in `checks/` and holds the rules every
   prompt shares, `chunk.sh` slices diffs, `scan.sh` is the sensitive-data
-  scan, `holdoff.sh` remembers failures between rounds, `trust.sh` decides
+  scan, `holdoff.sh` remembers failures between rounds, `cooldown.sh` makes a
+  PR wait after an edit of its title or description, `trust.sh` decides
   which PRs the reviewer reads by their authors, and so on. Every file
   there can be sourced on its own and has no side effects when sourced.
 - `review-loop.sh` runs rounds on a timer; `owner-alert.sh` opens an issue when
