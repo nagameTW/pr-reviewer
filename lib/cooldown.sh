@@ -7,9 +7,10 @@
 #
 # One rule. The head SHA has not changed since the reviewer's last comment on
 # the PR, and that comment is younger than the cooldown: skip the PR in this
-# round. A new push never waits, because a new head differs from the head in
-# that comment. The data is the comment list the dispatcher already reads.
-# There is no state file.
+# round. A push to the PR branch never waits, because a new head differs from
+# the head in that comment. For a stacked PR, a push to the parent branch can
+# wait up to the cooldown. See the trade-off above cooldown_decide. The data is
+# the comment list the dispatcher already reads. There is no state file.
 
 # Minutes. 0 turns the cooldown off.
 COOLDOWN_MIN="${PRREVIEW_GATE_PR_COOLDOWN_MIN:-10}"
@@ -52,6 +53,12 @@ cooldown_last_gate_comment() {
 #   review                  anything else
 #   review unreadable-time  same head, but the time is empty, not a time to the
 #                           second, or in the future
+# Trade-off: this function compares only the head SHA of the PR. The review key
+# of a stacked PR (a PR whose base is not the default branch) also holds the
+# base commit. A push to the parent branch changes the key and leaves the head
+# the same. This function then skips the PR until the reviewer's last comment
+# is old enough. The wait ends after PRREVIEW_GATE_PR_COOLDOWN_MIN minutes. The
+# PR is not lost. A fix needs the base commit in the dispatcher call.
 # Fail-safe: a time that cannot be read never skips. A skip that cannot end
 # would leave the PR without a review. The cost of a wrong "review" is one
 # extra model run.

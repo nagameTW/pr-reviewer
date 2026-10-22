@@ -3349,8 +3349,9 @@ for PR in $OPEN_PRS; do
       fi
       continue
     fi
-    # Same head, a changed key (title, description or base branch), and the
-    # reviewer commented a moment ago: wait for the cooldown (lib/cooldown.sh).
+    # Same head, a changed key (title, description, base branch or, for a
+    # stacked PR, parent branch), and the reviewer commented a moment ago:
+    # wait for the cooldown (lib/cooldown.sh).
     # A named PR asked for a review and gets one, so the round keeps its rule of
     # 0 only after a verdict. A time that cannot be read does not skip, and the
     # log says so.
