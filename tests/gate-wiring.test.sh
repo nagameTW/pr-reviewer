@@ -224,4 +224,14 @@ has    '...and when the value is 0' 'Use 0 when the new side has no reliable lin
 is     'the review prompt gives the line definition right after the schema' "$(awk '/^\$REVIEW_SCHEMA$/{getline; print; exit}' pr-autoreview.sh)" '$REVIEW_LINE_SPEC'
 pin    'the structural repair gets the same definition' 'findings_repair_prompt "$OUT" "$REVIEW_SCHEMA" "$REVIEW_LINE_SPEC")"' pr-autoreview.sh
 
+# The Approved banner says what it is not. A reader who skims a comment that
+# starts with a green check can take it for a GitHub approval, so the second
+# line of that banner names the difference. Both parsers that find a verdict
+# in an earlier comment match `Automated review: ` with a colon, and this line
+# has a comma, so it cannot pass for a second banner.
+APPROVE_BANNER="$(awk '/BANNER="> \[!TIP\]/ { p = 1 } p { print } p && /^  else$/ { exit }' pr-autoreview.sh)"
+has    'the Approved banner says it is not a GitHub approval' '> Automated review, not a GitHub approval.' "$APPROVE_BANNER"
+has    '...below the verdict line' '**Automated review: ✅ Approved**$BANNER_COUNTS' "$APPROVE_BANNER"
+case "$APPROVE_BANNER" in *'Automated review: '*'Automated review: '*) bad '...and the note does not repeat the colon form the parsers match' 'two lines match the banner pattern' ;; *) ok '...and the note does not repeat the colon form the parsers match' ;; esac
+
 if [ "$FAILED" -eq 0 ]; then echo "PASS: gate wiring"; else echo "FAIL: gate wiring"; exit 1; fi

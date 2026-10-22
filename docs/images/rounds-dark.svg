@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 880 544" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="rounds-github-dark-title rounds-github-dark-desc" id="rounds-github-dark-root">
+<title id="rounds-github-dark-title">Life of a blocking finding across rounds</title>
+<desc id="rounds-github-dark-desc">Each push starts a new round. A blocking finding is fixed or carried over. A new HIGH finding on a file this push did not change is shown as MEDIUM and does not block.</desc>
+<defs>
+      <style>#rounds-github-dark-root { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; color: #F0F6FC; }
+      #rounds-github-dark-root .page { max-width: 1000px; width: 100%; }
+      #rounds-github-dark-root .diagram-container { width: 100%; overflow-x: auto; }
+      #rounds-github-dark-root .diagram-container { overflow-x: visible; }
+      #rounds-github-dark-root .bg { fill: #0D1117; }
+      #rounds-github-dark-root .edge-frame { fill: none; stroke: #656C76; stroke-width: 2; }
+      #rounds-github-dark-root text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #F0F6FC; font-size: 12px; }
+      #rounds-github-dark-root .t-name { font-size: 14px; font-weight: 600; }
+      #rounds-github-dark-root .t-name-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; font-weight: 700; }
+      #rounds-github-dark-root .t-sub { fill: #9198A1; }
+      #rounds-github-dark-root .t-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+      #rounds-github-dark-root .t-eye { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; letter-spacing: .12em; fill: #9198A1; }
+      #rounds-github-dark-root .t-arrow { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; letter-spacing: .06em; fill: #9198A1; }
+      #rounds-github-dark-root .t-alert { fill: #F85149; font-weight: 700; }
+      #rounds-github-dark-root .t-chip { fill: #0D1117; font-weight: 700; }
+      #rounds-github-dark-root .t-title { font-size: 14px; font-weight: 700; }
+      #rounds-github-dark-root .mask { fill: #0D1117; }
+      #rounds-github-dark-root .node { fill: #151B23; stroke: #656C76; stroke-width: 1.2; }
+      #rounds-github-dark-root .raised { fill: #0D1117; stroke: #656C76; stroke-width: 1; }
+      #rounds-github-dark-root .hero { fill: #111D2E; stroke: #4493F8; stroke-width: 2.4; }
+      #rounds-github-dark-root .optional { fill: none; stroke: #656C76; stroke-width: 1.2; stroke-dasharray: 5 4; }
+      #rounds-github-dark-root .zone { fill: none; stroke: #656C76; stroke-width: 1; stroke-dasharray: 4 4; }
+      #rounds-github-dark-root .strip { fill: #151B23; stroke: #656C76; stroke-width: 1.2; }
+      #rounds-github-dark-root .bar { fill: #DA3633; }
+      #rounds-github-dark-root .alert-node { fill: #0D1117; stroke: #DA3633; stroke-width: 2; stroke-dasharray: 6 4; }
+      #rounds-github-dark-root .edge { fill: none; stroke: #4493F8; stroke-width: 1.6; }
+      #rounds-github-dark-root .edge-dash { fill: none; stroke: #4493F8; stroke-width: 1.4; stroke-dasharray: 5 4; }
+      #rounds-github-dark-root .edge-alert { fill: none; stroke: #DA3633; stroke-width: 1.6; }
+      #rounds-github-dark-root .mk { fill: #4493F8; }
+      #rounds-github-dark-root .mk-alert { fill: #DA3633; }
+      #rounds-github-dark-root .chip { fill: #F0F6FC; }
+      #rounds-github-dark-root .dot { fill: #F0F6FC; }
+      #rounds-github-dark-root .bullet { fill: #9198A1; }
+      #rounds-github-dark-root .diamond { fill: #0D1117; stroke: #656C76; stroke-width: 1.4; }</style>
+<marker id="rounds-github-dark-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon class="mk" points="0 0, 8 3, 0 6"/></marker>
+<marker id="rounds-github-dark-arrow-alert" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon class="mk-alert" points="0 0, 8 3, 0 6"/></marker>
+</defs>
+<rect class="bg" width="880" height="544"/>
+<rect class="edge-frame" x="1" y="1" width="878" height="542" rx="8"/>
+<g transform="translate(0,-76)">
+<path class="edge" d="M54,148 H120" marker-end="url(#rounds-github-dark-arrow)"/>
+<path class="edge-dash" d="M48,154 V404" marker-end="url(#rounds-github-dark-arrow)"/>
+<path class="edge" d="M320,148 H632" marker-end="url(#rounds-github-dark-arrow)"/>
+<path class="edge-alert" d="M220,192 V292 Q220,300 228,300 H392" marker-end="url(#rounds-github-dark-arrow-alert)"/>
+<path class="edge" d="M632,300 H744 Q752,300 752,292 V192" marker-end="url(#rounds-github-dark-arrow)"/>
+<path class="edge-alert" d="M480,348 V372 Q480,380 488,380 H528 Q536,380 536,372 V348" marker-end="url(#rounds-github-dark-arrow-alert)"/>
+<rect class="mask" x="452" y="124" width="48" height="16" rx="2"/><text class="t-arrow" x="476" y="136" text-anchor="middle">FIXED</text>
+<rect class="mask" x="271" y="278" width="78" height="16" rx="2"/><text class="t-arrow" x="310" y="290" text-anchor="middle">NOT FIXED</text>
+<rect class="mask" x="666" y="276" width="48" height="16" rx="2"/><text class="t-arrow" x="690" y="288" text-anchor="middle">FIXED</text>
+<rect class="mask" x="469" y="388" width="78" height="16" rx="2"/><text class="t-arrow" x="508" y="400" text-anchor="middle">NOT FIXED</text>
+<rect class="mask" x="61" y="270" width="78" height="16" rx="2"/><text class="t-arrow" x="100" y="282" text-anchor="middle">LATE HIGH</text>
+<text class="t-eye" x="24" y="112">NEW FINDING</text>
+<circle class="dot" cx="48" cy="148" r="6"/>
+<g class="focal" data-box="120 104 200 88">
+<rect class="raised focal-r" x="120" y="104" width="200" height="88" rx="6"/>
+<text class="t-name" x="132" y="126">Blocking</text>
+<text class="t-sub" x="132" y="146">A CRITICAL or HIGH finding</text>
+<text class="t-sub" x="132" y="162">the comment lists as blocking.</text>
+</g>
+<g data-box="632 104 224 88">
+<rect class="raised" x="632" y="104" width="224" height="88" rx="6"/>
+<text class="t-name" x="644" y="126">Fixed</text>
+<text class="t-sub" x="644" y="146">The model marks it fixed.</text>
+<text class="t-sub" x="644" y="162">It leaves the blocking list.</text>
+</g>
+<g data-box="392 252 240 96">
+<rect class="alert-node" x="392" y="252" width="240" height="96" rx="6"/>
+<text class="t-name" x="404" y="274">Carried over</text>
+<text class="t-sub" x="404" y="294">The model repeats it with the</text>
+<text class="t-sub" x="404" y="310">prefix <tspan class="t-code">Carried over:</tspan>.</text>
+<text class="t-sub" x="404" y="326">It still blocks.</text>
+</g>
+<g data-box="24 404 304 96">
+<rect class="optional" x="24" y="404" width="304" height="96" rx="6"/>
+<text class="t-name" x="36" y="426">Not blocking</text>
+<text class="t-sub" x="36" y="446">A new HIGH on a file this push did not</text>
+<text class="t-sub" x="36" y="462">change and no earlier round cited.</text>
+<text class="t-sub" x="36" y="478">Listed as MEDIUM. Not carried over.</text>
+</g>
+<rect class="mask" x="59" y="126" width="56" height="16" rx="2"/><text class="t-arrow" x="87" y="138" text-anchor="middle">BLOCKS</text>
+<g data-box="352 424 504 80">
+<rect class="strip" x="352" y="424" width="504" height="80" rx="6"/>
+<text class="t-title" x="368" y="448">Each transition happens on a new push.</text>
+<text class="t-sub" x="368" y="468">The model marks each earlier blocker fixed or repeats it.</text>
+<text class="t-sub" x="368" y="484">The harness does not check this. CRITICAL is never lowered.</text>
+</g>
+<g data-box="24 524 832 72">
+<rect class="strip" x="24" y="524" width="832" height="72" rx="6"/>
+<text class="t-title" x="40" y="548">A PR merged while its verdict is changes requested gets one alert comment.</text>
+<text class="t-sub" x="40" y="568">A round with no blocking findings posts Approved. MEDIUM and LOW findings stay listed.</text>
+</g>
+</g>
+</svg>

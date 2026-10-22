@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 880 432" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="redteam-github-dark-title redteam-github-dark-desc" id="redteam-github-dark-root">
+<title id="redteam-github-dark-title">Optional red team before an approval</title>
+<desc id="redteam-github-dark-desc">When a round has no blockers and is about to approve, one more call argues that the approval is wrong. Up to three candidates go through refutation. Survivors are posted. Otherwise the approval stands.</desc>
+<defs>
+      <style>#redteam-github-dark-root { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; color: #F0F6FC; }
+      #redteam-github-dark-root .page { max-width: 1000px; width: 100%; }
+      #redteam-github-dark-root .diagram-container { width: 100%; overflow-x: auto; }
+      #redteam-github-dark-root .diagram-container { overflow-x: visible; }
+      #redteam-github-dark-root .bg { fill: #0D1117; }
+      #redteam-github-dark-root .edge-frame { fill: none; stroke: #656C76; stroke-width: 2; }
+      #redteam-github-dark-root text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #F0F6FC; font-size: 12px; }
+      #redteam-github-dark-root .t-name { font-size: 14px; font-weight: 600; }
+      #redteam-github-dark-root .t-name-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; font-weight: 700; }
+      #redteam-github-dark-root .t-sub { fill: #9198A1; }
+      #redteam-github-dark-root .t-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+      #redteam-github-dark-root .t-eye { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; letter-spacing: .12em; fill: #9198A1; }
+      #redteam-github-dark-root .t-arrow { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; letter-spacing: .06em; fill: #9198A1; }
+      #redteam-github-dark-root .t-alert { fill: #F85149; font-weight: 700; }
+      #redteam-github-dark-root .t-chip { fill: #0D1117; font-weight: 700; }
+      #redteam-github-dark-root .t-title { font-size: 14px; font-weight: 700; }
+      #redteam-github-dark-root .mask { fill: #0D1117; }
+      #redteam-github-dark-root .node { fill: #151B23; stroke: #656C76; stroke-width: 1.2; }
+      #redteam-github-dark-root .raised { fill: #0D1117; stroke: #656C76; stroke-width: 1; }
+      #redteam-github-dark-root .hero { fill: #111D2E; stroke: #4493F8; stroke-width: 2.4; }
+      #redteam-github-dark-root .optional { fill: none; stroke: #656C76; stroke-width: 1.2; stroke-dasharray: 5 4; }
+      #redteam-github-dark-root .zone { fill: none; stroke: #656C76; stroke-width: 1; stroke-dasharray: 4 4; }
+      #redteam-github-dark-root .strip { fill: #151B23; stroke: #656C76; stroke-width: 1.2; }
+      #redteam-github-dark-root .bar { fill: #DA3633; }
+      #redteam-github-dark-root .alert-node { fill: #0D1117; stroke: #DA3633; stroke-width: 2; stroke-dasharray: 6 4; }
+      #redteam-github-dark-root .edge { fill: none; stroke: #4493F8; stroke-width: 1.6; }
+      #redteam-github-dark-root .edge-dash { fill: none; stroke: #4493F8; stroke-width: 1.4; stroke-dasharray: 5 4; }
+      #redteam-github-dark-root .edge-alert { fill: none; stroke: #DA3633; stroke-width: 1.6; }
+      #redteam-github-dark-root .mk { fill: #4493F8; }
+      #redteam-github-dark-root .mk-alert { fill: #DA3633; }
+      #redteam-github-dark-root .chip { fill: #F0F6FC; }
+      #redteam-github-dark-root .dot { fill: #F0F6FC; }
+      #redteam-github-dark-root .bullet { fill: #9198A1; }
+      #redteam-github-dark-root .diamond { fill: #0D1117; stroke: #656C76; stroke-width: 1.4; }</style>
+<marker id="redteam-github-dark-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon class="mk" points="0 0, 8 3, 0 6"/></marker>
+<marker id="redteam-github-dark-arrow-alert" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon class="mk-alert" points="0 0, 8 3, 0 6"/></marker>
+</defs>
+<rect class="bg" width="880" height="432"/>
+<rect class="edge-frame" x="1" y="1" width="878" height="430" rx="8"/>
+<g transform="translate(0,-56)">
+<path class="edge" d="M152,160 H184" marker-end="url(#redteam-github-dark-arrow)"/>
+<path class="edge" d="M432,160 H464" marker-end="url(#redteam-github-dark-arrow)"/>
+<path class="edge" d="M592,160 H640" marker-end="url(#redteam-github-dark-arrow)"/>
+<path class="edge-dash" d="M308,240 V296" marker-end="url(#redteam-github-dark-arrow)"/>
+<path class="edge-dash" d="M528,208 V296" marker-end="url(#redteam-github-dark-arrow)"/>
+<path class="edge-dash" d="M680,208 V256 Q680,264 672,264 H600 Q592,264 592,272 V296" marker-end="url(#redteam-github-dark-arrow)"/>
+<path class="edge-alert" d="M808,208 V296" marker-end="url(#redteam-github-dark-arrow-alert)"/>
+<rect class="mask" x="599" y="134" width="34" height="16" rx="2"/><text class="t-arrow" x="616" y="146" text-anchor="middle">YES</text>
+<rect class="mask" x="315" y="260" width="86" height="16" rx="2"/><text class="t-arrow" x="358" y="272" text-anchor="middle">CALL FAILS</text>
+<rect class="mask" x="535" y="244" width="42" height="16" rx="2"/><text class="t-arrow" x="556" y="256" text-anchor="middle">NONE</text>
+<rect class="mask" x="604" y="242" width="64" height="16" rx="2"/><text class="t-arrow" x="636" y="254" text-anchor="middle">REFUTED</text>
+<rect class="mask" x="731" y="244" width="70" height="16" rx="2"/><text class="t-arrow" x="766" y="256" text-anchor="middle">SURVIVES</text>
+<g data-box="24 128 128 64">
+<rect class="raised" x="24" y="128" width="128" height="64" rx="6"/>
+<text class="t-name" x="36" y="150">Any round</text>
+<text class="t-sub" x="36" y="170">no blockers,</text>
+<text class="t-sub" x="36" y="186">about to approve</text>
+</g>
+<g class="focal" data-box="184 80 248 160"><rect class="hero focal-r" x="184" y="80" width="248" height="160" rx="6"/><text class="t-name" x="196" y="102">Red team</text><text class="t-sub" x="196" y="120">One more call argues</text><text class="t-sub" x="196" y="136">the approval is wrong.</text><circle class="bullet" cx="200" cy="154" r="3"/><text class="t-sub" x="210" y="158">parts of the diff that disagree</text><circle class="bullet" cx="200" cy="170" r="3"/><text class="t-sub" x="210" y="174">a limit at the wrong level</text><circle class="bullet" cx="200" cy="186" r="3"/><text class="t-sub" x="210" y="190">an error returned as success</text><circle class="bullet" cx="200" cy="202" r="3"/><text class="t-sub" x="210" y="206">a branch deciding from other input</text><circle class="bullet" cx="200" cy="218" r="3"/><text class="t-sub" x="210" y="222">a rule the repo's own docs pin</text></g>
+<g data-box="464 112 128 96"><polygon class="diamond" points="528,112 592,160 528,208 464,160"/><text class="t-name" x="528" y="164" text-anchor="middle">Candidates?</text></g>
+<text class="t-eye" x="528" y="100" text-anchor="middle">CRITICAL or HIGH</text>
+<g data-box="640 112 216 96">
+<rect class="raised" x="640" y="112" width="216" height="96" rx="6"/>
+<text class="t-name" x="652" y="134">Refutation</text>
+<text class="t-sub" x="652" y="154">One call per candidate,</text>
+<text class="t-sub" x="652" y="170">up to 3. The same call</text>
+<text class="t-sub" x="652" y="186">as any blocking finding.</text>
+</g>
+<g data-box="24 296 576 64">
+<rect class="raised" x="24" y="296" width="576" height="64" rx="6"/>
+<text class="t-name" x="36" y="318">Approval stands</text>
+<text class="t-sub" x="36" y="338">No candidates, a refuted candidate, or a failed or timed-out call.</text>
+</g>
+<g data-box="640 296 216 64">
+<rect class="alert-node" x="640" y="296" width="216" height="64" rx="6"/>
+<text class="t-name" x="652" y="318">Survivor: posted</text>
+<text class="t-sub" x="652" y="338">marked "raised by the red team"</text>
+</g>
+<g data-box="24 392 408 72">
+<rect class="optional" x="24" y="392" width="408" height="72" rx="6"/>
+<text class="t-title" x="40" y="416">Off by default.</text>
+<text class="t-sub" x="40" y="436"><tspan class="t-code">prreview set PRREVIEW_GATE_REDTEAM 1</tspan> turns it on.</text>
+</g>
+<g data-box="448 392 408 72">
+<rect class="strip" x="448" y="392" width="408" height="72" rx="6"/>
+<text class="t-title" x="464" y="416">Refutation only removes findings.</text>
+<text class="t-sub" x="464" y="436">The red team is the one step that looks</text>
+<text class="t-sub" x="464" y="452">for a defect the review missed.</text>
+</g>
+</g>
+</svg>

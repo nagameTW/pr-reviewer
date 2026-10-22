@@ -1,99 +1,120 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 430" width="960" height="430" role="img" aria-labelledby="t d">
-  <title id="t">Where pr-reviewer sits</title>
-  <desc id="d">The reviewer runs on your machine. It reads open pull requests through gh, asks headless Claude Code to review a disposable clone with read-only tools, scans the result against your sensitive-data patterns, and posts one comment per new head. It never approves and never merges.</desc>
-  <style>
-    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #3B4252; }
-    .cap { font-size: 12px; fill: #4C566A; letter-spacing: .06em; }
-    .name { font-size: 16px; font-weight: 600; }
-    .hero-name { font-size: 22px; font-weight: 700; fill: #2E3440; }
-    .sub { font-size: 12.5px; fill: #4C566A; }
-    .row-name { font-size: 14px; font-weight: 600; fill: #2E3440; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-    .lbl { font-size: 12px; fill: #4C566A; }
-    .never { font-size: 12px; font-weight: 700; fill: #A2525A; }
-    .box { fill: #ECEFF4; stroke: #81A1C1; stroke-width: 1.5; }
-    .hero { fill: #E5E9F0; stroke: #5E81AC; stroke-width: 2.5; }
-    .row { fill: #FFFFFF; stroke: #81A1C1; stroke-width: 1.2; }
-    .ghost { fill: none; stroke: #81A1C1; stroke-width: 1.5; stroke-dasharray: 5 4; }
-    .ghost-text { font-size: 14px; fill: #4C566A; }
-    .flow { stroke: #5E81AC; stroke-width: 2; fill: none; }
-    .flow-head { fill: #5E81AC; }
-    .no { stroke: #BF616A; stroke-width: 1.8; fill: none; stroke-dasharray: 6 5; }
-    .x { stroke: #BF616A; stroke-width: 3; stroke-linecap: round; }
-  </style>
-  <rect x="1" y="1" width="958" height="428" rx="14" fill="#FFFFFF" stroke="#D8DEE9" stroke-width="2"/>
-
-  <!-- GitHub column -->
-  <text class="cap" x="28" y="40">GITHUB</text>
-  <rect class="box" x="28" y="64" width="190" height="96" rx="10"/>
-  <text class="name" x="46" y="98">Pull request</text>
-  <text class="sub" x="46" y="120">any repo you list in</text>
-  <text class="sub" x="46" y="138">PRREVIEW_GATE_REPOS</text>
-
-  <rect class="ghost" x="28" y="262" width="190" height="52" rx="10"/>
-  <text class="ghost-text" x="46" y="293">Approve</text>
-  <rect class="ghost" x="28" y="336" width="190" height="52" rx="10"/>
-  <text class="ghost-text" x="46" y="367">Merge</text>
-
-  <!-- Protagonist -->
-  <text class="cap" x="340" y="40">YOUR MACHINE</text>
-  <rect class="hero" x="340" y="56" width="330" height="340" rx="14"/>
-  <text class="hero-name" x="362" y="94">pr-reviewer</text>
-  <text class="sub" x="362" y="116">runs as your gh login, on a machine you control</text>
-
-  <rect class="row" x="360" y="134" width="290" height="64" rx="8"/>
-  <text class="row-name" x="376" y="160">review-loop.sh</text>
-  <text class="lbl" x="376" y="182">one round a minute while any PR is open</text>
-
-  <rect class="row" x="360" y="210" width="290" height="64" rx="8"/>
-  <text class="row-name" x="376" y="236">pr-autoreview.sh</text>
-  <text class="lbl" x="376" y="258">one round: every new head gets one review</text>
-
-  <rect class="row" x="360" y="286" width="290" height="92" rx="8"/>
-  <text class="name" x="376" y="312" style="fill:#2E3440">Disposable clone</text>
-  <text class="lbl" x="376" y="334">base branch at the merge base,</text>
-  <text class="lbl" x="376" y="352">PR diff applied on top; never</text>
-  <text class="lbl" x="376" y="370">your own working tree</text>
-
-  <!-- Claude + patterns column -->
-  <text class="cap" x="760" y="40">MODEL</text>
-  <rect class="box" x="760" y="64" width="172" height="130" rx="10"/>
-  <text class="name" x="778" y="98">Claude Code</text>
-  <text class="sub" x="778" y="120">claude -p, headless</text>
-  <text class="sub" x="778" y="144">tools: Read, Grep, Glob</text>
-  <text class="sub" x="778" y="162">inside the clone only;</text>
-  <text class="sub" x="778" y="180">no shell, no network</text>
-
-  <text class="cap" x="760" y="252">LOCAL FILE</text>
-  <rect class="box" x="760" y="266" width="172" height="96" rx="10"/>
-  <text class="name" x="778" y="298">sensitive-patterns</text>
-  <text class="sub" x="778" y="320">your regex list; no file,</text>
-  <text class="sub" x="778" y="338">no run</text>
-
-  <!-- PR <-> reviewer -->
-  <path class="flow" d="M218 94 H332"/><path class="flow-head" d="M340 94 l-10 -5 v10 z"/>
-  <text class="lbl" x="228" y="84">diff, title, body</text>
-  <path class="flow" d="M340 138 H226"/><path class="flow-head" d="M218 138 l10 -5 v10 z"/>
-  <text class="lbl" x="228" y="158">one comment</text>
-  <text class="lbl" x="228" y="174">per new head</text>
-
-  <!-- reviewer -> approve / merge : never -->
-  <path class="no" d="M340 288 H218"/>
-  <line class="x" x1="270" y1="280" x2="286" y2="296"/><line class="x" x1="286" y1="280" x2="270" y2="296"/>
-  <text class="never" x="298" y="280">never</text>
-  <path class="no" d="M340 362 H218"/>
-  <line class="x" x1="270" y1="354" x2="286" y2="370"/><line class="x" x1="286" y1="354" x2="270" y2="370"/>
-  <text class="never" x="298" y="354">never</text>
-
-  <!-- reviewer <-> Claude -->
-  <path class="flow" d="M670 104 H752"/><path class="flow-head" d="M760 104 l-10 -5 v10 z"/>
-  <text class="lbl" x="678" y="94">prompt</text>
-  <path class="flow" d="M760 150 H678"/><path class="flow-head" d="M670 150 l10 -5 v10 z"/>
-  <text class="lbl" x="678" y="170">findings</text>
-  <text class="lbl" x="678" y="186">JSON</text>
-
-  <!-- patterns -> reviewer -->
-  <path class="flow" d="M760 314 H678"/><path class="flow-head" d="M670 314 l10 -5 v10 z"/>
-  <text class="lbl" x="678" y="304">checked</text>
-  <text class="lbl" x="678" y="336">before</text>
-  <text class="lbl" x="678" y="352">every post</text>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 880 528" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="overview-github-title overview-github-desc" id="overview-github-root">
+<title id="overview-github-title">Where pr-reviewer runs</title>
+<desc id="overview-github-desc">pr-reviewer runs on your machine, reads open pull requests through gh, has Claude Code review a per-PR worktree with read-only tools, scans text against your sensitive-patterns file, and posts one comment per new head.</desc>
+<defs>
+      <style>#overview-github-root { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; color: #1F2328; }
+      #overview-github-root .page { max-width: 1000px; width: 100%; }
+      #overview-github-root .diagram-container { width: 100%; overflow-x: auto; }
+      #overview-github-root .diagram-container { overflow-x: visible; }
+      #overview-github-root .bg { fill: #FFFFFF; }
+      #overview-github-root .edge-frame { fill: none; stroke: #818B98; stroke-width: 2; }
+      #overview-github-root text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #1F2328; font-size: 12px; }
+      #overview-github-root .t-name { font-size: 14px; font-weight: 600; }
+      #overview-github-root .t-name-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; font-weight: 700; }
+      #overview-github-root .t-sub { fill: #59636E; }
+      #overview-github-root .t-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+      #overview-github-root .t-eye { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; letter-spacing: .12em; fill: #59636E; }
+      #overview-github-root .t-arrow { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; letter-spacing: .06em; fill: #59636E; }
+      #overview-github-root .t-alert { fill: #D1242F; font-weight: 700; }
+      #overview-github-root .t-chip { fill: #FFFFFF; font-weight: 700; }
+      #overview-github-root .t-title { font-size: 14px; font-weight: 700; }
+      #overview-github-root .mask { fill: #FFFFFF; }
+      #overview-github-root .node { fill: #F6F8FA; stroke: #818B98; stroke-width: 1.2; }
+      #overview-github-root .raised { fill: #FFFFFF; stroke: #818B98; stroke-width: 1; }
+      #overview-github-root .hero { fill: #DDF4FF; stroke: #0969DA; stroke-width: 2.4; }
+      #overview-github-root .optional { fill: none; stroke: #818B98; stroke-width: 1.2; stroke-dasharray: 5 4; }
+      #overview-github-root .zone { fill: none; stroke: #818B98; stroke-width: 1; stroke-dasharray: 4 4; }
+      #overview-github-root .strip { fill: #F6F8FA; stroke: #818B98; stroke-width: 1.2; }
+      #overview-github-root .bar { fill: #CF222E; }
+      #overview-github-root .alert-node { fill: #FFFFFF; stroke: #CF222E; stroke-width: 2; stroke-dasharray: 6 4; }
+      #overview-github-root .edge { fill: none; stroke: #0969DA; stroke-width: 1.6; }
+      #overview-github-root .edge-dash { fill: none; stroke: #0969DA; stroke-width: 1.4; stroke-dasharray: 5 4; }
+      #overview-github-root .edge-alert { fill: none; stroke: #CF222E; stroke-width: 1.6; }
+      #overview-github-root .mk { fill: #0969DA; }
+      #overview-github-root .mk-alert { fill: #CF222E; }
+      #overview-github-root .chip { fill: #25292E; }
+      #overview-github-root .dot { fill: #1F2328; }
+      #overview-github-root .bullet { fill: #59636E; }
+      #overview-github-root .diamond { fill: #FFFFFF; stroke: #818B98; stroke-width: 1.4; }</style>
+<marker id="overview-github-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon class="mk" points="0 0, 8 3, 0 6"/></marker>
+<marker id="overview-github-arrow-alert" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon class="mk-alert" points="0 0, 8 3, 0 6"/></marker>
+</defs>
+<rect class="bg" width="880" height="528"/>
+<rect class="edge-frame" x="1" y="1" width="878" height="526" rx="8"/>
+<g transform="translate(0,-28)">
+<rect class="hero" x="264" y="56" width="376" height="368" rx="8"/>
+<text class="t-eye" x="280" y="78">YOUR MACHINE</text>
+<text class="t-eye" x="24" y="150">GITHUB</text>
+<text class="t-eye" x="712" y="150">MODEL</text>
+<path class="edge" d="M184,212 H284" marker-end="url(#overview-github-arrow)"/>
+<path class="edge" d="M284,244 H184" marker-end="url(#overview-github-arrow)"/>
+<path class="edge" d="M620,212 H712" marker-end="url(#overview-github-arrow)"/>
+<path class="edge" d="M712,244 H620" marker-end="url(#overview-github-arrow)"/>
+<path class="edge" d="M452,156 V180" marker-end="url(#overview-github-arrow)"/>
+<path class="edge" d="M362,276 V300" marker-end="url(#overview-github-arrow)"/>
+<path class="edge" d="M542,300 V276" marker-end="url(#overview-github-arrow)"/>
+<rect class="mask" x="203" y="190" width="42" height="16" rx="2"/><text class="t-arrow" x="224" y="202" text-anchor="middle">READ</text>
+<rect class="mask" x="203" y="250" width="42" height="16" rx="2"/><text class="t-arrow" x="224" y="262" text-anchor="middle">POST</text>
+<rect class="mask" x="648" y="190" width="56" height="16" rx="2"/><text class="t-arrow" x="676" y="202" text-anchor="middle">PROMPT</text>
+<rect class="mask" x="652" y="250" width="48" height="16" rx="2"/><text class="t-arrow" x="676" y="262" text-anchor="middle">REPLY</text>
+<rect class="mask" x="462" y="160" width="56" height="16" rx="2"/><text class="t-arrow" x="490" y="172" text-anchor="middle">STARTS</text>
+<rect class="mask" x="370" y="280" width="56" height="16" rx="2"/><text class="t-arrow" x="398" y="292" text-anchor="middle">BUILDS</text>
+<rect class="mask" x="549" y="280" width="42" height="16" rx="2"/><text class="t-arrow" x="570" y="292" text-anchor="middle">SCAN</text>
+<g data-box="24 164 160 112">
+<rect class="node" x="24" y="164" width="160" height="112" rx="6"/>
+<text class="t-name" x="36" y="186">Pull request</text>
+<text class="t-sub" x="36" y="206">open, not a draft,</text>
+<text class="t-sub" x="36" y="222">in a repo from</text>
+<text class="t-sub" x="36" y="238"><tspan class="t-code">PRREVIEW_GATE_REPOS</tspan></text>
+</g>
+<g data-box="284 92 336 64">
+<rect class="raised" x="284" y="92" width="336" height="64" rx="6"/>
+<text class="t-name-code" x="296" y="114">review-loop.sh</text>
+<text class="t-sub" x="296" y="134">polls once a minute while a PR is open</text>
+</g>
+<g data-box="284 180 336 96">
+<rect class="raised" x="284" y="180" width="336" height="96" rx="6"/>
+<text class="t-name-code" x="296" y="202">pr-autoreview.sh</text>
+<text class="t-sub" x="296" y="222">one round: each new head gets one review</text>
+<text class="t-sub" x="296" y="238">up to 2 PRs at the same time</text>
+</g>
+<g data-box="284 300 156 96">
+<rect class="raised" x="284" y="300" width="156" height="96" rx="6"/>
+<text class="t-name" x="296" y="322">Per-PR worktree</text>
+<text class="t-sub" x="296" y="342">merge base + PR diff,</text>
+<text class="t-sub" x="296" y="358">rules files from the</text>
+<text class="t-sub" x="296" y="374">default branch</text>
+</g>
+<g data-box="464 300 156 96">
+<rect class="raised" x="464" y="300" width="156" height="96" rx="6"/>
+<text class="t-name" x="476" y="322">Sensitive patterns</text>
+<text class="t-sub" x="476" y="342">your regex list.</text>
+<text class="t-sub" x="476" y="358">Scans PR text and</text>
+<text class="t-sub" x="476" y="374">each comment</text>
+</g>
+<g data-box="712 164 144 112">
+<rect class="node" x="712" y="164" width="144" height="112" rx="6"/>
+<text class="t-name" x="724" y="186">Claude Code</text>
+<text class="t-sub" x="724" y="206"><tspan class="t-code">claude -p</tspan>, headless</text>
+<text class="t-sub" x="724" y="222">Read, Grep, Glob on</text>
+<text class="t-sub" x="724" y="238">the worktree only.</text>
+<text class="t-sub" x="724" y="254">No shell, no web.</text>
+</g>
+<g data-box="24 444 408 88">
+<rect class="optional" x="24" y="444" width="408" height="88" rx="6"/>
+<text class="t-title" x="40" y="468">Fork PRs from untrusted authors: skipped</text>
+<text class="t-sub" x="40" y="488">A fork PR is reviewed only if its author is in</text>
+<text class="t-sub" x="40" y="504"><tspan class="t-code">PRREVIEW_GATE_TRUSTED_AUTHORS</tspan>, or you run</text>
+<text class="t-sub" x="40" y="520"><tspan class="t-code">prreview once --pr</tspan>.</text>
+</g>
+<g data-box="448 444 408 88">
+<rect class="strip" x="448" y="444" width="408" height="88" rx="6"/>
+<rect class="bar" x="448" y="444" width="6" height="88" rx="2"/>
+<text class="t-title" x="468" y="468">It never approves or merges.</text>
+<text class="t-sub" x="468" y="488">Its only merge call is <tspan class="t-code">gh pr merge --disable-auto</tspan>,</text>
+<text class="t-sub" x="468" y="504">off by default. A verdict is a comment,</text>
+<text class="t-sub" x="468" y="520">not a GitHub approval.</text>
+</g>
+</g>
 </svg>

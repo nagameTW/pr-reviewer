@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 880 836" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="round-github-dark-title round-github-dark-desc" id="round-github-dark-root">
+<title id="round-github-dark-title">How one review round runs</title>
+<desc id="round-github-dark-desc">A review round has seven steps: pick, scan, build, slice, review, verify and post. Steps 1 to 4 make no model call. A match in the scan, or a scan that cannot run, posts a Review withheld notice and the PR is not reviewed. Output that cannot be parsed is not posted.</desc>
+<defs>
+      <style>#round-github-dark-root { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; color: #F0F6FC; }
+      #round-github-dark-root .page { max-width: 1000px; width: 100%; }
+      #round-github-dark-root .diagram-container { width: 100%; overflow-x: auto; }
+      #round-github-dark-root .diagram-container { overflow-x: visible; }
+      #round-github-dark-root .bg { fill: #0D1117; }
+      #round-github-dark-root .edge-frame { fill: none; stroke: #656C76; stroke-width: 2; }
+      #round-github-dark-root text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #F0F6FC; font-size: 12px; }
+      #round-github-dark-root .t-name { font-size: 14px; font-weight: 600; }
+      #round-github-dark-root .t-name-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; font-weight: 700; }
+      #round-github-dark-root .t-sub { fill: #9198A1; }
+      #round-github-dark-root .t-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+      #round-github-dark-root .t-eye { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; letter-spacing: .12em; fill: #9198A1; }
+      #round-github-dark-root .t-arrow { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; letter-spacing: .06em; fill: #9198A1; }
+      #round-github-dark-root .t-alert { fill: #F85149; font-weight: 700; }
+      #round-github-dark-root .t-chip { fill: #0D1117; font-weight: 700; }
+      #round-github-dark-root .t-title { font-size: 14px; font-weight: 700; }
+      #round-github-dark-root .mask { fill: #0D1117; }
+      #round-github-dark-root .node { fill: #151B23; stroke: #656C76; stroke-width: 1.2; }
+      #round-github-dark-root .raised { fill: #0D1117; stroke: #656C76; stroke-width: 1; }
+      #round-github-dark-root .hero { fill: #111D2E; stroke: #4493F8; stroke-width: 2.4; }
+      #round-github-dark-root .optional { fill: none; stroke: #656C76; stroke-width: 1.2; stroke-dasharray: 5 4; }
+      #round-github-dark-root .zone { fill: none; stroke: #656C76; stroke-width: 1; stroke-dasharray: 4 4; }
+      #round-github-dark-root .strip { fill: #151B23; stroke: #656C76; stroke-width: 1.2; }
+      #round-github-dark-root .bar { fill: #DA3633; }
+      #round-github-dark-root .alert-node { fill: #0D1117; stroke: #DA3633; stroke-width: 2; stroke-dasharray: 6 4; }
+      #round-github-dark-root .edge { fill: none; stroke: #4493F8; stroke-width: 1.6; }
+      #round-github-dark-root .edge-dash { fill: none; stroke: #4493F8; stroke-width: 1.4; stroke-dasharray: 5 4; }
+      #round-github-dark-root .edge-alert { fill: none; stroke: #DA3633; stroke-width: 1.6; }
+      #round-github-dark-root .mk { fill: #4493F8; }
+      #round-github-dark-root .mk-alert { fill: #DA3633; }
+      #round-github-dark-root .chip { fill: #F0F6FC; }
+      #round-github-dark-root .dot { fill: #F0F6FC; }
+      #round-github-dark-root .bullet { fill: #9198A1; }
+      #round-github-dark-root .diamond { fill: #0D1117; stroke: #656C76; stroke-width: 1.4; }</style>
+<marker id="round-github-dark-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon class="mk" points="0 0, 8 3, 0 6"/></marker>
+<marker id="round-github-dark-arrow-alert" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon class="mk-alert" points="0 0, 8 3, 0 6"/></marker>
+</defs>
+<rect class="bg" width="880" height="836"/>
+<rect class="edge-frame" x="1" y="1" width="878" height="834" rx="8"/>
+<g transform="translate(0,-0)">
+<rect class="zone" x="24" y="24" width="832" height="402" rx="8"/>
+<text class="t-eye" x="840" y="46" text-anchor="end">NO MODEL CALL</text>
+<rect class="zone" x="24" y="450" width="832" height="178" rx="8"/>
+<text class="t-eye" x="840" y="472" text-anchor="end">MODEL CALLS</text>
+<path class="edge" d="M56,164 V180" marker-end="url(#round-github-dark-arrow)"/>
+<path class="edge" d="M56,252 V268" marker-end="url(#round-github-dark-arrow)"/>
+<path class="edge" d="M56,340 V356" marker-end="url(#round-github-dark-arrow)"/>
+<path class="edge" d="M56,412 V486" marker-end="url(#round-github-dark-arrow)"/>
+<path class="edge" d="M56,542 V558" marker-end="url(#round-github-dark-arrow)"/>
+<path class="edge" d="M56,614 V660" marker-end="url(#round-github-dark-arrow)"/>
+<g data-box="32 60 816 104" data-left="170">
+<rect class="raised" x="32" y="60" width="816" height="104" rx="6"/>
+<circle class="chip" cx="56" cy="82" r="12"/>
+<text class="t-chip" x="56" y="86" text-anchor="middle">1</text>
+<text class="t-name" x="80" y="87">Pick</text>
+<text class="t-sub" x="192" y="87">Open PRs that are not drafts and have no comment for the current head.</text>
+<text class="t-sub" x="192" y="103">Skips fork PRs from authors you do not trust.</text>
+<text class="t-sub" x="192" y="119">Waits if the head is unchanged and the reviewer's last comment is under 10 minutes old.</text>
+<text class="t-sub" x="192" y="135">Only a title, description or base edit can cause this wait. A new push never waits.</text>
+<text class="t-sub" x="192" y="151">Setting: <tspan class="t-code">PRREVIEW_GATE_PR_COOLDOWN_MIN</tspan>.</text>
+</g>
+<g data-box="32 180 816 72" data-left="170">
+<rect class="raised" x="32" y="180" width="816" height="72" rx="6"/>
+<circle class="chip" cx="56" cy="202" r="12"/>
+<text class="t-chip" x="56" y="206" text-anchor="middle">2</text>
+<text class="t-name" x="80" y="207">Scan</text>
+<text class="t-sub" x="192" y="207">Matches the title, description and linked issue text against your sensitive-patterns file.</text>
+<text class="t-sub" x="192" y="223">On a match, or if the scan cannot run, posts a "Review withheld" notice that does not</text>
+<text class="t-sub" x="192" y="239">quote the value. The PR is not reviewed and no model call is made.</text>
+</g>
+<g data-box="32 268 816 72" data-left="170">
+<rect class="raised" x="32" y="268" width="816" height="72" rx="6"/>
+<circle class="chip" cx="56" cy="290" r="12"/>
+<text class="t-chip" x="56" y="294" text-anchor="middle">3</text>
+<text class="t-name" x="80" y="295">Build</text>
+<text class="t-sub" x="192" y="295">Checks out the merge base and applies the PR diff.</text>
+<text class="t-sub" x="192" y="311">Then copies convention files (CLAUDE.md, AGENTS.md, README, CONTRIBUTING) from the default branch.</text>
+<text class="t-sub" x="192" y="327">Over 2000 changed lines or 40 files: no review, one split request.</text>
+</g>
+<g data-box="32 356 816 56" data-left="170">
+<rect class="raised" x="32" y="356" width="816" height="56" rx="6"/>
+<circle class="chip" cx="56" cy="378" r="12"/>
+<text class="t-chip" x="56" y="382" text-anchor="middle">4</text>
+<text class="t-name" x="80" y="383">Slice</text>
+<text class="t-sub" x="192" y="383">Over 300 changed lines: slices of about 250 lines, up to 8, reviewed in parallel.</text>
+<text class="t-sub" x="192" y="399">300 lines or fewer: one slice.</text>
+</g>
+<g class="focal" data-box="32 486 816 56" data-left="170">
+<rect class="hero focal-r" x="32" y="486" width="816" height="56" rx="6"/>
+<circle class="chip" cx="56" cy="508" r="12"/>
+<text class="t-chip" x="56" y="512" text-anchor="middle">5</text>
+<text class="t-name" x="80" y="513">Review</text>
+<text class="t-sub" x="192" y="513">Claude Code reads the worktree with Read, Grep and Glob. It has no shell and no web tools.</text>
+<text class="t-sub" x="192" y="529">Every slice gets the 13 checklist items.</text>
+</g>
+<g data-box="32 558 816 56" data-left="170">
+<rect class="raised" x="32" y="558" width="816" height="56" rx="6"/>
+<circle class="chip" cx="56" cy="580" r="12"/>
+<text class="t-chip" x="56" y="584" text-anchor="middle">6</text>
+<text class="t-name" x="80" y="585">Verify</text>
+<text class="t-sub" x="192" y="585">Drops findings that cite a file in neither the diff nor the tree.</text>
+<text class="t-sub" x="192" y="601">One call per blocking finding, up to 6, tries to refute it. Confidence 0.8 or more is needed.</text>
+</g>
+<g data-box="32 660 816 56" data-left="170">
+<rect class="raised" x="32" y="660" width="816" height="56" rx="6"/>
+<circle class="chip" cx="56" cy="682" r="12"/>
+<text class="t-chip" x="56" y="686" text-anchor="middle">7</text>
+<text class="t-name" x="80" y="687">Post</text>
+<text class="t-sub" x="192" y="687">Escapes HTML tags in model text that could rewrite the comment.</text>
+<text class="t-sub" x="192" y="703">Matches the comment against your sensitive-patterns file, then posts one comment per new head.</text>
+</g>
+<g data-box="24 740 832 72"><rect class="strip" x="24" y="740" width="832" height="72" rx="6"/><rect class="bar" x="24" y="740" width="6" height="72" rx="2"/><text class="t-title" x="44" y="764">Fails closed.</text><text class="t-sub" x="44" y="784">Output that cannot be parsed means nothing is posted this round.</text><text class="t-sub" x="44" y="800">The PR is tried again later. A verdict whose post failed is kept and sent again with no new review.</text></g>
+</g>
+</svg>

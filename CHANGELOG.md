@@ -121,6 +121,18 @@ All notable changes to this project are recorded here. The format follows
   any letter case of a convention name. The note to the model says that a path
   the default branch lacks is absent from the tree. The log line about the
   copy appears only when a convention file changed.
+- The README is shorter and the details moved to `docs/`. It names the tool
+  `prreview` throughout and has a four-step Quick start. "Trust and cost" and
+  "Status and limits" come before Quick start, and the Contents list is gone.
+  The settings summary lists names only. `docs/configuration.md` holds every
+  setting with its default, and `tests/prreview.test.sh` checks that file
+  instead of the README. `docs/operations.md` holds one round in detail,
+  failures and holds, and where the files live. `docs/github-app.md` and
+  `docs/windows.md` hold the App and WSL2 steps. `docs/comparison.md` is new.
+  The diagrams are light and dark SVGs that follow the reader's theme. A table
+  of the 13 checklist items replaces `docs/images/checks.svg`.
+- An Approved comment has a second banner line: "Automated review, not a
+  GitHub approval." A Changes requested banner is unchanged.
 
 ### Fixed
 
