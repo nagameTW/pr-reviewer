@@ -61,6 +61,8 @@ is 'a number with a fraction does not match the trigger' "$(trusted '{"number":2
 is 'a record without a number does not match the trigger' "$(trusted '{"author":null}' '' 2)" not-trusted
 is 'text that is not JSON is not trusted'               "$(trusted 'not json' 'mallory' 7)" not-trusted
 is 'an empty answer is not trusted'                     "$(trusted '' '' '')" not-trusted
+is 'an answer of only white space is not trusted'       "$(trusted $' \n' '' '')" not-trusted
+is 'text after a trusted record is not trusted'         "$(trusted '{"number":8,"isCrossRepository":false,"author":{"login":"alice"}} oops' '' '')" not-trusted
 
 # ── the reference: owner/repo#N ───────────────────────────────────────────
 ref() { trust_parse_pr_ref "$1" 2>/dev/null || echo rejected; }

@@ -32,9 +32,11 @@
 # Trade-off: a PR whose author account was deleted can come back with no
 # login. The rule then skips it, unless `prreview once --pr` names it.
 pr_author_trusted() {
-  local allowed="${2-}"
+  local allowed="${2-}" answer
   allowed="${allowed//,/ }"
-  jq -e --arg allowed "$allowed" --arg trigger "${3-}" '
+  # Read the printed answer, not the exit status of `jq -e`. jq 1.6 exits 0
+  # for -e with no input, and the text of an empty answer is not "true".
+  answer="$(jq -r --arg allowed "$allowed" --arg trigger "${3-}" '
     type == "object" and (
       ($trigger != "" and (.number | type == "number" and . == floor and tostring == $trigger))
       or (
@@ -47,7 +49,8 @@ pr_author_trusted() {
                  | [$allowed | ascii_downcase | scan("[^ \t\n]+")] | any(. == $login)))
       )
     )
-  ' <<<"${1-}" >/dev/null 2>&1
+  ' <<<"${1-}" 2>/dev/null)" || return 1
+  [ "$answer" = true ]
 }
 
 # trust_plan_prs LIST ALLOWED FORK_PRS TRIGGER
