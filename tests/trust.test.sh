@@ -358,6 +358,36 @@ OUT="$(run_gate PRREVIEW_ONCE_PR=owner/repo#2)"
 has 'a head with a verdict that only the job sees: the job says so' "$OUT" '[owner__repo#2] PR #2: this head was already handled'
 has '...and the round exits 0'                           "$OUT" 'rc=0'
 rm -f "$T/view-2.1.json" "$T/view-2.2.json"
+# A notice carries the same key marker as a verdict, but it is not one. The
+# title reminder and the sensitive-data notice leave the PR without a review,
+# so every run exits 75 and says why, until a verdict exists on the head.
+TITLE_NOTICE="[{\"author\":{\"login\":\"owner\"},\"body\":\"<!-- pr-reviewer $KEY2 -->\\n\\n> [!NOTE]\\n> **Automated review: ℹ️ Title format reminder**\",\"createdAt\":\"2026-01-01T00:00:00Z\"}]"
+SENS_NOTICE="[{\"author\":{\"login\":\"owner\"},\"body\":\"<!-- pr-reviewer $KEY2 -->\\n\\n> [!CAUTION]\\n> **Automated review: ⛔ Review withheld**\",\"createdAt\":\"2026-01-01T00:00:00Z\"}]"
+for KIND in title sensitive; do
+  NOTICE="$TITLE_NOTICE"; [ "$KIND" = title ] || NOTICE="$SENS_NOTICE"
+  view2 "$NOTICE" false > "$T/view-2.json"
+  for RUN in first second; do
+    OUT="$(run_gate PRREVIEW_ONCE_PR=owner/repo#2)"
+    has "$KIND notice, $RUN run: the round exits 75"      "$OUT" 'rc=75'
+    has "$KIND notice, $RUN run: it says why"             "$OUT" 'only a notice'
+    has "$KIND notice, $RUN run: it says the PR was not reviewed" "$OUT" 'owner/repo#2 was not reviewed'
+  done
+  # The job sees the notice and the dispatcher does not.
+  view2 '[]' false > "$T/view-2.1.json"; view2 "$NOTICE" false > "$T/view-2.2.json"; rm -f "$T/view-2.json"
+  OUT="$(run_gate PRREVIEW_ONCE_PR=owner/repo#2)"
+  has "$KIND notice seen only by the job: the round exits 75" "$OUT" 'rc=75'
+  rm -f "$T/view-2.1.json" "$T/view-2.2.json"
+done
+# A notice and a verdict together: the verdict counts.
+view2 "$(jq -c -n --argjson a "$TITLE_NOTICE" --argjson b "$GATE_COMMENT" '$a + $b')" false > "$T/view-2.json"
+OUT="$(run_gate PRREVIEW_ONCE_PR=owner/repo#2)"
+has 'a notice and a verdict on the head: the round exits 0' "$OUT" 'rc=0'
+# A verdict for another key is not a verdict for this head.
+OLD_VERDICT="$(jq -c '.[0].body |= sub("pr-reviewer [^ ]+ "; "pr-reviewer 0000000000000000000000000000000000000000-000000000000 ")' <<<"$GATE_COMMENT")"
+view2 "$(jq -c -n --argjson a "$TITLE_NOTICE" --argjson b "$OLD_VERDICT" '$a + $b')" false > "$T/view-2.json"
+OUT="$(run_gate PRREVIEW_ONCE_PR=owner/repo#2)"
+has 'a verdict for an older key does not count: the round exits 75' "$OUT" 'rc=75'
+rm -f "$T/view-2.json"
 # A verdict the job posts counts too. This pins the wiring: a full review
 # needs a model.
 is 'the job records its verdict comment for the named round' \

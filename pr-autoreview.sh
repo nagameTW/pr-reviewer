@@ -991,7 +991,13 @@ review_one_pr() { # $1 = PR number, $2 = the worktree the dispatcher made
   # already handled this exact head + title/body?
   if [ "$HEAD_HANDLED" = 1 ]; then
     echo "PR #$PR: this head was already handled — nothing to do until it changes (review-only: this gate never merges)"
-    note_answered
+    # A notice marks the head handled, so the loop does not post it again, but
+    # it is not a review. Only a verdict answers a named PR.
+    if prompt_key_has_verdict "$INFO" "$MARKER" "$PRIOR_AUTHORS" "$KEY"; then
+      note_answered
+    else
+      echo "PR #$PR: the reviewer has only a notice on this head, no verdict"
+    fi
     return 0
   fi
   # This head's marker from an App outside PRIOR_AUTHORS: the identity list
@@ -3305,7 +3311,13 @@ for PR in $OPEN_PRS; do
     fi
     if prompt_head_handled "$PRE" "$MARKER" "$PRIOR_AUTHORS" "$DEFAULT_BRANCH"; then
       echo "[$REPO_KEY#$PR] PR #$PR: this head was already handled — nothing to do until it changes (review-only: this gate never merges)"
-      note_answered
+      # Only a verdict answers a named PR. A notice marks the head handled so
+      # the loop does not post it again, but the PR has no review.
+      if prompt_head_verdict "$PRE" "$MARKER" "$PRIOR_AUTHORS" "$DEFAULT_BRANCH"; then
+        note_answered
+      else
+        echo "[$REPO_KEY#$PR] PR #$PR: the reviewer has only a notice on this head, no verdict"
+      fi
       continue
     fi
   fi
