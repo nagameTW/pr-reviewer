@@ -109,7 +109,7 @@ is 'round task: round 1 has no task section' "$(prompt_round_task_section 1 1)" 
 has 'round task: round 2 verifies the previous blockers one by one' 'fixed, not-fixed or refuted' "$(prompt_round_task_section 2 1)"
 has 'round task: a carried finding keeps its file, severity and issue text' 'same file, same severity, same issue text' "$(prompt_round_task_section 2 1)"
 has 'round task: a carried finding is re-anchored when the old line is past the end of the file' 'past the end of the file' "$(prompt_round_task_section 2 1)"
-has 'round task: ...or when it is not the NEW[...] line of the code it names' 'is not the NEW[...] line of the code the finding names' "$(prompt_round_task_section 2 1)"
+has 'round task: ...or when it is not the NEW[...] line of the code it names' 'is not the NEW[...] line of the code the finding names (if the diff has no labels, the new-side line counted from the hunk header). Then give that line of the code.' "$(prompt_round_task_section 2 1)"
 is  'round task: a carried finding is no longer pinned to the old file:line' "$(prompt_round_task_section 2 1 | grep -c 'same file:line')" 0
 has 'round task: round 2 searches the delta only' 'ONLY to the files changed since the last reviewed round' "$(prompt_round_task_section 2 1)"
 has 'round task: round 2 looks for new defects on the delta only' 'Look for new defects on the delta only' "$(prompt_round_task_section 2 1)"
