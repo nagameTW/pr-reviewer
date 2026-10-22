@@ -133,8 +133,8 @@ It does not:
   plus `Read` on the round's own copies of the diff and of the PR's title and
   description (with the title and body of the issue the PR links, when it
   links one).
-- Review a PR whose title or description matches your sensitive-data patterns,
-  or post a comment that does.
+- Review a PR whose title, description or linked issue matches your
+  sensitive-data patterns, or post a comment that does.
 
 ## Terms
 
@@ -657,7 +657,9 @@ works in place of the loop, and a lock stops two rounds from overlapping.
    only comments by the reviewer's own account count. A PR on hold after a
    failure waits out its hold (see [When something fails](#when-something-fails)).
 2. **Scan.** Check the PR's title and description against your
-   sensitive-patterns file. A hit stops the review of that PR.
+   sensitive-patterns file. A hit stops the review of that PR. The title and
+   body of the issue the PR links get the same check when the round reads
+   them, before any model call.
 3. **Build.** Update the local clone of the repo, add a per-PR worktree, check
    out the merge base of the PR in it, and apply the PR's diff on top. The
    author's branch is never checked out, and the convention files are restored
@@ -821,7 +823,7 @@ even when you run `prreview once` from a terminal. After moving a tool, run
 | `PRREVIEW_REVIEW_APP_ID` | empty | A GitHub App's ID; when set, comments are posted as the App (see [Posting as a GitHub App](#posting-as-a-github-app)) |
 | `PRREVIEW_REVIEW_APP_KEY` | empty | The App's private key file |
 | `PRREVIEW_REVIEW_APP_SLUG` | read from GitHub every round | The App's URL name; its comments are authored by `<slug>[bot]`. Leave it unset, so renaming the App cannot leave a stale one |
-| `PRREVIEW_SENSITIVE_PATTERNS_FILE` | `~/.config/pr-reviewer/sensitive-patterns` | The regex list that every comment carrying PR text or model output, and every PR title and description, is checked against |
+| `PRREVIEW_SENSITIVE_PATTERNS_FILE` | `~/.config/pr-reviewer/sensitive-patterns` | The regex list that every comment carrying PR text or model output, and every PR title and description and every linked issue, is checked against |
 | `PRREVIEW_GATE_REPO_CONTEXT` | a sentence pointing at `CLAUDE.md`/`AGENTS.md`, `README`, `CONTRIBUTING` | Replaces the sentence that tells the model where a repo's conventions live |
 | `PRREVIEW_REVIEW_MODEL` | `claude-opus-5-5` | Model for the review, the refutation pass and the red team |
 | `PRREVIEW_GATE_CHEAP_MODEL` | `claude-sonnet-5-5` | Model for repairing unparseable output |

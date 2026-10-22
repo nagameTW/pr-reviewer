@@ -6,6 +6,16 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Security
+
+- The reviewer now scans the title and body of the issue a PR links against
+  your sensitive patterns. The README already said so, but only the PR's own
+  title and description were scanned, and the linked issue text reached the
+  model without a scan. On a match, or when the scan cannot run, the reviewer
+  posts a "Review withheld" notice that does not quote the value, and it does
+  not review the PR. To get a new review, edit the issue, then push a commit
+  or edit the PR description.
+
 ### Added
 
 - CI runs the test suite on macOS with `/bin/bash`, which is bash 3.2. The
