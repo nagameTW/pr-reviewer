@@ -48,6 +48,14 @@ All notable changes to this project are recorded here. The format follows
   trusted. Set `PRREVIEW_GATE_FORK_PRS=1` to bring back the old behavior. A
   fork PR that was open before the upgrade keeps its earlier comment, and its
   new heads are skipped.
+- The loop starts a round only when an open PR passes the same rule. Before,
+  it counted every open PR, so one fork PR left open started a round each
+  minute, with the scan of merged PRs and up to ten reads each time. The count
+  reads `PRREVIEW_GATE_TRUSTED_AUTHORS` and `PRREVIEW_GATE_FORK_PRS` from the
+  same environment as the round, and it asks for up to 1000 PRs, as the round
+  does. A field that is missing or of the wrong type means the PR is not
+  trusted. A list the loop cannot read counts as work. The scan of merged PRs
+  does not look at the author.
 - The reviewer finds `gtimeout` and `gsha256sum` on its own. At startup it uses
   `timeout` or `gtimeout` for deadlines. It uses `sha256sum`, `gsha256sum` or
   `shasum -a 256` for the review key digest, whichever it finds first. When only

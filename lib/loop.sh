@@ -32,19 +32,40 @@ loop_repos_of() {
   printf '%s\n' "$REPOS"
 }
 
-# How many open PRs are waiting across every repo the driven script covers.
-# $1 = path to the driven script, $2 = gh binary (default `gh`).
+# How many open PRs the round would review, across every repo the driven
+# script covers. $1 = path to the driven script, $2 = gh binary (default `gh`).
 #
-# Every failure direction answers 1, i.e. "assume there is work". A round that
-# runs with nothing to do costs one `gh pr list` per repo; a round skipped
-# because a transient error read as zero costs a review nobody notices is
-# missing, and the log says `open PRs=0` either way. That asymmetry is the
-# whole reason the count is generous.
+# The count applies the rule of the round: trust_plan_prs (lib/trust.sh), with
+# PRREVIEW_GATE_TRUSTED_AUTHORS and PRREVIEW_GATE_FORK_PRS read from the
+# environment. The round inherits the same environment from the loop, and
+# `prreview run` fills it from the settings file before it starts the loop, so
+# both see the same values. A count that includes the PRs the round skips
+# starts a full round every interval for as long as one fork PR stays open,
+# and each round pays for the merged-PR scan. The scan itself stays unfiltered.
+# The loop needs lib/trust.sh sourced and jq on PATH. The call asks for the
+# same fields and the same limit as the round, and the answer is read once.
+#
+# Every failure direction answers 1 per repo, i.e. "assume there is work". A
+# round that runs with nothing to do costs one `gh pr list` per repo; a round
+# skipped because a transient error read as zero costs a review nobody notices
+# is missing, and the log says `open PRs=0` either way. That asymmetry is the
+# whole reason the count is generous. An empty answer, a list that is not a
+# list, and an entry without a number are such failures: the round refuses
+# them and says so.
+# Trade-off: trust_plan_prs runs one jq call per PR, about 1000 calls for a
+# repository at the limit, once per interval.
 loop_open_pr_count() {
-  local script="${1-}" gh="${2:-gh}" repos r n total=0
+  local script="${1-}" gh="${2:-gh}" repos r list plan n total=0
   repos="$(loop_repos_of "$script")" || { printf '1\n'; return 0; }
   for r in $repos; do
-    n="$("$gh" pr list --repo "$r" --state open --json number --jq 'length' 2>/dev/null)" || n=1
+    # An empty answer is not an empty list: jq reads no input as no entries.
+    if list="$("$gh" pr list --repo "$r" --state open --limit 1000 --json number,author,isCrossRepository 2>/dev/null)" \
+       && [ -n "${list//[[:space:]]/}" ] \
+       && plan="$(trust_plan_prs "$list" "${PRREVIEW_GATE_TRUSTED_AUTHORS-}" "${PRREVIEW_GATE_FORK_PRS-}" "" 2>/dev/null)"; then
+      n="$(printf '%s\n' "$plan" | grep -c '^review ' || true)"
+    else
+      n=1
+    fi
     case "$n" in '' | *[!0-9]*) n=1 ;; esac
     total=$((total + n))
   done

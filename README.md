@@ -152,8 +152,11 @@ It skips every other PR. In practice, a skipped PR comes from a fork, and its
 author is not on the list. Anyone can open a fork PR, and each push to it would
 start a new model call on your account.
 
-The reviewer posts nothing on a skipped PR. The round log names it by number
-and never by title. A round that skips PRs prints one `WARNING:` line with the
+The reviewer posts nothing on a skipped PR. The loop that starts the rounds
+applies the same rule to its check, with the same two settings. A skipped PR
+then does not start a round each minute, and the loop keeps its idle schedule.
+The scan of merged PRs does not look at the author. The round log names a
+skipped PR by number and never by title. A round that skips PRs prints one `WARNING:` line with the
 count, and `prreview status` shows the count for the last round.
 
 To review one outside PR, name it:
@@ -204,7 +207,7 @@ The rest of this README uses these words in one sense each.
 | **Gate** | The name the code and its settings use for the reviewer: `pr-autoreview.sh`, the `PRREVIEW_GATE_*` settings, `gate.log`. It only comments; it does not block or merge anything, which is why its log calls the comment a review-only verdict. |
 | **Head** | The latest commit on a PR's branch. The reviewer reviews heads, not branches. |
 | **Trusted author** | The author of a PR that comes from a branch of the repository itself, or a login in `PRREVIEW_GATE_TRUSTED_AUTHORS`. A PR that `prreview once --pr` names is reviewed as if its author were trusted. |
-| **Round** | One run of `pr-autoreview.sh`. It goes over every listed repo and reviews each PR from a trusted author whose head has no comment yet. The loop checks for open PRs once a minute and starts a round when it finds any; with none open, it starts one only on every 15th check. The loop's log counts checks, so `[round 12]` there is the 12th check, whether or not a round ran. For a single PR, "round 2" means the second verdict comment on it: a push, an edited title, description or base branch, or (for a stacked PR) a push to its parent branch leads to the next one. |
+| **Round** | One run of `pr-autoreview.sh`. It goes over every listed repo and reviews each PR from a trusted author whose head has no comment yet. The loop checks once a minute for open PRs that the reviewer would read (see [Whose PRs it reviews](#whose-prs-it-reviews)) and starts a round when it finds any. A fork PR that the reviewer skips does not count. With none to review, the loop starts a round only on every 15th check. The loop's log counts checks, so `[round 12]` there is the 12th check, whether or not a round ran. For a single PR, "round 2" means the second verdict comment on it: a push, an edited title, description or base branch, or (for a stacked PR) a push to its parent branch leads to the next one. |
 | **Slice** | Part of a large diff, reviewed by its own model call (`PRREVIEW_GATE_CHUNK_*`). |
 | **Verdict** | The first line of the comment: ✅ Approved or ❌ Changes requested. It is text in a comment, not a GitHub review state. |
 | **Blocking finding** | A CRITICAL or HIGH finding that counts toward ❌ Changes requested. MEDIUM and LOW are listed without changing the verdict. |
@@ -449,10 +452,11 @@ line. A value is taken literally: no quotes, nothing expanded. Run
 ### 3. Check that it works
 
 Once installed, the service looks for open PRs right away and reviews any it
-finds from a trusted author. With none open, it runs a round only every 15
-minutes (`PRREVIEW_LOOP_IDLE_EVERY`), to catch PRs merged in the meantime. If
-you answered `n` at the service step, nothing reviews until you run
-`./prreview start`, `./prreview run` or `./prreview once`.
+finds from a trusted author. With no such PR open, it runs a round only every
+15 minutes (`PRREVIEW_LOOP_IDLE_EVERY`), to catch PRs merged in the meantime. An
+open fork PR that the reviewer skips does not start a round. If you answered `n`
+at the service step, nothing reviews until you run `./prreview start`,
+`./prreview run` or `./prreview once`.
 
 ```bash
 ./prreview status    # the main settings, service state, skipped PRs, the last log lines
@@ -932,8 +936,8 @@ even when you run `prreview once` from a terminal. After moving a tool, run
 | `PRREVIEW_GATE_DISARM_AUTO_MERGE` | `0` | `1` turns off an auto-merge that was armed on a head the reviewer has not reviewed yet; the token then needs write access |
 | `PRREVIEW_ALERT_REPO` | empty | `owner/repo` where the loop opens an issue when a round fails, or when `pr-autoreview.sh` itself no longer parses (the token then needs to open issues there); empty only logs it. Use a private repository. Each alert issue records a time when the host was up. |
 | `PRREVIEW_ALERT_REPEAT_HOURS` | `6` | Hours between "Still failing" comments on an alert issue that is still open |
-| `PRREVIEW_LOOP_INTERVAL` | `60` | Seconds between the loop's checks for open PRs; a check that finds any starts a round |
-| `PRREVIEW_LOOP_IDLE_EVERY` | `15` | With no open PRs, start a round only on every this-many-th check |
+| `PRREVIEW_LOOP_INTERVAL` | `60` | Seconds between the loop's checks for open PRs; a check that finds any PR the reviewer would read starts a round |
+| `PRREVIEW_LOOP_IDLE_EVERY` | `15` | With no PR to review, start a round only on every this-many-th check |
 | `PRREVIEW_LOOP_ROUND_TIMEOUT` | `3900` | Seconds before the loop stops a round (see [When something fails](#when-something-fails)) |
 | `PRREVIEW_LOOP_ROUND_KILL_AFTER` | `60` | Seconds a round gets to exit after that before it is killed |
 | `PRREVIEW_LOOP_READY_FAIL_LIMIT` | `5` | Checks in a row that `pr-autoreview.sh` may fail to parse before the loop files an alert issue in `PRREVIEW_ALERT_REPO` |

@@ -37,7 +37,10 @@ model call. A missing or unreadable field means the PR is not trusted. The
 reviewer posts nothing on a skipped PR and logs its number only. The list is
 the point where trust is decided. If a PR turns into a fork PR after the list,
 the dispatcher reads it once with `gh pr view`, and the job stops it before the
-diff fetch. That PR gets no model call and no write.
+diff fetch. That PR gets no model call and no write. The loop that starts the
+rounds counts only the PRs this rule admits, so one open fork PR from a
+stranger does not start a round, and a scan of merged PRs, every minute. The
+scan of merged PRs does not look at the author.
 `PRREVIEW_GATE_FORK_PRS=1` turns the rule off. The rule assumes that everyone
 who can push to the repository is trusted. A repository whose workflows build
 branches from outside input, for example with `pull_request_target`, breaks

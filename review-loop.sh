@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Review-gate driver. Runs pr-autoreview.sh once a minute for as long as
-# there are open PRs anywhere the gate reviews, and every IDLE_EVERY rounds
-# when there are none.
+# there are open PRs anywhere the gate would review (a fork PR that the round
+# skips does not count), and every IDLE_EVERY rounds when there are none.
 #
 set -uo pipefail
 
@@ -10,6 +10,7 @@ GATE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$GATE_DIR" || { echo "no gate repo at $GATE_DIR"; exit 1; }
 . ./lib/loop.sh || { echo "lib/loop.sh missing — refusing to run"; exit 1; }
 . ./lib/tools.sh || { echo "lib/tools.sh missing — refusing to run"; exit 1; }
+. ./lib/trust.sh || { echo "lib/trust.sh missing — refusing to run"; exit 1; }
 # The round below runs under a deadline, so the loop needs a timeout command.
 tools_resolve
 [ -n "$TIMEOUT_BIN" ] || { echo "timeout(1) missing (also tried gtimeout) — refusing to run" >&2; exit 1; }
