@@ -96,8 +96,9 @@ differ.
 The comment leads with the verdict and one line per finding; the detail sits
 in folded sections, opened here for the first finding. Every finding names a
 file and line, says what goes wrong on real input, and gives the fix. A
-security finding cites the standard it falls under, from the list in
-`checks/`. The folded summary also checks the PR description against the
+security finding cites the standard it falls under, from the table in
+[docs/how-it-reviews.md](docs/how-it-reviews.md#15-standards-the-checks-cite).
+The folded summary also checks the PR description against the
 diff: "pytest passes locally" with no recorded output is called out as a claim
 with no evidence.
 
@@ -256,6 +257,13 @@ model sees. Item 3 treats a host address in any RFC 1918 private range as a
 real internal address, in tests too. It allows the ranges and names reserved
 for documentation. If your fixtures use other ranges, edit
 `checks/03-sensitive-data.md` to match.
+
+Security findings cite the OWASP Top 10:2025, the OWASP API Security Top
+10:2023 and the CWE Top 25:2025. For LLM code they cite the OWASP lists for
+2026 and the MCP specification of 2025-06-18. The page
+[How pr-reviewer reviews](docs/how-it-reviews.md) has the edition table, each
+item, one review step by step, the known limits, and a comparison with human
+review and other AI review tools.
 
 ## Adding your own checks
 
