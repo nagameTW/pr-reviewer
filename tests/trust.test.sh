@@ -423,6 +423,13 @@ OUT="$(run_gate PRREVIEW_ONCE_PR=owner/repo#2 PRREVIEW_GATE_ONCE_WAIT=1)"
 has 'a named PR with the lock held fails'   "$OUT" 'rc=75'
 has '...and says why'                       "$OUT" 'still holds'
 has '...and names the PR that was not reviewed' "$OUT" 'owner/repo#2 was not reviewed'
+# 0 means do not wait. The default wait is 300 seconds, so a run that waits
+# at all takes far longer than the limit below.
+START=$SECONDS
+OUT="$(run_gate PRREVIEW_ONCE_PR=owner/repo#2 PRREVIEW_GATE_ONCE_WAIT=0)"
+has 'a wait of 0 with the lock held fails at once'  "$OUT" 'rc=75'
+has '...and says why'                                 "$OUT" 'owner/repo#2 was not reviewed'
+is '...without a wait'                                "$([ $((SECONDS - START)) -lt 10 ] && echo fast || echo slow)" fast
 OUT="$(run_gate)"
 has 'a round without a named PR still exits 0 when the lock is held' "$OUT" 'rc=0'
 has '...as before'                          "$OUT" 'holds'
@@ -520,6 +527,9 @@ is  '...and is read back'                      "$(setting get PRREVIEW_GATE_TRUS
 has 'PRREVIEW_GATE_FORK_PRS takes 1'           "$(setting set PRREVIEW_GATE_FORK_PRS 1)" 'PRREVIEW_GATE_FORK_PRS=1'
 has 'PRREVIEW_GATE_FORK_PRS refuses 2'         "$(setting set PRREVIEW_GATE_FORK_PRS 2)" 'takes 0 (off) or 1 (on)'
 has 'PRREVIEW_GATE_ONCE_WAIT refuses a word'   "$(setting set PRREVIEW_GATE_ONCE_WAIT soon)" 'takes a whole number'
+has 'PRREVIEW_GATE_ONCE_WAIT refuses 5m'        "$(setting set PRREVIEW_GATE_ONCE_WAIT 5m)" 'takes a whole number'
+has 'PRREVIEW_GATE_ONCE_WAIT refuses a negative number' "$(setting set PRREVIEW_GATE_ONCE_WAIT -1)" 'takes a whole number'
 has 'PRREVIEW_GATE_ONCE_WAIT shows its default' "$(setting get PRREVIEW_GATE_ONCE_WAIT)" '300'
+has 'PRREVIEW_GATE_ONCE_WAIT takes 0 (do not wait)' "$(setting set PRREVIEW_GATE_ONCE_WAIT 0)" 'PRREVIEW_GATE_ONCE_WAIT=0'
 
 if [ "$FAILED" -eq 0 ]; then echo "PASS: trust"; else echo "FAIL: trust"; exit 1; fi

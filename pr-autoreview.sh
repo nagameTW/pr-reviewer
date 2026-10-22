@@ -340,7 +340,8 @@ GATE_DISARM_AUTO_MERGE="${PRREVIEW_GATE_DISARM_AUTO_MERGE:-0}"
 # names it. PRREVIEW_GATE_FORK_PRS=1 reviews fork PRs like any other.
 GATE_FORK_PRS="${PRREVIEW_GATE_FORK_PRS:-0}"
 TRUSTED_AUTHORS="${PRREVIEW_GATE_TRUSTED_AUTHORS:-}"
-# Seconds that `prreview once --pr` waits for a round that is running.
+# Seconds that `prreview once --pr` waits for a round that is running. 0 means
+# do not wait.
 ONCE_WAIT="${PRREVIEW_GATE_ONCE_WAIT:-300}"
 case "$ONCE_WAIT" in '' | *[!0-9]*) echo "PRREVIEW_GATE_ONCE_WAIT must be a whole number of seconds, got '$ONCE_WAIT'" >&2; exit 2 ;; esac
 # The tool lib comes first: the checks below use what it resolves.
@@ -392,8 +393,11 @@ lock_holder() {
 if [ -n "$ONCE_NUM" ]; then
   # A named PR waits for the running round and fails when it cannot get the
   # lock. Exit 0 here would tell the person who asked that the PR was
-  # reviewed. 75 is EX_TEMPFAIL.
-  if ! flock -w "$ONCE_WAIT" 9; then
+  # reviewed. 75 is EX_TEMPFAIL. A wait of 0 means do not wait. It uses
+  # `flock -n`, because the flock ports differ on a zero timeout.
+  ONCE_LOCK_OPT=(-w "$ONCE_WAIT")
+  [ "$ONCE_WAIT" -gt 0 ] || ONCE_LOCK_OPT=(-n)
+  if ! flock "${ONCE_LOCK_OPT[@]}" 9; then
     echo "another pr-autoreview run still holds $LOCKFILE after ${ONCE_WAIT}s — $ONCE_REPO#$ONCE_NUM was not reviewed"
     lock_holder
     exit 75

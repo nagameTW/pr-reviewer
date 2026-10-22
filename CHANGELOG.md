@@ -14,8 +14,9 @@ All notable changes to this project are recorded here. The format follows
 - `prreview once --pr owner/repo#N` reviews one PR now, a fork PR included.
   It reviews that PR and no other, and it waits for a running round with
   `flock -w`. If it cannot get the lock in `PRREVIEW_GATE_ONCE_WAIT` seconds
-  (300 by default), it prints the reason and exits with code 75. It rejects
-  any value that is not `owner/repo#N` for a repository on your list.
+  (300 by default; 0 means do not wait), it prints the reason and exits with
+  code 75. It rejects any value that is not `owner/repo#N` for a repository on
+  your list.
 - `PRREVIEW_GATE_TRUSTED_AUTHORS` lists the logins whose fork PRs are
   reviewed. `PRREVIEW_GATE_FORK_PRS=1` reviews every PR, as before.
 - `prreview status` shows how many PRs the last round skipped. A round that

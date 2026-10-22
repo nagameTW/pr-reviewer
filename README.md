@@ -172,8 +172,9 @@ To review one outside PR, name it:
 The command reviews the current head of that PR and no other PR. When the
 author pushes again, the new head is skipped until you run the command again.
 If a round is running, the command waits for it up to `PRREVIEW_GATE_ONCE_WAIT`
-seconds (300 by default). If it cannot get the lock in that time, it prints the
-reason and exits with code 75, so you know the PR was not reviewed. It rejects
+seconds (300 by default). A value of `0` means do not wait. If the command
+cannot get the lock in that time, it prints the reason and exits with code 75,
+so you know the PR was not reviewed. It rejects
 anything that is not `owner/repo#N` for a repository you review.
 
 The exit code says if the PR has a verdict:
@@ -900,7 +901,7 @@ even when you run `prreview once` from a terminal. After moving a tool, run
 | `PRREVIEW_GATE_REPOS` | none (required) | Space-separated `owner/repo` list to review |
 | `PRREVIEW_GATE_TRUSTED_AUTHORS` | empty | Logins whose fork PRs are reviewed, separated by spaces or commas (see [Whose PRs it reviews](#whose-prs-it-reviews)) |
 | `PRREVIEW_GATE_FORK_PRS` | `0` | `1` reviews PRs from forks like any other PR |
-| `PRREVIEW_GATE_ONCE_WAIT` | `300` | Seconds that `prreview once --pr` waits for a running round |
+| `PRREVIEW_GATE_ONCE_WAIT` | `300` | Seconds that `prreview once --pr` waits for a running round. A whole number; `0` means do not wait |
 | `PRREVIEW_OWNER_LOGIN` | `gh api user` | The account whose marked comments count as this reviewer's own; with a GitHub App set, only the App's comments count |
 | `PRREVIEW_REVIEW_APP_ID` | empty | A GitHub App's ID; when set, comments are posted as the App (see [Posting as a GitHub App](#posting-as-a-github-app)) |
 | `PRREVIEW_REVIEW_APP_KEY` | empty | The App's private key file |
