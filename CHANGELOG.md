@@ -75,6 +75,12 @@ All notable changes to this project are recorded here. The format follows
 
 ### Fixed
 
+- A value of `PRREVIEW_ONCE_PR` in the environment no longer reaches the
+  rounds of the loop. Before, such a value named one PR in every round. The
+  round then reviewed only that PR, whatever its author, and skipped the scan
+  of merged PRs. `review-loop.sh` and `prreview run` now clear the variable for
+  every round. `prreview set` and the settings file refuse it as a setting.
+  Only `prreview once --pr` sets it.
 - With `PRREVIEW_GATE_VERIFY_LINES=1`, the line-number check failed on bash
   3.2, the bash that macOS ships. Bash 3.2 ended a command substitution at the
   `)` of a `case` pattern and printed a syntax error. The loop that counts the

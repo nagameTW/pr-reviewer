@@ -265,6 +265,15 @@ prreview set parallel 5 >/dev/null
 is 'set takes a friendly name' "$(prreview get parallel)" 5
 has 'set refuses a misspelled setting' "$(prreview set PRREVIEW_GATE_PARALEL 5 2>&1)" 'not a setting the reviewer reads'
 has 'set refuses a name that is not a setting' "$(prreview set bogus 1 2>&1)" 'not a setting name'
+# PRREVIEW_ONCE_PR names the PR of one `prreview once --pr` run. As a setting
+# it would name the same PR in every round of the loop.
+is 'PRREVIEW_ONCE_PR is not a setting name' "$(prreview_key_of PRREVIEW_ONCE_PR || echo refused)" refused
+has 'the settings file refuses to store it' "$(prreview_config_set "$T/once-set" PRREVIEW_ONCE_PR 'a/b#5' 2>&1)" 'not a setting name: PRREVIEW_ONCE_PR'
+is '...and holds nothing after the refusal' "$([ -e "$T/once-set" ] && echo written || echo none)" none
+printf 'PRREVIEW_GATE_REPOS=a/b\nPRREVIEW_ONCE_PR=a/b#5\n' > "$T/once"
+is 'a settings file that holds it is refused, naming the line' "$(prreview_config_read "$T/once" 2>&1 >/dev/null | cut -d: -f2)" 2
+has '...and the message says how the key is set' "$(prreview_config_read "$T/once" 2>&1 >/dev/null)" 'prreview once --pr'
+has 'set refuses it' "$(prreview set PRREVIEW_ONCE_PR a/b#5 2>&1)" 'not a setting name: PRREVIEW_ONCE_PR'
 OUT="$(prreview bogus 2>&1)"; RC=$?
 has 'an unknown command is named' "$OUT" 'unknown command: bogus'
 is '...and is a usage error' "$RC" 2

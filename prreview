@@ -540,7 +540,9 @@ cmd_run() {
   local own_log=""
   load_config; mkdir -p "$STATE_DIR"
   [ "${1-}" = --service ] && own_log="$LOG"
-  PRREVIEW_LOOP_LOG_FILE="$own_log" exec bash "$PRREVIEW_HOME/review-loop.sh" "$STATE_DIR/gate-logs"
+  # Only `prreview once --pr` names a PR, so a value in the environment is
+  # cleared here. Else the loop would name the same PR in every round.
+  PRREVIEW_ONCE_PR='' PRREVIEW_LOOP_LOG_FILE="$own_log" exec bash "$PRREVIEW_HOME/review-loop.sh" "$STATE_DIR/gate-logs"
 }
 # `--pr owner/repo#N` reviews that one PR, even a fork PR whose author is not
 # trusted. The reviewer reads PRREVIEW_ONCE_PR, checks it again, and waits for

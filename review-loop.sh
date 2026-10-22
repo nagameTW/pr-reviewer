@@ -164,7 +164,9 @@ while true; do
       continue
     }
     READY_FAILS=0
-    env LC_ALL=C.UTF-8 LANG=C.UTF-8 \
+    # PRREVIEW_ONCE_PR= : only `prreview once --pr` names a PR. A value in the
+    # environment of this loop would name the same PR in every round.
+    env LC_ALL=C.UTF-8 LANG=C.UTF-8 PRREVIEW_ONCE_PR= \
         PATH="$LOOP_PATH" \
         CLAUDE_BIN="$LOOP_CLAUDE" GH_BIN="$GH" \
         "$TIMEOUT_BIN" -k "$ROUND_KILL_AFTER" "$ROUND_TIMEOUT" "$BASH_BIN" "$RUN_SH" > "$LOG" 2>&1 || rc=$?

@@ -398,6 +398,37 @@ has 'once --pr with the lock held exits non-zero' "$OUT" 'rc=75'
 has '...and says why'                             "$OUT" 'still holds'
 kill "$HOLDER" 2>/dev/null; wait "$HOLDER" 2>/dev/null
 
+# ── a loop round is never a named round ────────────────────────────────────
+# Only `prreview once --pr` names a PR. A value left in the environment of the
+# loop, or of `prreview run`, must not name one in every round. A probe stands
+# in for pr-autoreview.sh and for review-loop.sh and writes what it sees.
+LD="$T/loop-dir"; mkdir -p "$LD/lib" "$LD/home"
+cp "$ROOT/review-loop.sh" "$ROOT/prreview" "$LD/"
+cp "$ROOT"/lib/*.sh "$LD/lib/"
+cat > "$LD/pr-autoreview.sh" <<'PROBE_EOF'
+#!/usr/bin/env bash
+REPOS="owner/repo"
+echo "once_pr=[${PRREVIEW_ONCE_PR-unset}]" >> "$LOOP_PROBE"
+PROBE_EOF
+set_list '[{"number":1,"author":{"login":"alice"},"isCrossRepository":false,"labels":[]}]'
+LOOP_PROBE="$T/loop.probe"; : > "$LOOP_PROBE"
+env -i HOME="$LD/home" PATH="$T/bin:$PATH" GH_BIN="$T/bin/gh" CLAUDE_BIN="$T/bin/claude" \
+  PRREVIEW_ONCE_PR=owner/repo#2 LOOP_PROBE="$LOOP_PROBE" PRREVIEW_LOOP_INTERVAL=1 \
+  bash "$LD/review-loop.sh" "$LD/logs" >/dev/null 2>&1 &
+LOOP_PID=$!
+for _ in $(seq 1 100); do [ -s "$LOOP_PROBE" ] && break; sleep 0.1; done
+kill "$LOOP_PID" 2>/dev/null; wait "$LOOP_PID" 2>/dev/null
+has 'the loop ran a round' "$(cat "$LOOP_PROBE")" 'once_pr='
+is '...and the round names no PR, whatever the loop inherited' "$(head -1 "$LOOP_PROBE")" 'once_pr=[]'
+LD2="$T/run-dir"; mkdir -p "$LD2/lib" "$LD2/home"
+cp "$ROOT/prreview" "$ROOT/pr-autoreview.sh" "$LD2/"
+cp "$ROOT"/lib/*.sh "$LD2/lib/"
+printf '#!/usr/bin/env bash\necho "once_pr=[${PRREVIEW_ONCE_PR-unset}]" >> "$LOOP_PROBE"\n' > "$LD2/review-loop.sh"
+: > "$LOOP_PROBE"
+env -i HOME="$LD2/home" PATH="$T/bin:$PATH" GH_BIN="$T/bin/gh" PRREVIEW_PLATFORM=unsupported \
+  PRREVIEW_ONCE_PR=owner/repo#2 LOOP_PROBE="$LOOP_PROBE" bash "$LD2/prreview" run >/dev/null 2>&1
+is 'prreview run starts the loop with no PR named' "$(head -1 "$LOOP_PROBE")" 'once_pr=[]'
+
 # ── prreview status ───────────────────────────────────────────────────────
 mkdir -p "$H/.cache/pr-reviewer/gate-logs"
 status() { env -i HOME="$H" PATH="$T/bin:$PATH" GH_BIN="$T/bin/gh" PRREVIEW_PLATFORM=unsupported bash "$ROOT/prreview" status 2>&1; }
