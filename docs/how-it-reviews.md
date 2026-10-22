@@ -47,7 +47,7 @@ Every finding must pass the trace rule in [Security standards the checks cite](#
 
 Default: no severity of its own. The ladder applies. A missing timeout is the only resource-exhaustion case that counts as a finding. Applies only when the diff touches such code.
 
-**3 Sensitive data.** A finding is a real private-network address, MAC address, host name or domain name. A token or credential is also a finding. This applies anywhere in the diff. Addresses and names that Internet standards (numbered RFC documents) reserve for documentation are placeholders and are not a finding. A token with only its middle masked is a finding. A private-range address is a finding even in a test, unless the code recognizes or blocks such addresses. Default: CRITICAL, because the ladder rates exposed sensitive data CRITICAL. Applies to every PR.
+**3 Sensitive data.** A finding is a real private-network address, MAC address, host name or domain name. A token or credential is also a finding. This applies anywhere in the diff. Addresses and names that RFCs reserve for documentation are placeholders and are not a finding. A token with only its middle masked is a finding. A private-range address is a finding even in a test, unless the code recognizes or blocks such addresses. Default: CRITICAL, because the ladder rates exposed sensitive data CRITICAL. Applies to every PR.
 
 **4 Project constraints.** A finding is a diff that breaks a rule the repository wrote down for itself. The rule can be in `README.md`, `CONTRIBUTING.md`, architecture notes, or an agent instruction file such as `CLAUDE.md` or `AGENTS.md`. An unwritten preference is not a constraint. Default: HIGH. CRITICAL when the rule is a safety rule, such as an action that must stay manual, opt-in or read-only. Applies to every PR.
 
@@ -76,7 +76,7 @@ Type annotations, imports, refactors that keep behavior, dead-code deletion, and
   - The tool acts under a shared admin account.
   - The tool leaves the allow decision to the model.
   - The tool runs a high-impact step with no person approving it.
-  - The tool is from a third party. It is loaded unpinned (not fixed to one version, such as `@latest`) or from a source nobody verified.
+  - The tool is from a third party. It is loaded unpinned, such as `@latest`, or from a source nobody verified.
 - CRITICAL: any one of these:
   - Text from outside can reach any of the HIGH cases through the diff.
   - The diff removes or bypasses an approval step or an opt-in that already exists.

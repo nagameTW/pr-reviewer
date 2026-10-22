@@ -10,7 +10,7 @@
 
 pr-reviewer reviews pull requests on your own machine, with your own Claude Code login. It needs no GitHub Action, no App, no webhook and no repo admin rights.
 
-It watches the repos you list. One round is one pass that picks the PRs to review and posts the comments. In a round, for each new head of an open PR from a [trusted author](docs/operations.md#whose-prs-it-reviews), it asks headless [Claude Code](https://code.claude.com/docs/en/overview) for a review. The head is the latest commit of the PR. Headless means Claude Code runs without a screen. Then it posts one comment with a verdict (Approved or Changes requested) and the findings.
+It watches the repos you list. One round is one pass that picks the PRs to review and posts the comments. In a round, for each new head of an open PR from a [trusted author](docs/operations.md#whose-prs-it-reviews), it asks headless [Claude Code](https://code.claude.com/docs/en/overview) for a review. Then it posts one comment with a verdict (Approved or Changes requested) and the findings.
 
 Comments come from your own `gh` account, or from a [GitHub App](docs/github-app.md) if you set one up. It is a set of bash scripts that call `gh`, `git`, `jq` and `claude`. To see a real run and a real comment, read the [demo page](docs/demo.md).
 
