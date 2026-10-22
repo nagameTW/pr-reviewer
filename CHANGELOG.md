@@ -135,6 +135,8 @@ All notable changes to this project are recorded here. The format follows
   of the 13 checklist items replaces `docs/images/checks.svg`.
 - An Approved comment has a second banner line: "Automated review, not a
   GitHub approval." A Changes requested banner is unchanged.
+- `README.zh-TW.md` uses plain wording and has its own diagrams. The body text
+  of every diagram is justified.
 
 ### Fixed
 

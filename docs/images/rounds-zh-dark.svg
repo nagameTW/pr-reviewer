@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 880 544" xmlns="http://www.w3.org/2000/svg" xml:lang="zh-TW" role="img" aria-labelledby="rounds-github-zh-dark-title rounds-github-zh-dark-desc" id="rounds-github-zh-dark-root">
+<title id="rounds-github-zh-dark-title">會擋下核准的問題在多輪之間的狀態</title>
+<desc id="rounds-github-zh-dark-desc">每次推送都開始新的一輪。模型把先前會擋下核准的問題標為已修正，或沿用到下一輪。若新的 HIGH 問題位於本次推送未改動、先前各輪也未引用的檔案，改列為 MEDIUM，不擋下核准。</desc>
+<defs>
+      <style>#rounds-github-zh-dark-root { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", Helvetica, Arial, sans-serif; color: #F0F6FC; }
+      #rounds-github-zh-dark-root .page { max-width: 1000px; width: 100%; }
+      #rounds-github-zh-dark-root .diagram-container { width: 100%; overflow-x: auto; }
+      #rounds-github-zh-dark-root .diagram-container { overflow-x: visible; }
+      #rounds-github-zh-dark-root .bg { fill: #0D1117; }
+      #rounds-github-zh-dark-root .edge-frame { fill: none; stroke: #656C76; stroke-width: 2; }
+      #rounds-github-zh-dark-root text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", Helvetica, Arial, sans-serif; fill: #F0F6FC; font-size: 12px; }
+      #rounds-github-zh-dark-root .t-name { font-size: 14px; font-weight: 600; }
+      #rounds-github-zh-dark-root .t-name-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; font-weight: 700; }
+      #rounds-github-zh-dark-root .t-sub { fill: #9198A1; }
+      #rounds-github-zh-dark-root .t-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+      #rounds-github-zh-dark-root .t-eye { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", Helvetica, Arial, sans-serif; font-size: 11px; letter-spacing: .08em; fill: #9198A1; }
+      #rounds-github-zh-dark-root .t-arrow { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", Helvetica, Arial, sans-serif; font-size: 11px; letter-spacing: .04em; fill: #9198A1; }
+      #rounds-github-zh-dark-root .t-alert { fill: #F85149; font-weight: 700; }
+      #rounds-github-zh-dark-root .t-chip { fill: #0D1117; font-weight: 700; }
+      #rounds-github-zh-dark-root .t-title { font-size: 14px; font-weight: 700; }
+      #rounds-github-zh-dark-root .mask { fill: #0D1117; }
+      #rounds-github-zh-dark-root .node { fill: #151B23; stroke: #656C76; stroke-width: 1.2; }
+      #rounds-github-zh-dark-root .raised { fill: #0D1117; stroke: #656C76; stroke-width: 1; }
+      #rounds-github-zh-dark-root .hero { fill: #111D2E; stroke: #4493F8; stroke-width: 2.4; }
+      #rounds-github-zh-dark-root .optional { fill: none; stroke: #656C76; stroke-width: 1.2; stroke-dasharray: 5 4; }
+      #rounds-github-zh-dark-root .zone { fill: none; stroke: #656C76; stroke-width: 1; stroke-dasharray: 4 4; }
+      #rounds-github-zh-dark-root .strip { fill: #151B23; stroke: #656C76; stroke-width: 1.2; }
+      #rounds-github-zh-dark-root .bar { fill: #DA3633; }
+      #rounds-github-zh-dark-root .alert-node { fill: #0D1117; stroke: #DA3633; stroke-width: 2; stroke-dasharray: 6 4; }
+      #rounds-github-zh-dark-root .edge { fill: none; stroke: #4493F8; stroke-width: 1.6; }
+      #rounds-github-zh-dark-root .edge-dash { fill: none; stroke: #4493F8; stroke-width: 1.4; stroke-dasharray: 5 4; }
+      #rounds-github-zh-dark-root .edge-alert { fill: none; stroke: #DA3633; stroke-width: 1.6; }
+      #rounds-github-zh-dark-root .mk { fill: #4493F8; }
+      #rounds-github-zh-dark-root .mk-alert { fill: #DA3633; }
+      #rounds-github-zh-dark-root .chip { fill: #F0F6FC; }
+      #rounds-github-zh-dark-root .dot { fill: #F0F6FC; }
+      #rounds-github-zh-dark-root .bullet { fill: #9198A1; }
+      #rounds-github-zh-dark-root .diamond { fill: #0D1117; stroke: #656C76; stroke-width: 1.4; }</style>
+<marker id="rounds-github-zh-dark-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon class="mk" points="0 0, 8 3, 0 6"/></marker>
+<marker id="rounds-github-zh-dark-arrow-alert" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon class="mk-alert" points="0 0, 8 3, 0 6"/></marker>
+</defs>
+<rect class="bg" width="880" height="544"/>
+<rect class="edge-frame" x="1" y="1" width="878" height="542" rx="8"/>
+<g transform="translate(0,-76)">
+<path class="edge" d="M54,148 H120" marker-end="url(#rounds-github-zh-dark-arrow)"/>
+<path class="edge-dash" d="M48,154 V404" marker-end="url(#rounds-github-zh-dark-arrow)"/>
+<path class="edge" d="M320,148 H632" marker-end="url(#rounds-github-zh-dark-arrow)"/>
+<path class="edge-alert" d="M220,192 V292 Q220,300 228,300 H392" marker-end="url(#rounds-github-zh-dark-arrow-alert)"/>
+<path class="edge" d="M632,300 H744 Q752,300 752,292 V192" marker-end="url(#rounds-github-zh-dark-arrow)"/>
+<path class="edge-alert" d="M480,348 V372 Q480,380 488,380 H528 Q536,380 536,372 V348" marker-end="url(#rounds-github-zh-dark-arrow-alert)"/>
+<rect class="mask" x="453" y="124" width="46" height="16" rx="2"/><text class="t-arrow" x="476" y="136" text-anchor="middle">已修正</text>
+<rect class="mask" x="287" y="278" width="46" height="16" rx="2"/><text class="t-arrow" x="310" y="290" text-anchor="middle">未修正</text>
+<rect class="mask" x="667" y="276" width="46" height="16" rx="2"/><text class="t-arrow" x="690" y="288" text-anchor="middle">已修正</text>
+<rect class="mask" x="485" y="388" width="46" height="16" rx="2"/><text class="t-arrow" x="508" y="400" text-anchor="middle">未修正</text>
+<rect class="mask" x="58" y="268" width="116" height="16" rx="2"/><text class="t-arrow" x="116" y="280" text-anchor="middle">未改動檔案的 HIGH</text>
+<text class="t-eye" x="24" y="112">新問題</text>
+<circle class="dot" cx="48" cy="148" r="6"/>
+<g class="focal" data-box="120 104 200 88">
+<rect class="raised focal-r" x="120" y="104" width="200" height="88" rx="6"/>
+<text class="t-name" x="132" y="126">擋下核准中</text>
+<text class="t-sub" y="146" data-r="308"><tspan x="132" textLength="54.7" lengthAdjust="spacing">CRITICAL</tspan><tspan x="192.8">或</tspan><tspan x="210.9" textLength="30.0" lengthAdjust="spacing">HIGH</tspan><tspan x="247 259.3 271.7 283.7 296">的問題，留</tspan></text>
+<text class="t-sub" y="162"><tspan x="132 144 156 168 180 192 204 216 228">言列為會擋下核准。</tspan></text>
+</g>
+<g data-box="632 104 224 88">
+<rect class="raised" x="632" y="104" width="224" height="88" rx="6"/>
+<text class="t-name" x="644" y="126">已修正</text>
+<text class="t-sub" y="146" data-r="844"><tspan x="644 656.6 669.1 681.7 694.3 706.9 719.4 731.4 744 756.6 769.1 781.7 794.3 806.9 819.4 832">模型標為已修正，該問題不再列為會</tspan></text>
+<text class="t-sub" y="162"><tspan x="644 656 668 680 692">擋下核准。</tspan></text>
+</g>
+<g data-box="392 252 240 96">
+<rect class="alert-node" x="392" y="252" width="240" height="96" rx="6"/>
+<text class="t-name" x="404" y="274">沿用到下一輪</text>
+<text class="t-sub" y="294" data-r="620"><tspan x="404 416.2 428.5 440.7 453 465.2">模型加上前綴</tspan><tspan x="482.5" class="t-code" textLength="50.5" lengthAdjust="spacing">Carried</tspan><tspan x="542.2" class="t-code" textLength="36.1" lengthAdjust="spacing">over:</tspan><tspan x="583.5 595.8 608">重複列</tspan></text>
+<text class="t-sub" y="310"><tspan x="404 416 428 440 452 464 476 488 500 512 524 536">出該問題，仍然擋下核准。</tspan></text>
+</g>
+<g data-box="24 404 304 96">
+<rect class="optional" x="24" y="404" width="304" height="96" rx="6"/>
+<text class="t-name" x="36" y="426">不擋下核准</text>
+<text class="t-sub" y="446" data-r="316"><tspan x="36 48.1">新的</tspan><tspan x="64.2" textLength="30.0" lengthAdjust="spacing">HIGH</tspan><tspan x="98.4 110.5 122.6 134.7 146.8 158.9 171 183.1 195.2 207.3 219.4 231.4 243.5 255.6 267.7 279.8 291.9 304">問題位於本次推送未改動、先前各輪也未</tspan></text>
+<text class="t-sub" y="462" data-r="316"><tspan x="36 48 60 72 84 96 108 120 132">引用的檔案。改列為</tspan><tspan x="147.3" textLength="48.7" lengthAdjust="spacing">MEDIUM</tspan><tspan x="196 208 220 232 244 256 268 280 292 304">，不擋下核准，也不沿</tspan></text>
+<text class="t-sub" y="478"><tspan x="36 48 60 72 84 96">用到下一輪。</tspan></text>
+</g>
+<rect class="mask" x="58" y="126" width="58" height="16" rx="2"/><text class="t-arrow" x="87" y="138" text-anchor="middle">擋下核准</text>
+<g data-box="352 424 504 80">
+<rect class="strip" x="352" y="424" width="504" height="80" rx="6"/>
+<text class="t-title" x="368" y="448">狀態只在新的推送時改變。</text>
+<text class="t-sub" y="468" data-r="840"><tspan x="368 380 392 404 416.1 428.1 440.1 452.1 464.1 476.1 488.2 500.2 512.2 524.2 536.2 548.2 560.3 572.3 584.3 596.3 608.3 620.3 632.3 644.4 656.4 668.4 680.4 692.4">模型要把先前每個會擋下核准的問題標為已修正，或重複列出。</tspan><tspan x="704.4" textLength="60.0" lengthAdjust="spacing">pr-reviewer</tspan><tspan x="767.9 779.9 792 804 816 828">的程式不會檢</tspan></text>
+<text class="t-sub" y="484"><tspan x="368 380 392 404 416 428 440 452 464">查模型標得對不對。</tspan><tspan x="476" textLength="54.7" lengthAdjust="spacing">CRITICAL</tspan><tspan x="534 546 558 570 582">從不降級。</tspan></text>
+</g>
+<g data-box="24 524 832 72">
+<rect class="strip" x="24" y="524" width="832" height="72" rx="6"/>
+<text class="t-title" x="40" y="548">若 PR 的審查結果為 changes requested，該 PR 合併後會收到一則警示留言。</text>
+<text class="t-sub" y="568"><tspan x="40 52 64 76 88 100 112 124 136 148 160 172 184 196 208">若一輪無會擋下核准的問題，貼出</tspan><tspan x="223.3" textLength="51.4" lengthAdjust="spacing">Approved</tspan><tspan x="274.7">。</tspan><tspan x="286.7" textLength="48.7" lengthAdjust="spacing">MEDIUM</tspan><tspan x="338.7">與</tspan><tspan x="354" textLength="27.3" lengthAdjust="spacing">LOW</tspan><tspan x="384.7 396.7 408.7 420.7 432.7 444.7 456.7 468.7">的問題仍會列出。</tspan></text>
+</g>
+</g>
+</svg>

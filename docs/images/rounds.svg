@@ -53,46 +53,45 @@
 <rect class="mask" x="271" y="278" width="78" height="16" rx="2"/><text class="t-arrow" x="310" y="290" text-anchor="middle">NOT FIXED</text>
 <rect class="mask" x="666" y="276" width="48" height="16" rx="2"/><text class="t-arrow" x="690" y="288" text-anchor="middle">FIXED</text>
 <rect class="mask" x="469" y="388" width="78" height="16" rx="2"/><text class="t-arrow" x="508" y="400" text-anchor="middle">NOT FIXED</text>
-<rect class="mask" x="61" y="270" width="78" height="16" rx="2"/><text class="t-arrow" x="100" y="282" text-anchor="middle">LATE HIGH</text>
+<rect class="mask" x="58" y="268" width="78" height="16" rx="2"/><text class="t-arrow" x="97" y="280" text-anchor="middle">LATE HIGH</text>
 <text class="t-eye" x="24" y="112">NEW FINDING</text>
 <circle class="dot" cx="48" cy="148" r="6"/>
 <g class="focal" data-box="120 104 200 88">
 <rect class="raised focal-r" x="120" y="104" width="200" height="88" rx="6"/>
-<text class="t-name" x="132" y="126">Blocking</text>
-<text class="t-sub" x="132" y="146">A CRITICAL or HIGH finding</text>
-<text class="t-sub" x="132" y="162">the comment lists as blocking.</text>
+<text class="t-name" x="132" y="126" textLength="59.1" lengthAdjust="spacing">Blocking</text>
+<text class="t-sub" y="146" data-r="308"><tspan x="132">A</tspan><tspan x="144.1" textLength="54.7" lengthAdjust="spacing">CRITICAL</tspan><tspan x="202.9" textLength="10.7" lengthAdjust="spacing">or</tspan><tspan x="217.7" textLength="30.0" lengthAdjust="spacing">HIGH</tspan><tspan x="251.9" textLength="35.4" lengthAdjust="spacing">finding</tspan><tspan x="291.3" textLength="16.7" lengthAdjust="spacing">the</tspan></text>
+<text class="t-sub" y="162"><tspan x="132" textLength="49.3" lengthAdjust="spacing">comment</tspan><tspan x="184.7" textLength="20.7" lengthAdjust="spacing">lists</tspan><tspan x="208.7" textLength="12.7" lengthAdjust="spacing">as</tspan><tspan x="224.7" textLength="47.4" lengthAdjust="spacing">blocking.</tspan></text>
 </g>
 <g data-box="632 104 224 88">
 <rect class="raised" x="632" y="104" width="224" height="88" rx="6"/>
-<text class="t-name" x="644" y="126">Fixed</text>
-<text class="t-sub" x="644" y="146">The model marks it fixed.</text>
-<text class="t-sub" x="644" y="162">It leaves the blocking list.</text>
+<text class="t-name" x="644" y="126" textLength="36.6" lengthAdjust="spacing">Fixed</text>
+<text class="t-sub" y="146" data-r="844"><tspan x="644" textLength="20.7" lengthAdjust="spacing">The</tspan><tspan x="671" textLength="32.7" lengthAdjust="spacing">model</tspan><tspan x="710" textLength="32.7" lengthAdjust="spacing">marks</tspan><tspan x="749" textLength="6.0" lengthAdjust="spacing">it</tspan><tspan x="761.3" textLength="28.7" lengthAdjust="spacing">fixed.</tspan><tspan x="796.3" textLength="6.7" lengthAdjust="spacing">It</tspan><tspan x="809.3" textLength="34.7" lengthAdjust="spacing">leaves</tspan></text>
+<text class="t-sub" y="162"><tspan x="644" textLength="16.7" lengthAdjust="spacing">the</tspan><tspan x="664" textLength="44.0" lengthAdjust="spacing">blocking</tspan><tspan x="711.4" textLength="18.0" lengthAdjust="spacing">list.</tspan></text>
 </g>
 <g data-box="392 252 240 96">
 <rect class="alert-node" x="392" y="252" width="240" height="96" rx="6"/>
-<text class="t-name" x="404" y="274">Carried over</text>
-<text class="t-sub" x="404" y="294">The model repeats it with the</text>
-<text class="t-sub" x="404" y="310">prefix <tspan class="t-code">Carried over:</tspan>.</text>
-<text class="t-sub" x="404" y="326">It still blocks.</text>
+<text class="t-name" x="404" y="274" textLength="82.5" lengthAdjust="spacing">Carried over</text>
+<text class="t-sub" y="294" data-r="620"><tspan x="404" textLength="20.7" lengthAdjust="spacing">The</tspan><tspan x="432.9" textLength="32.7" lengthAdjust="spacing">model</tspan><tspan x="473.8" textLength="40.0" lengthAdjust="spacing">repeats</tspan><tspan x="522" textLength="6.0" lengthAdjust="spacing">it</tspan><tspan x="536.2" textLength="21.3" lengthAdjust="spacing">with</tspan><tspan x="565.8" textLength="16.7" lengthAdjust="spacing">the</tspan><tspan x="590.7" textLength="29.3" lengthAdjust="spacing">prefix</tspan></text>
+<text class="t-sub" y="310"><tspan x="404" class="t-code" textLength="50.5" lengthAdjust="spacing">Carried</tspan><tspan x="461.8" class="t-code" textLength="36.1" lengthAdjust="spacing">over:</tspan><tspan x="501.2" textLength="34.0" lengthAdjust="spacing">before</tspan><tspan x="538.5" textLength="9.3" lengthAdjust="spacing">it.</tspan><tspan x="551.2" textLength="6.7" lengthAdjust="spacing">It</tspan><tspan x="561.2" textLength="17.3" lengthAdjust="spacing">still</tspan><tspan x="581.8" textLength="37.3" lengthAdjust="spacing">blocks.</tspan></text>
 </g>
 <g data-box="24 404 304 96">
 <rect class="optional" x="24" y="404" width="304" height="96" rx="6"/>
-<text class="t-name" x="36" y="426">Not blocking</text>
-<text class="t-sub" x="36" y="446">A new HIGH on a file this push did not</text>
-<text class="t-sub" x="36" y="462">change and no earlier round cited.</text>
-<text class="t-sub" x="36" y="478">Listed as MEDIUM. Not carried over.</text>
+<text class="t-name" x="36" y="426" textLength="84.8" lengthAdjust="spacing">Not blocking</text>
+<text class="t-sub" y="446" data-r="316"><tspan x="36">A</tspan><tspan x="50.8" textLength="22.0" lengthAdjust="spacing">new</tspan><tspan x="79.6" textLength="30.0" lengthAdjust="spacing">HIGH</tspan><tspan x="116.4" textLength="13.3" lengthAdjust="spacing">on</tspan><tspan x="136.5">a</tspan><tspan x="150" textLength="15.3" lengthAdjust="spacing">file</tspan><tspan x="172.1" textLength="18.7" lengthAdjust="spacing">this</tspan><tspan x="197.6" textLength="26.0" lengthAdjust="spacing">push</tspan><tspan x="230.4" textLength="16.0" lengthAdjust="spacing">did</tspan><tspan x="253.2" textLength="16.7" lengthAdjust="spacing">not</tspan><tspan x="276.6" textLength="39.4" lengthAdjust="spacing">change</tspan></text>
+<text class="t-sub" y="462" data-r="316"><tspan x="36" textLength="20.0" lengthAdjust="spacing">and</tspan><tspan x="60.8" textLength="13.3" lengthAdjust="spacing">no</tspan><tspan x="79" textLength="33.4" lengthAdjust="spacing">earlier</tspan><tspan x="117.2" textLength="30.7" lengthAdjust="spacing">round</tspan><tspan x="152.7" textLength="28.7" lengthAdjust="spacing">cited.</tspan><tspan x="186.2" textLength="32.0" lengthAdjust="spacing">Listed</tspan><tspan x="223" textLength="12.7" lengthAdjust="spacing">as</tspan><tspan x="240.5" textLength="52.0" lengthAdjust="spacing">MEDIUM.</tspan><tspan x="297.3" textLength="18.7" lengthAdjust="spacing">Not</tspan></text>
+<text class="t-sub" y="478"><tspan x="36" textLength="36.7" lengthAdjust="spacing">carried</tspan><tspan x="76" textLength="26.7" lengthAdjust="spacing">over.</tspan></text>
 </g>
 <rect class="mask" x="59" y="126" width="56" height="16" rx="2"/><text class="t-arrow" x="87" y="138" text-anchor="middle">BLOCKS</text>
 <g data-box="352 424 504 80">
 <rect class="strip" x="352" y="424" width="504" height="80" rx="6"/>
-<text class="t-title" x="368" y="448">Each transition happens on a new push.</text>
-<text class="t-sub" x="368" y="468">The model marks each earlier blocker fixed or repeats it.</text>
-<text class="t-sub" x="368" y="484">The harness does not check this. CRITICAL is never lowered.</text>
+<text class="t-title" x="368" y="448" textLength="267.5" lengthAdjust="spacing">Each transition happens on a new push.</text>
+<text class="t-sub" y="468" data-r="840"><tspan x="368" textLength="20.7" lengthAdjust="spacing">The</tspan><tspan x="393.3" textLength="32.7" lengthAdjust="spacing">model</tspan><tspan x="430.7" textLength="32.7" lengthAdjust="spacing">marks</tspan><tspan x="468" textLength="26.0" lengthAdjust="spacing">each</tspan><tspan x="498.7" textLength="33.4" lengthAdjust="spacing">earlier</tspan><tspan x="536.7" textLength="38.7" lengthAdjust="spacing">blocker</tspan><tspan x="580" textLength="25.3" lengthAdjust="spacing">fixed</tspan><tspan x="610" textLength="10.7" lengthAdjust="spacing">or</tspan><tspan x="625.3" textLength="40.0" lengthAdjust="spacing">repeats</tspan><tspan x="670" textLength="9.3" lengthAdjust="spacing">it.</tspan><tspan x="684" textLength="20.7" lengthAdjust="spacing">The</tspan><tspan x="709.3" textLength="42.7" lengthAdjust="spacing">harness</tspan><tspan x="756.7" textLength="26.0" lengthAdjust="spacing">does</tspan><tspan x="787.3" textLength="16.7" lengthAdjust="spacing">not</tspan><tspan x="808.7" textLength="31.3" lengthAdjust="spacing">check</tspan></text>
+<text class="t-sub" y="484"><tspan x="368" textLength="22.0" lengthAdjust="spacing">this.</tspan><tspan x="393.3" textLength="54.7" lengthAdjust="spacing">CRITICAL</tspan><tspan x="451.3" textLength="8.7" lengthAdjust="spacing">is</tspan><tspan x="463.3" textLength="30.0" lengthAdjust="spacing">never</tspan><tspan x="496.7" textLength="45.4" lengthAdjust="spacing">lowered.</tspan></text>
 </g>
 <g data-box="24 524 832 72">
 <rect class="strip" x="24" y="524" width="832" height="72" rx="6"/>
-<text class="t-title" x="40" y="548">A PR merged while its verdict is changes requested gets one alert comment.</text>
-<text class="t-sub" x="40" y="568">A round with no blocking findings posts Approved. MEDIUM and LOW findings stay listed.</text>
+<text class="t-title" x="40" y="548" textLength="508.7" lengthAdjust="spacing">A PR merged while its verdict is changes requested gets one alert comment.</text>
+<text class="t-sub" y="568"><tspan x="40">A</tspan><tspan x="51.3" textLength="30.7" lengthAdjust="spacing">round</tspan><tspan x="85.3" textLength="21.3" lengthAdjust="spacing">with</tspan><tspan x="110" textLength="13.3" lengthAdjust="spacing">no</tspan><tspan x="126.7" textLength="44.0" lengthAdjust="spacing">blocking</tspan><tspan x="174" textLength="41.4" lengthAdjust="spacing">findings</tspan><tspan x="218.7" textLength="28.7" lengthAdjust="spacing">posts</tspan><tspan x="250.7" textLength="54.7" lengthAdjust="spacing">Approved.</tspan><tspan x="308.7" textLength="48.7" lengthAdjust="spacing">MEDIUM</tspan><tspan x="360.7" textLength="20.0" lengthAdjust="spacing">and</tspan><tspan x="384.1" textLength="27.3" lengthAdjust="spacing">LOW</tspan><tspan x="414.7" textLength="41.4" lengthAdjust="spacing">findings</tspan><tspan x="459.4" textLength="22.0" lengthAdjust="spacing">stay</tspan><tspan x="484.7" textLength="31.3" lengthAdjust="spacing">listed.</tspan></text>
 </g>
 </g>
 </svg>
