@@ -1081,7 +1081,8 @@ Who controls each input, and how the reviewer treats it:
   fixed notices carry neither and are not scanned: the notice that a title or
   description matched your patterns, and the title-format reminder.
 - **The model's words are escaped before they are posted.** In the summary,
-  the findings and the follow-up tickets, an `@name`, a line that starts with
+  the findings, the follow-up tickets, the refutation notes and the list of
+  unverified items, an `@name`, a line that starts with
   `/command` or `bors`, the words `Automated review:` before a verdict emoji,
   and a line that starts like a finding get a zero-width space. A mention does
   not notify, a command does not act, and a later round does not read the line

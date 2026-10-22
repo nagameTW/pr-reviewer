@@ -120,8 +120,8 @@ accidents.
 
 **What the model writes is escaped before it is posted.** A pull request can
 steer the model's words, and those words go out under the reviewer's login.
-In the summary, the findings, the follow-up tickets and the refutation notes,
-the reviewer puts a zero-width space into four kinds of text:
+In the summary, the findings, the follow-up tickets, the refutation notes and
+the list of unverified items, the reviewer puts a zero-width space into four kinds of text:
 
 - An `@name` that GitHub would turn into a mention. An `@` inside a closed
   fenced code block stays as it is, because it is code.

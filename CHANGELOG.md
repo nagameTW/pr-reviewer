@@ -144,8 +144,9 @@ All notable changes to this project are recorded here. The format follows
   list does not show that review.
 - The reviewer escapes the model's words before it posts them. A pull request
   can steer those words, and they go out under the reviewer's login. In the
-  summary, the findings, the follow-up tickets and the refutation notes, the
-  reviewer now puts a zero-width space into an `@name` (so it does not notify), a line that starts with `/command` or `bors` (so a bot does not
+  summary, the findings, the follow-up tickets, the refutation notes and the
+  list of unverified items, the reviewer now puts a zero-width space into an
+  `@name` (so it does not notify), a line that starts with `/command` or `bors` (so a bot does not
   read a command), the words `Automated review:` before a verdict emoji (so
   they do not look like the banner), and a line that starts with `- **HIGH**`
   or `- ~~**` (so a later round does not read it as a finding). An `@` in a
