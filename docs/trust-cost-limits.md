@@ -11,12 +11,13 @@ Contents:
 ## Trust
 
 - Run the reviewer on a machine only you use. The service runs as your user. It uses your `gh` login and your Claude Code login. It also uses the key of a GitHub App, if you set one up. Anyone who can act as that user can post as you.
-- The reviewer reads three kinds of PR:
+- The reviewer reads four kinds of PR:
   - A PR from a branch of the repo itself.
   - A PR by a login in `PRREVIEW_GATE_TRUSTED_AUTHORS`.
   - A PR that you name with `prreview once --pr`.
+  - Every fork PR, when you set `PRREVIEW_GATE_FORK_PRS=1`.
 
-  It skips every other fork PR. It posts nothing on a skipped PR.
+  Without that setting, it skips every other fork PR. It posts nothing on a skipped PR.
 - The model can only read. `--tools` limits Claude Code to `Read`, `Grep` and `Glob` in a worktree for each PR. A worktree is a separate working directory of git. The model has no shell and no web tools. Your code never runs.
 - The prompt says that PR text is data. That is an instruction to the model. It is not a sandbox. The tool limits above hold if the model is tricked. They need Claude Code 2.1.305 or later. The reviewer checks `claude --version` at startup and refuses an older version.
 - Every comment that carries PR text or model output is scanned against your sensitive-patterns file before the reviewer posts it. If the scan finds a match, or cannot run, a short notice replaces the comment. The notice does not quote the value.

@@ -21,14 +21,14 @@ Comments come from your own `gh` account, or from a [GitHub App](docs/github-app
 - It only comments. It never approves a PR and never merges one.
 - The model can only read. It gets `Read`, `Grep` and `Glob` in a separate working directory (a git worktree) of each PR. The PR code never runs.
 - Run it on a machine only you use. The service runs with your `gh` login and your Claude Code login.
-- It skips PRs from forks unless the author is on your trusted list.
-- It uses your Claude Code login, so reviews count against your usage limits. One review of the demo PR cost $0.54.
+- By default it skips fork PRs whose author is not on your trusted list. `prreview once --pr` reviews any PR you name, and `PRREVIEW_GATE_FORK_PRS=1` reviews all fork PRs ([the rule](docs/trust-cost-limits.md#trust)).
+- It uses your Claude Code login, so reviews count against your usage limits. Reviewing the demo PR cost $0.54 for round 1 and $1.14 for three rounds.
 
 ## Status and limits
 
 - Pre-1.0. Anything can change between versions. Read [CHANGELOG.md](CHANGELOG.md) before you upgrade.
 - No one has counted how many bugs it finds or how many false alarms it raises.
-- GitHub only. It runs on macOS, Linux and WSL2.
+- GitHub only. It runs on macOS, Linux and WSL2. CI does not test WSL2.
 
 ## Requirements
 
@@ -42,21 +42,38 @@ Comments come from your own `gh` account, or from a [GitHub App](docs/github-app
 
 ## Quick start
 
+**1. Get the code and put `prreview` on your `PATH`** ([details](docs/install.md#1-get-the-code)).
+
 ```bash
 git clone https://github.com/nagameTW/pr-reviewer.git ~/pr-reviewer
 mkdir -p ~/.local/bin && ln -s ~/pr-reviewer/prreview ~/.local/bin/prreview
-prreview setup
-prreview once --pr you/repo#12
-prreview start
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc   # bash: ~/.bashrc
 ```
 
-1. Get the code and put `prreview` on your `PATH` ([details](docs/install.md#1-get-the-code)).
-2. Run the setup. List at least one repo that you own. At **Background service**, answer `n`. You start the service in step 4.
-3. Review one test PR from a listed repo. This makes real model calls and posts a comment as your `gh` account.
-4. Start the service. `prreview status` shows the state and `prreview logs -f` follows the log ([details](docs/install.md#4-start-the-service)).
+Skip the last line if `~/.local/bin` is already on your `PATH`. Otherwise open a new terminal. Without the link, run `~/pr-reviewer/prreview` where this page says `prreview`. On macOS, do not clone into `~/Documents` or iCloud Drive. The service cannot read those folders.
+
+**2. Run the setup.** List at least one repo that you own. At **Background service**, answer `n`.
+
+```bash
+prreview setup
+```
+
+**3. Review one test PR** from a listed repo. Replace `you/repo#12` with your PR. This makes real model calls and posts a comment as your `gh` account.
+
+```bash
+prreview once --pr you/repo#12
+```
+
+**4. Start the service.**
 
 > [!WARNING]
 > The first round reviews every open non-draft PR from a trusted author in each listed repo. It comments on each PR as your `gh` account. Each review costs model usage. Until you trust the tool, list only repos that you own.
+
+```bash
+prreview start
+```
+
+`prreview status` shows the state and `prreview logs -f` follows the log ([details](docs/install.md#4-start-the-service)).
 
 ## Everyday commands
 
@@ -65,7 +82,7 @@ prreview start
 | `prreview repos add owner/repo`, `prreview repos remove owner/repo` | Change the repos under review |
 | `prreview set <name> <value>`, `prreview get <name>`, `prreview unset <name>` | Change, read or reset a setting |
 | `prreview once`, `prreview run` | Run one round, or keep running rounds, in this terminal |
-| `prreview once --pr owner/repo#12` | Review that one PR now |
+| `prreview once --pr owner/repo#12` | Review that one PR now, a fork PR included |
 | `prreview stop`, `prreview start`, `prreview restart` | Control the background service |
 | `prreview status`, `prreview logs -f` | Show the state and the skipped PRs. Follow the log |
 | `prreview checks` | List, add or remove review items |
@@ -109,7 +126,7 @@ Each finding has a severity: CRITICAL, HIGH, MEDIUM or LOW, from highest to lowe
 
 ## Settings
 
-`prreview setup` writes your settings to `~/.config/pr-reviewer/config`. The environment can override them. The only required setting is `PRREVIEW_GATE_REPOS`, the list of repos. [docs/configuration.md](docs/configuration.md) lists every setting and its default.
+`prreview setup` writes your settings to `~/.config/pr-reviewer/config`. The environment can override them, except `PATH`: the value that setup recorded in the file wins. Two things are required: `PRREVIEW_GATE_REPOS`, the list of repos, and the sensitive-data patterns file, which `prreview setup` writes. [docs/configuration.md](docs/configuration.md) lists every setting and its default.
 
 ## Repository structure
 

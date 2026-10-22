@@ -346,10 +346,16 @@ stays stopped.
 
 ## Command rules
 
-These rules hold for every `prreview` command.
+These rules hold for every `prreview` command except `set`. A check runs before `prreview` reads the settings, so it cannot change the service or the settings.
 
-- `prreview <command> --help` prints the usage of that command and does nothing else. `prreview --version` works like `prreview version`.
-- A command rejects an argument that it does not take. It prints `unknown argument:` and the usage of the command, and it exits with code 2. It changes nothing: the service and the settings stay as they were. `prreview set` accepts any value, so only its first argument can be rejected.
+- If any argument is `-h` or `--help`, the command prints its usage, exits with code 0 and does nothing else. `prreview --version` works like `prreview version`.
+- Otherwise a command rejects an argument that it does not take. It prints `unknown argument:` and the usage of the command, and it exits with code 2. It changes nothing: the service and the settings stay as they were.
+
+`prreview set <name> <value>` follows other rules, because its value can be any text:
+
+- Only the first argument is checked for `-h` and `--help`. `prreview set --help` prints the usage and exits with code 0. In `prreview set model --help`, `--help` is the value, and `prreview` stores it. A setting that takes a number or a path rejects that value.
+- The check for unknown arguments never rejects an argument of `set`. A wrong name or value fails inside `set`, with a message that starts with `prreview:` and exit code 1. Fewer than two arguments also exit with code 1.
+
 - A command that changes a setting restarts the service when the service runs. The loop keeps its old settings until it restarts. `prreview repos add`, `prreview repos remove`, `prreview set` and `prreview unset` are such commands.
 
 

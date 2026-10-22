@@ -133,19 +133,21 @@ All notable changes to this project are recorded here. The format follows
   the default branch lacks is absent from the tree. The log line about the
   copy appears only when a convention file changed.
 - The README is shorter and the details moved to `docs/`. It names the tool
-  `prreview` throughout and has a four-step Quick start. "Trust and cost" and
-  "Status and limits" come before Quick start, and the Contents list is gone.
+  `prreview` throughout and has a four-step Quick start. "Safety and cost" and
+  "Status and limits" come before Requirements and Quick start, and the
+  Contents list is gone.
   The settings summary lists names only. `docs/configuration.md` holds every
   setting with its default, and `tests/prreview.test.sh` checks that file
   instead of the README. `docs/operations.md` holds one round in detail,
   failures and holds, and where the files live. `docs/github-app.md` and
   `docs/windows.md` hold the App and WSL2 steps. `docs/comparison.md` is new.
-  The diagrams are light and dark SVGs that follow the reader's theme. A table
-  of the 13 checklist items replaces `docs/images/checks.svg`.
+  The diagrams are light and dark SVGs that follow the reader's theme. They
+  live in `docs/how-it-reviews.md`. A table of the 13 checklist items replaces
+  `docs/images/checks.svg`.
 - An Approved comment has a second banner line: "Automated review, not a
   GitHub approval." A Changes requested banner is unchanged.
-- `README.zh-TW.md` uses plain wording and has its own diagrams. The body text
-  of every diagram is justified.
+- `README.zh-TW.md` uses plain wording. The body text of every diagram is
+  justified.
 - The README is about 150 lines. It keeps what a new user needs to decide,
   install and use the tool. The diagrams moved to `docs/how-it-reviews.md`,
   and the install details moved to `docs/install.md`. `docs/operations.md`
@@ -154,12 +156,12 @@ All notable changes to this project are recorded here. The format follows
 
 ### Fixed
 
-- Every `prreview` command rejects an argument it does not take. It prints
-  `unknown argument: X` and the usage line of that command, exits with code 2,
-  and changes nothing. Before, `prreview uninstall --help` removed the
+- Every `prreview` command except `set` rejects an argument it does not take.
+  It prints `unknown argument: X` and the usage line of that command, exits
+  with code 2, and changes nothing. Before, `prreview uninstall --help` removed the
   background service, and `prreview run --help` started the loop.
 - Every `prreview` command takes `--help` and `-h`. It prints the usage and
-  exits 0 with no side effect. `prreview version` and `prreview --version`
+  exits 0 with no side effect. `prreview set` checks only its first argument. `prreview version` and `prreview --version`
   print the newest release in this file.
 - `prreview setup` does not start `gh auth login` when stdin is not a
   terminal and gh is not logged in. It prints the command and stops at the
