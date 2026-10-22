@@ -145,7 +145,7 @@ All notable changes to this project are recorded here. The format follows
   says it does not see its own comments and names the setting. No comment
   author can change this count. The guard on an armed auto-merge still runs.
   The count file stays while its PR is open. The reviewer removes it once its
-  PR is not open and the file is more than two days old, as it does the other
+  PR is not open and the file is three days old or more, as it does the other
   hold files. A repo with 1000 or more open
   PRs keeps all its count files, because a list that long may omit an open
   PR. Before a model call, the

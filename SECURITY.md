@@ -159,7 +159,7 @@ cannot stop a review. The guard on an armed auto-merge still runs for such a
 head.
 
 The count has limits. The file stays while its PR is open. The reviewer
-removes it once its PR is not open and the file is more than two days old. A
+removes it once its PR is not open and the file is three days old or more. A
 repo with 1000 or more open PRs keeps all its count files until the list is
 shorter, because the list may omit an open PR. If the hold directory cannot be
 written, or the name of the file cannot be built because the owner or repo

@@ -774,7 +774,7 @@ works in place of the loop, and a lock stops two rounds from overlapping.
    wrong (`PRREVIEW_REVIEW_APP_SLUG`) and the reviewer does not see its own
    comments. The head then counts as handled: no review, no model call, and a
    `WARNING` line in the log every round. The count file stays while its PR is
-   open. Once its PR is not open and the file is more than two days old, the
+   open. Once its PR is not open and the file is three days old or more, the
    reviewer removes it, as it does the hold files. A repo
    with 1000 or more open PRs keeps all its count files, because the list of
    open PRs may be cut off. If the hold directory cannot be written, or the
