@@ -711,6 +711,19 @@ is 'setup without a terminal does not start gh auth login' "$(cat "$T/login.log"
 has '...and prints the command to run' "$OUT" 'gh auth login'
 OUT="$(printf 'n\n' | FAKE_GH_AUTH_RC=1 prreview setup 2>&1)"
 has '...and stops at the GitHub step, as it does at the Claude Code login' "$OUT" "setup stopped at 'GitHub'"
+# No terminal: the GitHub and Claude Code steps need a login made elsewhere, so
+# asking "Try again?" cannot help. /dev/null ends the input; a pipe that never
+# ends (yes) answers y for ever. Both stop at the step, under a deadline.
+mkdir -p "$T/noterm"
+for case_ in "GitHub:FAKE_GH_AUTH_RC=1" "Claude Code:FAKE_CLAUDE_LOGGED=false"; do
+  title="${case_%%:*}"; var="${case_#*:}"
+  OUT="$("$TIMEOUT_BIN" 30 "${PRREVIEW_ENV[@]}" HOME="$T/noterm" "$var" bash "$ROOT/prreview" setup </dev/null 2>&1)"; RC=$?
+  has "setup with stdin from /dev/null stops at the $title step" "$OUT" "setup stopped at '$title'"
+  case "$OUT" in *'Try again?'*) bad "...without asking to try again ($title, /dev/null)" 'no retry prompt' "$OUT" ;; *) ok "...without asking to try again ($title, /dev/null)" ;; esac
+  is "...with a failure status ($title, /dev/null)" "$RC" 1
+  OUT="$(yes | "$TIMEOUT_BIN" 10 "${PRREVIEW_ENV[@]}" HOME="$T/noterm" "$var" bash "$ROOT/prreview" setup 2>&1)"
+  has "setup with a pipe that always says y stops at the $title step, not looping" "$OUT" "setup stopped at '$title'"
+done
 has 'a repository gh cannot see, with gh logged out, says to run gh auth login' \
    "$(FAKE_GH_AUTH_RC=1 prreview repos add nobody/else 2>&1)" 'gh auth login'
 has '...in setup too' "$(printf 'nobody/else\nn\n' | FAKE_GH_AUTH_RC=1 prreview setup 2>&1)" 'gh auth login'

@@ -527,6 +527,11 @@ cmd_setup() {
     say "── $title"
     until "setup_$step"; do
       [ "$step" = tools ] && die "install the missing tools, then run prreview setup again"
+      # Claude Code and GitHub need a login made in another terminal. With no
+      # terminal on stdin a retry cannot succeed, and a pipe of y would repeat it.
+      if [ ! -t 0 ]; then
+        case "$step" in claude|github) die "setup stopped at '$title'; run prreview setup again to continue" ;; esac
+      fi
       yes_no "Try again?" y || die "setup stopped at '$title'; run prreview setup again to continue"
     done
   done

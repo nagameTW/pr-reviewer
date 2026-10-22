@@ -147,7 +147,9 @@ All notable changes to this project are recorded here. The format follows
   print the newest release in this file.
 - `prreview setup` does not start `gh auth login` when stdin is not a
   terminal and gh is not logged in. It prints the command and stops at the
-  GitHub step, as it does at the Claude Code login.
+  GitHub step. The same holds at the Claude Code login. At either step it
+  asks no "Try again?" question and exits with status 1, so a pipe that
+  always answers `y` no longer repeats the step for ever.
 - When `gh auth status` fails, "cannot see owner/repo with this gh login"
   says to run `gh auth login`. The gate message "could not tell which GitHub
   account" says it too, and it has no em dash.
