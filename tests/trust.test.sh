@@ -404,10 +404,21 @@ is '...and files no ticket'                           "$(filed)" 0
 rm -f "$T/merged.json" "$T/view-20.json" "$T/view-21.json" "$T/view-22.json"
 
 # ── the lock: once --pr waits, and fails when it cannot get it ─────────────
+# hold_lock starts a background process that takes the lock of the gate. The
+# process writes $T/held after flock succeeds, and hold_lock returns when it
+# sees that file, so the gate cannot take the lock first. A fixed sleep
+# would race the holder on a slow machine.
+hold_lock() {
+  local i=0
+  rm -f "$T/held"
+  ( exec 8>"$T/lock"; flock 8 && : > "$T/held"; exec sleep 20 ) &
+  HOLDER=$!
+  while [ ! -e "$T/held" ] && [ "$i" -lt 100 ]; do sleep 0.1; i=$((i + 1)); done
+  [ -e "$T/held" ] || bad 'a background process takes the lock' 'a marker file within 10 seconds' 'no marker file'
+}
+release_lock() { kill "$HOLDER" 2>/dev/null; wait "$HOLDER" 2>/dev/null; }
 set_list '[{"number":2,"author":{"login":"mallory"},"isCrossRepository":true,"labels":[]}]'
-( exec 8>"$T/lock"; flock 8; exec sleep 20 ) &
-HOLDER=$!
-sleep 0.5
+hold_lock
 OUT="$(run_gate PRREVIEW_ONCE_PR=owner/repo#2 PRREVIEW_GATE_ONCE_WAIT=1)"
 has 'a named PR with the lock held fails'   "$OUT" 'rc=75'
 has '...and says why'                       "$OUT" 'still holds'
@@ -415,7 +426,7 @@ has '...and names the PR that was not reviewed' "$OUT" 'owner/repo#2 was not rev
 OUT="$(run_gate)"
 has 'a round without a named PR still exits 0 when the lock is held' "$OUT" 'rc=0'
 has '...as before'                          "$OUT" 'holds'
-kill "$HOLDER" 2>/dev/null; wait "$HOLDER" 2>/dev/null
+release_lock
 
 # ── prreview once --pr ────────────────────────────────────────────────────
 mkdir -p "$H/.config/pr-reviewer"
@@ -450,14 +461,12 @@ is '...without starting the reviewer'             "$(wc -c < "$T/claude.calls" |
 OUT="$(once whatever)"
 has 'once with any other argument is rejected'   "$OUT" 'usage: prreview once'
 is '...without starting the reviewer'             "$(wc -c < "$T/claude.calls" | tr -d ' ')" 0
-( exec 8>"$T/lock"; flock 8; exec sleep 20 ) &
-HOLDER=$!
-sleep 0.5
+hold_lock
 ONCE_ENV=(PRREVIEW_GATE_ONCE_WAIT=1)
 OUT="$(once --pr owner/repo#2)"
 has 'once --pr with the lock held exits non-zero' "$OUT" 'rc=75'
 has '...and says why'                             "$OUT" 'still holds'
-kill "$HOLDER" 2>/dev/null; wait "$HOLDER" 2>/dev/null
+release_lock
 
 # ── a loop round is never a named round ────────────────────────────────────
 # Only `prreview once --pr` names a PR. A value left in the environment of the
