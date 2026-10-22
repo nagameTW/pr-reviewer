@@ -59,7 +59,9 @@ All notable changes to this project are recorded here. The format follows
   same environment as the round, and it asks for up to 1000 PRs, as the round
   does. The count applies the same rule, so a PR with a missing field or a
   wrong type counts 0. A list the loop cannot read counts as work. The scan of
-  merged PRs does not look at the author.
+  merged PRs does not look at the author. The count needs `jq`. If `jq` is
+  missing, the loop stops at startup and names it, as it does for the timeout
+  command.
 - The reviewer finds `gtimeout` and `gsha256sum` on its own. At startup it uses
   `timeout` or `gtimeout` for deadlines. It uses `sha256sum`, `gsha256sum` or
   `shasum -a 256` for the review key digest, whichever it finds first. When only

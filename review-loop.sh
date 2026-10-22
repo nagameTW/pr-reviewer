@@ -14,6 +14,9 @@ cd "$GATE_DIR" || { echo "no gate repo at $GATE_DIR"; exit 1; }
 # The round below runs under a deadline, so the loop needs a timeout command.
 tools_resolve
 [ -n "$TIMEOUT_BIN" ] || { echo "timeout(1) missing (also tried gtimeout) — refusing to run" >&2; exit 1; }
+# The open-PR count reads the PR list with jq. Without it every count fails,
+# and each failed count asks for a round.
+command -v jq >/dev/null 2>&1 || { echo "jq missing — refusing to run" >&2; exit 1; }
 # Once, up front: a repo list that cannot be read here (PRREVIEW_GATE_REPOS
 # unset or empty) makes every round below fail the same way, once a minute,
 # for as long as nobody looks.
