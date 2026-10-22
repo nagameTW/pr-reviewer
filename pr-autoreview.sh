@@ -2616,6 +2616,21 @@ $SLICE_CLEAN"
     fi
   fi
 
+  # ── Line-number backstop ──────────────────────────────────────────────────
+  # The model reads a display copy that labels each line with its new-side
+  # number, so a wrong line should be rare. When one still gets through and
+  # the diff is applied, a line past the end of the cited file is provably
+  # wrong. It is set to 0 ("no line") and the finding stays with its severity,
+  # so nothing blocks or stops blocking because of it. This is not
+  # PRREVIEW_GATE_VERIFY_LINES, which deletes findings and stays off by
+  # default. It runs after the red team merge so the candidates are covered
+  # and before the verifier, which is told the line of the finding.
+  # An answer that is empty leaves the findings as they were.
+  if [ "${DIFF_APPLIED:-0}" = 1 ]; then
+    CLAMPED="$(findings_clamp_lines "$REPO_DIR" "PR #$PR" <<<"$CLEANED")" \
+      && [ -n "$CLAMPED" ] && CLEANED="$CLAMPED"
+  fi
+
   # ── Second round: try to refute every blocking finding ───────
   # Runs only when something actually blocks, so a clean PR pays
   # nothing — unless the red-team stage above just handed it candidates, which

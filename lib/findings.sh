@@ -535,6 +535,64 @@ FINDINGS_LINE_JQ='.findings = ((.findings // [])
           | ($n == null) or ((.line >= 1) and (.line <= $n)))
     )))'
 
+# Line-number backstop. A model can still cite a number the file cannot have,
+# for example the line of the diff file. When the diff was applied to the
+# tree, the post-change length of each cited file is known, so a line past
+# the end is provably wrong. FINDINGS_CLAMP_JQ sets that line to 0 ("no line",
+# see REVIEW_SCHEMA) and keeps the finding with its severity, so a blocker
+# stays a blocker. It never drops a finding and never guesses an offset.
+# Trade-off: a wrong line that still falls inside the file is not caught.
+# Only the display copy of the diff (lib/diffview.sh) can prevent that case.
+# This is not FINDINGS_LINE_JQ, which deletes findings and stays off by default.
+# $counts maps a path to its line count. A path with no count is kept as is.
+# shellcheck disable=SC2034  # read by findings_clamp_lines
+FINDINGS_CLAMP_JQ='.findings = ((.findings // [])
+  | map(if (type == "object") and ((.file | type) == "string") and ((.line | type) == "number") and (.line >= 1)
+        then (.file | sub("^\\./"; "")) as $f
+             | ($counts[$f] // null) as $n
+             | if ($n != null) and (.line > $n) then .line = 0 else . end
+        else . end))'
+# The findings whose line FINDINGS_CLAMP_JQ changes, one "file:line" per row.
+# shellcheck disable=SC2034  # read by findings_clamp_lines
+FINDINGS_CLAMP_LOG_JQ='(.findings // [])[]
+  | select((type == "object") and ((.file | type) == "string") and ((.line | type) == "number") and (.line >= 1))
+  | (.file | sub("^\\./"; "")) as $f
+  | select(($counts[$f] // null) as $n | ($n != null) and (.line > $n))
+  | "\(.file):\(.line)"'
+
+# findings_clamp_lines REPO_DIR LABEL: read the findings JSON on stdin, write
+# it with every provably wrong line set to 0, and log one row per change on
+# stderr. LABEL starts each log row, for example "PR #7". Input that is not
+# usable comes back unchanged. A line count comes from awk NR, not wc -l: wc
+# counts newlines and reads a file with no final newline one short.
+findings_clamp_lines() {
+  local repo="${1-}" label="${2-}" in counts out f
+  in="$(cat)"
+  # Not a findings object: nothing to measure.
+  jq -e '(.findings | type) == "array"' >/dev/null 2>&1 <<<"$in" || { printf '%s' "$in"; return 0; }
+  counts="$(jq -r '[.findings[]? | select(type == "object") | (.file // "") | select(type == "string" and . != "")] | unique[]?' <<<"$in" 2>/dev/null \
+    | while IFS= read -r f; do
+        # A path is model text. An absolute path or a climbing path is not
+        # measured, so the finding keeps its line.
+        if [[ "$f" != /* && "$f" != *..* ]]; then
+          f="${f#./}"
+          if [ -n "$f" ] && [ -f "$repo/$f" ]; then
+            printf '%s\t%s\n' "$f" "$(LC_ALL=C awk 'END { print NR }' "$repo/$f" 2>/dev/null)"
+          fi
+        fi
+      done \
+    | jq -Rn '[inputs | split("\t") | select(length == 2 and (.[1] | test("^[0-9]+$"))) | {(.[0]): (.[1] | tonumber)}] | add // {}' 2>/dev/null)"
+  if [ -z "$counts" ] || [ "$counts" = "{}" ]; then printf '%s' "$in"; return 0; fi
+  if ! out="$(jq -c --argjson counts "$counts" "$FINDINGS_CLAMP_JQ" <<<"$in" 2>/dev/null)" || [ -z "$out" ]; then
+    printf '%s' "$in"; return 0
+  fi
+  jq -r --argjson counts "$counts" "$FINDINGS_CLAMP_LOG_JQ" <<<"$in" 2>/dev/null \
+    | while IFS= read -r f; do
+        printf '%s: line %s is past the end of the file, set to 0 (the finding is kept)\n' "$label" "$f" >&2
+      done
+  printf '%s' "$out"
+}
+
 # ── the severity ladder, in ONE place ──────────────────────────────────────
 #
 # Four expressions used to spell this out separately (the blocking tally, the
