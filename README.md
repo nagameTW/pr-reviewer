@@ -50,8 +50,8 @@ models. Current costs can differ.
 
 It is plain bash on top of `gh`, `git`, `jq` and the `claude` CLI. There is no
 server and no webhook: a loop polls once a minute, and each round is one run
-of `pr-autoreview.sh`. `prreview setup` walks you through the settings and, if you
-say yes, installs the loop as a background service.
+of `pr-autoreview.sh`. `prreview setup` walks you through the settings and, if
+you say yes, installs the loop as a background service.
 
 ## Contents
 
@@ -425,10 +425,11 @@ ROUND USAGE: 3 call(s)  in=28 out=6978 cache_read=347346 cache_write=40101  cost
 Run it again without pushing anything and the PR is skipped: the head already
 has its comment. For the same reason, with the service installed,
 `./prreview once` right after setup usually prints
-`this head was already handled` for every PR, because the service got there first. If it prints `another pr-autoreview run holds … — exiting`, the
-service is in the middle of a round. `./prreview logs -f` shows that round, or run
-`./prreview stop` first to try `once` on its own and `./prreview start` afterwards; a
-stopped service stays stopped.
+`this head was already handled` for every PR, because the service got there
+first. If it prints `another pr-autoreview run holds … — exiting`, the service
+is in the middle of a round. `./prreview logs -f` shows that round, or run
+`./prreview stop` first to try `once` on its own and `./prreview start`
+afterwards; a stopped service stays stopped.
 
 ## Everyday commands
 
