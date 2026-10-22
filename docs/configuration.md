@@ -50,7 +50,7 @@ Settings come from two layers. The first layer is a config file. The second laye
 | `PRREVIEW_GATE_HOLDOFF_FAIL` | `300` | Seconds that a head waits after a failed review or post (see [When something fails](operations.md#when-something-fails)) |
 | `PRREVIEW_GATE_HOLDOFF_QUOTA` | `1800` | Seconds that a head waits after a usage-limit error |
 | `PRREVIEW_GATE_HOLDOFF_MAX` | `3600` | Longest wait after repeated failures |
-| `PRREVIEW_GATE_HOLDOFF_DIR` | `~/.cache/pr-reviewer/review-holdoff` | Where the reviewer keeps those holds, with the verdicts that wait to be posted again |
+| `PRREVIEW_GATE_HOLDOFF_DIR` | `~/.cache/pr-reviewer/review-holdoff` | Where the reviewer keeps those holds, with the verdicts that wait to be posted again and the count of verdicts posted for each head |
 | `PRREVIEW_GATE_PR_COOLDOWN_MIN` | `10` | Minutes that a PR waits after the last comment of the reviewer. This applies when the title, description or base branch changed and the head is the same. A push to the PR branch never waits. A push to the parent branch of a stacked PR can wait, because the reviewer compares only the head. The value is a whole number. `0` turns the wait off. `prreview once --pr` ignores it |
 | `PRREVIEW_GATE_PARALLEL` | `2` | PRs that the reviewer reviews at the same time |
 | `PRREVIEW_GATE_CALL_CAP` | `8` | Model calls in flight for one PR |

@@ -16,21 +16,21 @@ Each point names the code that does it. The code paths are at the commit that yo
   - `.mcp.json` and `.claude/`
   - `.github/review-checks.md`
 
-  The function is [`tree_force_convention_files`](../lib/tree.sh#L265). The file list is at [`lib/tree.sh:168`](../lib/tree.sh#L168).
-- **The model gets three read tools.** The tools are `Read`, `Grep` and `Glob`, and nothing else. The `--tools` option sets them ([`lib/claude-call.sh:48`](../lib/claude-call.sh#L48) and [`:73`](../lib/claude-call.sh#L73)). The code refuses a Claude Code older than 2.1.305 ([`:42`](../lib/claude-call.sh#L42)). Your code never runs.
-- **A second call tries to refute each blocking finding.** A refutation removes a finding only at confidence 0.8 or higher ([`lib/findings.sh:995`](../lib/findings.sh#L995)). The step can only remove findings. It lowers false alarms. It is not a security control ([SECURITY.md](../SECURITY.md)).
-- **It scans a comment against your own patterns before it posts.** A match, or a scan that cannot run, replaces the comment with a short notice ([`scan_hit_or_unknown`](../lib/scan.sh#L80), used before the final post at [`pr-autoreview.sh:3062`](../pr-autoreview.sh#L3062)).
-- **It posts nothing when a step fails.** If the output cannot be parsed, even after one repair call, the result is "no action (fail closed)" ([`pr-autoreview.sh:2194`](../pr-autoreview.sh#L2194)).
-- **Unfixed blocking findings carry over to the next round.** The round prompt tells the model to mark them "Carried over:" ([`pr-autoreview.sh:1810`](../pr-autoreview.sh#L1810)).
-- **Claims in the PR text are checked against the diff.** The prompt gives the model sentences such as "tests pass" or "verified" as claims to check ([`prompt_claims_section`](../lib/prompt.sh#L564)).
-- **It comments and nothing more.** Every verdict is a `gh pr comment` ([`pr-autoreview.sh:3084`](../pr-autoreview.sh#L3084)). It makes one merge-related call: `gh pr merge --disable-auto`. This call disarms an auto-merge on a head that the reviewer has not reviewed ([`lib/merge.sh:26`](../lib/merge.sh#L26)).
-- **A second, adversarial pass is off by default.** The red team runs only when `PRREVIEW_GATE_REDTEAM` is set ([`lib/redteam.sh:61`](../lib/redteam.sh#L61)).
+  The function is `tree_force_convention_files` in [`lib/tree.sh`](../lib/tree.sh). The file list is the variable `TREE_CONV_RE` in the same file.
+- **The model gets three read tools.** The tools are `Read`, `Grep` and `Glob`, and nothing else. The `--tools` option sets them ([`lib/claude-call.sh`](../lib/claude-call.sh), variable `CLAUDE_READ_TOOLS` and function `claude_call`). The code refuses a Claude Code older than 2.1.305 (same file, function `claude_version_check`). Your code never runs.
+- **A second call tries to refute each blocking finding.** A refutation removes a finding only at confidence 0.8 or higher ([`lib/findings.sh`](../lib/findings.sh), function `findings_verify_refuted`). The step can only remove findings. It lowers false alarms. It is not a security control ([SECURITY.md](../SECURITY.md)).
+- **It scans a comment against your own patterns before it posts.** A match, or a scan that cannot run, replaces the comment with a short notice ([`lib/scan.sh`](../lib/scan.sh), function `scan_hit_or_unknown`. [`pr-autoreview.sh`](../pr-autoreview.sh), function `review_one_pr`, calls it before the final post).
+- **It posts nothing when a step fails.** If the output cannot be parsed, even after one repair call, the result is "no action (fail closed)" ([`pr-autoreview.sh`](../pr-autoreview.sh), function `review_one_pr`).
+- **Unfixed blocking findings carry over to the next round.** The round prompt tells the model to mark them "Carried over:" ([`pr-autoreview.sh`](../pr-autoreview.sh), function `review_one_pr`).
+- **Claims in the PR text are checked against the diff.** The prompt gives the model sentences such as "tests pass" or "verified" as claims to check ([`lib/prompt.sh`](../lib/prompt.sh), function `prompt_claims_section`).
+- **It comments and nothing more.** Every verdict is a `gh pr comment` ([`pr-autoreview.sh`](../pr-autoreview.sh), function `review_one_pr`). It makes one merge-related call: `gh pr merge --disable-auto`. This call disarms an auto-merge on a head that the reviewer has not reviewed ([`lib/merge.sh`](../lib/merge.sh), function `disarm_unreviewed_auto_merge`).
+- **A second, adversarial pass is off by default.** The red team runs only when `PRREVIEW_GATE_REDTEAM` is set ([`lib/redteam.sh`](../lib/redteam.sh), function `redteam_enabled`).
 
 ## Tools side by side
 
 | Tool | Runs on | What you install | Approve or merge | Project rules are read from | Sources |
 | --- | --- | --- | --- | --- | --- |
-| pr-reviewer | Your machine, polling once a minute | `gh` and Claude Code logins. No admin rights | Comments only. No approval, no merge | The default branch, for every PR | [README](../README.md), [`lib/tree.sh`](../lib/tree.sh#L265), [`lib/merge.sh`](../lib/merge.sh#L26) |
+| pr-reviewer | Your machine, polling once a minute | `gh` and Claude Code logins. No admin rights | Comments only. No approval, no merge | The default branch, for every PR | [README](../README.md), [`lib/tree.sh`](../lib/tree.sh), [`lib/merge.sh`](../lib/merge.sh) |
 | claude-code-action | Your GitHub runner | Claude GitHub App, a repo secret and a workflow file. You must be a repo admin | Cannot approve or merge. It can push commits to the PR branch | A fixed list of files is restored from the base branch. The rest stays at the PR head | [README][cca-readme], [security][cca-security], [limits][cca-limits] |
 | Claude Code `/code-review` | Your own Claude Code session | Claude Code only | `--comment` posts inline comments. No approve or merge option found | Follows your `CLAUDE.md` on your checkout. A base-branch rule not found | [local review docs][cc-local] |
 | Anthropic Code Review (managed) | Anthropic infrastructure | An organization Owner turns it on and installs the Claude GitHub App. Team and Enterprise plans only | "A review never approves or blocks the pull request" | `REVIEW.md` from the base or default branch | [Code Review][cc-review], [customize][cc-customize], [costs][cc-costs] |
@@ -80,7 +80,7 @@ Other tools, per their docs:
 
 - **You want built-in scanners.** CodeRabbit lists 50 or more ([tools][cr-tools]). Bito and Amazon Q list their own scanners ([Bito][bito], [Amazon Q][amazonq]). pr-reviewer has none.
 - **You want the tool to learn from feedback.** CodeRabbit, Greptile, Cursor Bugbot, Graphite Agent and Kodus do ([CodeRabbit][cr-learn], [Greptile][greptile-rules], [Bugbot][bugbot], [Graphite][graphite], [Kodus][kodus-readme]). pr-reviewer does not.
-- **You want one-click fixes.** The docs list Copilot, Greptile, Cursor Bugbot and CodeRabbit as offering them ([Copilot][gh-use], [Greptile][greptile-rules], [Bugbot][bugbot], [CodeRabbit][cr-config]). pr-reviewer is built not to change your code.
+- **You want fixes that the tool applies for you.** The docs list Copilot, Cursor Bugbot and CodeRabbit as offering them ([Copilot][gh-use], [Bugbot][bugbot], [CodeRabbit][cr-config]). pr-reviewer is built not to change your code.
 - **You want a merge gate.** CodeRabbit can request changes and approve ([request changes][cr-request]). Kodus can request changes and auto-approve ([policy][kodus-policy]). Copilot approvals are in public preview ([use][gh-use]). pr-reviewer never approves. It never submits a GitHub review.
 - **You do not want a machine to keep running.** CodeRabbit runs as a vendor service ([FAQ][cr-faq]). Anthropic's managed Code Review runs on Anthropic infrastructure ([Code Review][cc-review]). claude-code-action runs on your GitHub runner. So it does not depend on your computer being on ([README][cca-readme]). pr-reviewer pauses when the machine sleeps.
 - **You use GitLab, Bitbucket or Azure DevOps.** PR-Agent supports all three ([README][pa-readme]). OpenCodeReview supports GitLab CI and Gerrit ([README][ocr-readme]). pr-reviewer uses `gh` and works on GitHub only.

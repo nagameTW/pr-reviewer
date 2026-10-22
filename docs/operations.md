@@ -124,7 +124,30 @@ reads the settings named `PRREVIEW_LOOP_*`. It starts the rounds.
    the PR. The comment carries a hidden marker. The marker holds the head SHA
    and a hash of the title, description and base branch. For a stacked PR, it
    also holds the base commit. Only comments by the own account of the reviewer
-   count. A PR on hold after a failure waits out its hold (see
+   count. A comment from another App that carries the marker gets a `WARNING`
+   line in the log. The reviewer reviews the head anyway, however many such
+   comments there are.
+
+   The reviewer also keeps a count of the verdicts it posted for each head. The
+   count is in the hold directory (`PRREVIEW_GATE_HOLDOFF_DIR`). At two
+   verdicts for one head, the list of App logins (`PRREVIEW_REVIEW_APP_SLUG`)
+   is probably wrong, and the reviewer does not see its own comments. The head
+   then counts as handled. The reviewer makes no review and no model call for
+   it, and logs a `WARNING` line in every round. It reviews the head again
+   after the author pushes.
+
+   The count file stays while its PR is open. The reviewer removes it when
+   both conditions are true:
+   - The PR is not open.
+   - The file is three days old or more.
+
+   A repo with 1000 or more open PRs keeps all its count files, because the
+   list of open PRs may be cut off. If the hold directory cannot be written, or
+   the count file name cannot be built for the owner and repo, the reviewer
+   skips the PR before any model call. The round then fails, so the failure
+   alert runs.
+
+   A PR on hold after a failure waits out its hold (see
    [When something fails](#when-something-fails)).
 2. **Scan.** Check the title and description of the PR against your
    sensitive-patterns file. A match stops the review of that PR. The round reads
@@ -182,8 +205,9 @@ reads the settings named `PRREVIEW_LOOP_*`. It starts the rounds.
    then gets its own call that tries to refute it. The limit is
    `PRREVIEW_GATE_VERIFY_MAX` (6) in a round. The reviewer drops a refuted
    finding. Any finding beyond the cap stands.
-7. **Post.** Render one comment. Scan it against your patterns. Post it. The end
-   of the round prints the model usage and the cost of the round.
+7. **Post.** Render one comment. Escape the model text (see
+   [SECURITY.md](../SECURITY.md)). Scan the comment against your patterns. Post
+   it. The end of the round prints the model usage and the cost of the round.
 
 CRITICAL and HIGH findings block. MEDIUM and LOW findings are listed under the
 verdict and do not block. Two kinds of HIGH finding are listed and do not block:
@@ -272,6 +296,7 @@ happens:
   - A diff that cannot be fetched whole.
   - A symlink on the base branch.
   - An App token that cannot be created.
+  - A hold directory that cannot be written.
   - A review job that crashes.
 
   The round finishes the other PRs. Then it exits with an error. If you set
@@ -362,7 +387,7 @@ export XDG_RUNTIME_DIR=/run/user/$(id -u) # in the reviewer's session
 | Path | What is there |
 | --- | --- |
 | `~/.config/pr-reviewer/` | `config`, `sensitive-patterns`, your copy of the checklist in `checks/`, and the key of a GitHub App as `app.pem` |
-| `~/.cache/pr-reviewer/` | The log `gate.log` of the service, round logs in `gate-logs/`, holds in `review-holdoff/`, and the round lock |
+| `~/.cache/pr-reviewer/` | The log `gate.log` of the service, round logs in `gate-logs/`, holds and counts of posted verdicts in `review-holdoff/`, and the round lock |
 | `~/.cache/pr-reviewer/work/` | Review clones and the scratch files of each round (`PRREVIEW_GATE_WORKROOT`). The path is under `$XDG_CACHE_HOME` when that is set |
 | `~/.local/state/pr-reviewer/` | Which repo the next round starts with. The path is under `$XDG_STATE_HOME` when that is set |
 | `~/Library/LaunchAgents/local.pr-reviewer.plist` | The background service on macOS |

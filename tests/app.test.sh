@@ -57,6 +57,13 @@ is 'a personal repo gets its own' "$(with_stub app_token_for 12345 "$T/key.pem" 
 # "Only select repositories" and not given this one.
 is 'a repo the App cannot reach gets nothing, and says so by status' \
    "$(with_stub app_token_for 12345 "$T/key.pem" me/secret || echo refused)" refused
+# The token is for the one repository that gets the comment, not for every
+# repository the installation reaches.
+is 'the token request names only the repository it is for' \
+   "$(grep 'access_tokens' "$CURL_LOG" | grep -c -- '-d {"repositories":\["web"\]}')" 1
+is '...for a personal repository too' \
+   "$(grep 'installations/55/access_tokens' "$CURL_LOG" | grep -c -- '-d {"repositories":\["api"\]}')" 1
+is '...as a POST' "$(grep 'access_tokens' "$CURL_LOG" | grep -vc -- '-X POST')" 0
 is 'every call carries a time limit' "$(grep -vc -- '--max-time' "$CURL_LOG")" 0
 is 'no credential is on a command line' "$(grep -c 'Bearer' "$CURL_LOG")" 0
 is '...it goes in on stdin, once per call' "$(grep -c '^Authorization: Bearer ' "$HDR_LOG")" "$(wc -l < "$CURL_LOG" | tr -d ' ')"

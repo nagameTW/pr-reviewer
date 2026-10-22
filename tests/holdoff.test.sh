@@ -626,5 +626,153 @@ grep -qE '^holdoff_knobs_ok \|\| exit 2$' pr-autoreview.sh \
   && ok 'pr-autoreview.sh refuses a bad hold before its first review' \
   || fail 'pr-autoreview.sh refuses a bad hold before its first review'
 
+# ── the local count of posted verdicts ────────────────────────────────────
+# One line per verdict this machine posted for a key. No comment author can
+# write it, so a count from here cannot be forged on GitHub.
+PF="$(holdoff_posted_path o/r 42 "abc123-def456")" || PF=""
+case "$PF" in */o+r+42+abc123-def456.posted) ok "posted path names the owner, the repo, the PR and the key" ;;
+  *) fail "unexpected posted path: '$PF'" ;; esac
+holdoff_posted_path o/r 42 'a/b' >/dev/null 2>&1 && fail "a key with a slash became a posted path"
+holdoff_posted_path o/r 42 'a+b' >/dev/null 2>&1 && fail "a key with a plus became a posted path"
+holdoff_posted_path o/r x abc >/dev/null 2>&1 && fail "a bad PR number became a posted path"
+ok "posted path refuses the keys that holdoff_path refuses"
+is "no file counts 0" "$(holdoff_posted_count "$PF")" 0
+is "an empty path counts 0" "$(holdoff_posted_count '')" 0
+holdoff_posted_record "$PF" "$NOW" || fail "holdoff_posted_record failed"
+is "one record counts 1" "$(holdoff_posted_count "$PF")" 1
+holdoff_posted_record "$PF" "$NOW"
+is "two records count 2" "$(holdoff_posted_count "$PF")" 2
+is "the file is mode 600" "$(stat -c %a "$PF" 2>/dev/null || stat -f %Lp "$PF")" 600
+PF2="$(holdoff_posted_path o/r 42 "other-key")"
+is "another key starts from zero" "$(holdoff_posted_count "$PF2")" 0
+printf 'junk\n\n12x\n' > "$TMP/hold/junk.posted"
+is "lines that are not a time count 0" "$(holdoff_posted_count "$TMP/hold/junk.posted")" 0
+holdoff_posted_record "" "$NOW" && fail "an empty path was recorded"
+holdoff_posted_record "$PF" "" && fail "an empty time was recorded"
+mkdir -p "$TMP/hold/dirfile.posted"
+holdoff_posted_record "$TMP/hold/dirfile.posted" "$NOW" 2>/dev/null && fail "a write that fails reported success"
+ok "a write that fails returns non-zero (the caller logs it)"
+# Finding 3: two owners with the same repo name, PR number and key must not
+# share a count.
+PA="$(holdoff_posted_path owner-a/project 7 abc)"
+PB="$(holdoff_posted_path owner-b/project 7 abc)"
+[ -n "$PA" ] && [ -n "$PB" ] && [ "$PA" != "$PB" ] \
+  && ok "owner-a/project and owner-b/project get different posted paths" \
+  || fail "same repo name under two owners shares a posted path: '$PA' '$PB'"
+holdoff_posted_path 'o/r/x' 7 abc >/dev/null 2>&1 && fail "a repo with a slash became a posted path"
+holdoff_posted_path 'o w/r' 7 abc >/dev/null 2>&1 && fail "an owner with a space became a posted path"
+holdoff_posted_path '/r' 7 abc >/dev/null 2>&1 && fail "an empty owner became a posted path"
+holdoff_posted_path 'o/' 7 abc >/dev/null 2>&1 && fail "an empty repo became a posted path"
+holdoff_posted_path 'a+b/r' 7 abc >/dev/null 2>&1 && fail "an owner with a plus became a posted path"
+holdoff_posted_path 'o/r+x' 7 abc >/dev/null 2>&1 && fail "a repo with a plus became a posted path"
+ok "posted path refuses an owner or repo outside the GitHub name characters"
+old() { touch -d '5 days ago' "$@" 2>/dev/null || touch -t "$(date -d '5 days ago' +%Y%m%d%H%M 2>/dev/null || date -v-5d +%Y%m%d%H%M)" "$@"; }
+# An Enterprise Managed User login holds an underscore (alice_acme). It gets
+# a path, and the count works on it.
+PM="$(holdoff_posted_path alice_acme/r 7 abc)" || PM=""
+case "$PM" in */alice_acme+r+7+abc.posted) ok "an owner with an underscore gets a posted path" ;;
+  *) fail "no posted path for an owner with an underscore: '$PM'" ;; esac
+holdoff_posted_record "$PM" "$NOW"; holdoff_posted_record "$PM" "$NOW"
+is "...two records count 2 for it" "$(holdoff_posted_count "$PM")" 2
+PM2="$(holdoff_posted_path alice/acme_r 7 abc)"
+[ -n "$PM2" ] && [ "$PM" != "$PM2" ] \
+  && ok "alice_acme/r and alice/acme_r get different posted paths" \
+  || fail "an underscore in the owner or the repo made two names equal: '$PM' '$PM2'"
+holdoff_posted_record "$PM" "$NOW"; old "$PM"
+holdoff_prune 2 "alice_acme/r#7"
+[ -e "$PM" ] \
+  && ok "prune keeps the count of an open PR of an owner with an underscore" \
+  || fail "prune dropped the count of an underscore owner"
+holdoff_prune 2 "alice_acme/r#8"
+[ -e "$PM" ] \
+  && fail "prune kept the count of a PR that is not open (underscore owner)" \
+  || ok "...and drops it when its PR is not open"
+# The hold path keeps the shared base name: its files would be lost on upgrade.
+case "$(holdoff_path owner-a/project 7 abc)" in */project-7-abc) ok "hold path is unchanged" ;;
+  *) fail "hold path changed" ;; esac
+
+# Finding 1: prune keeps the count of an open PR, however old the file is.
+PO="$(holdoff_posted_path o/r 42 abc)"; PC="$(holdoff_posted_path o/r 43 abc)"
+PX="$(holdoff_posted_path o/unlisted 5 abc)"; PY="$(holdoff_posted_path o/gone 5 abc)"
+PN="$(holdoff_posted_path o/r 44 abc)"
+for f in "$PO" "$PC" "$PX" "$PY"; do holdoff_posted_record "$f" "$NOW"; done
+old "$PO" "$PC" "$PX" "$PY"
+holdoff_posted_record "$PN" "$NOW"
+printf 'x' > "$TMP/hold/o-hold"; old "$TMP/hold/o-hold"
+holdoff_prune 2 "$(printf 'o/r#42\no/unlisted\n')"
+[ -e "$PO" ] || fail "prune removed the count of an open PR"
+ok "prune keeps an old posted file while its PR is open"
+[ -e "$PC" ] && fail "prune kept the count of a closed PR"
+ok "prune removes an old posted file for a closed PR"
+[ -e "$PX" ] || fail "prune removed a count of a repo whose open list is unknown"
+ok "a bare owner/repo line keeps every posted file of that repo"
+[ -e "$PY" ] && fail "prune kept the count of a repo that is not listed"
+ok "prune removes an old posted file of a repo that is not listed"
+[ -e "$PN" ] || fail "prune removed a fresh posted file"
+[ -e "$TMP/hold/o-hold" ] && fail "prune kept a stale hold when given an open list"
+ok "other state files are still pruned by age"
+holdoff_prune 2
+[ -e "$PO" ] && fail "prune without an open list kept a stale posted file"
+ok "with no open list, prune removes stale posted files as before"
+is "...and the count of a pruned file is 0 again" "$(holdoff_posted_count "$PO")" 0
+
+# Names that look alike must not keep each other: repo r with PR 4, and repo
+# r-4 with any PR. The separator "+" is not a GitHub name character, so the
+# prefix owner+repo+PR+ is exact.
+mk() { for f in "$@"; do holdoff_posted_record "$f" "$NOW"; done; old "$@"; }
+PR4="$(holdoff_posted_path o/r 4 abc)"; PRD4="$(holdoff_posted_path o/r-4 9 abc)"
+mk "$PR4" "$PRD4"
+holdoff_prune 2 "o/r#4"
+[ -e "$PR4" ] || fail "open r#4 did not keep its own count"
+[ -e "$PRD4" ] && fail "open r#4 kept the count of repo r-4"
+ok "open r#4 keeps r#4 and drops the old count of repo r-4"
+mk "$PR4" "$PRD4"
+holdoff_prune 2 "o/r-4#9"
+[ -e "$PRD4" ] || fail "open r-4#9 did not keep its own count"
+[ -e "$PR4" ] && fail "open r-4#9 kept the count of repo r"
+ok "open r-4#9 keeps r-4#9 and drops the old count of repo r"
+mk "$PR4" "$PRD4"
+holdoff_prune 2 "o/r"
+[ -e "$PR4" ] || fail "bare r did not keep its own count"
+[ -e "$PRD4" ] && fail "bare r kept the count of repo r-4"
+ok "a bare owner/repo keeps that repo and not a repo with a longer name"
+P12="$(holdoff_posted_path o/r 12 abc)"; P1="$(holdoff_posted_path o/r 1 abc)"
+mk "$P12" "$P1"
+holdoff_prune 2 "o/r#1"
+[ -e "$P1" ] || fail "open r#1 did not keep its own count"
+[ -e "$P12" ] && fail "open r#1 kept the count of PR 12"
+ok "open r#1 does not keep the count of PR 12"
+
+# GitHub owner and repo names are case-insensitive: a spelling change must not
+# reset the count.
+PU="$(holdoff_posted_path Owner/Repo 7 abc)"; PL="$(holdoff_posted_path owner/repo 7 abc)"
+[ -n "$PU" ] && [ "$PU" = "$PL" ] \
+  && ok "Owner/Repo and owner/repo give the same posted path" \
+  || fail "case changed the posted path: '$PU' '$PL'"
+# The open list may spell the repo in another case than the file name.
+PK="$(holdoff_posted_path owner/repo 4 abc)"
+holdoff_posted_record "$PK" "$NOW"; old "$PK"
+holdoff_prune 2 "Owner/Repo#4"
+[ -e "$PK" ] \
+  && ok "an open entry in another case keeps the count of the same PR" \
+  || fail "prune dropped the count when the open entry differed in case"
+holdoff_prune 2 "OWNER/REPO"
+[ -e "$PK" ] \
+  && ok "a bare entry in another case keeps the count of the repo" \
+  || fail "prune dropped the count when the bare entry differed in case"
+# Finding 2: the check that the directory can hold the count.
+D2="$TMP/newhold"; rm -rf "$D2"
+HOLDOFF_DIR="$D2" holdoff_dir_writable || fail "a missing directory could not be made"
+is "a missing hold directory is made with mode 700" "$(stat -c %a "$D2" 2>/dev/null || stat -f %Lp "$D2")" 700
+: > "$TMP/notdir"
+HOLDOFF_DIR="$TMP/notdir/hold" holdoff_dir_writable 2>/dev/null && fail "a path below a file counted as writable"
+ok "a hold directory that cannot be made is not writable"
+mkdir -p "$TMP/rodir"; chmod 500 "$TMP/rodir"
+if [ ! -w "$TMP/rodir" ]; then
+  HOLDOFF_DIR="$TMP/rodir" holdoff_dir_writable 2>/dev/null && fail "a read-only directory counted as writable"
+  ok "a read-only hold directory is not writable"
+fi
+chmod 700 "$TMP/rodir"
+
 [ "$RC" = 0 ] && echo "PASS: lib/holdoff.sh"
 exit "$RC"

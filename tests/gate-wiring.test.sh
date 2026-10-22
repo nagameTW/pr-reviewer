@@ -89,7 +89,7 @@ pin    'an exempt oversize PR doubles its first-round samples' 'SAMPLES_ROUND1 *
 # A review that ran but left nothing usable is held, or the next round pays
 # for the same review a minute later, and every minute after that.
 pin    'an unusable review that ran holds the head' '[ "$REVIEW_STATUS" = "OK" ] && [ -n "${HOLD_F:-}" ] && holdoff_set "$HOLD_F" failed "$(date +%s)"' pr-autoreview.sh
-pin    'the repo list asks gh for more than its default 30 PRs' 'pr list --repo "$REPO" --state open --limit 1000' pr-autoreview.sh
+pin    'the repo list asks gh for more than its default 30 PRs' 'pr list --repo "$REPO" --state open --limit "$PR_LIST_LIMIT"' pr-autoreview.sh
 # ...and the split request is excluded from the ROUND readers only: the
 # memory/round count (PROMPT_REAL_REVIEWS_JQ) and the verdict-shaped
 # count skip it, and the post-merge alert's last verdict body keeps it, so

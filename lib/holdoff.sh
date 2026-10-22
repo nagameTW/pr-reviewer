@@ -68,6 +68,11 @@ holdoff_knobs_ok() {
 # A key that is not what we expect yields no path at all rather than a path
 # somewhere else — refusing is the only safe answer when the input to a
 # filename is untrusted.
+# Trade-off: the name keeps only the repo base name (${repo##*/}), so owner-a/x
+# and owner-b/x share one hold file for the same PR number and key. Two such
+# repos in one gate see each other's hold. A new name would drop the held
+# verdicts that exist at upgrade, so it stays. The post count does not share
+# it: holdoff_posted_path names the owner too.
 holdoff_path() {
   local repo="${1-}" pr="${2-}" key="${3-}"
   case "$pr"  in ''|*[!0-9]*) return 1 ;; esac
@@ -184,12 +189,106 @@ holdoff_stuck() {
       done
 }
 
+# ── The local count of posted verdicts ─────────────────────────────────────
+#
+# One line per verdict that this machine posted for a key: the time, in epoch
+# seconds. The file is state that no comment author can create. The reviewer
+# uses it to see that it posts again and again for one head. That happens when
+# the list of App logins is wrong: the reviewer cannot know its own comments,
+# so each round reads the head as not reviewed. See PROMPT_LOCAL_POST_LIMIT
+# in lib/prompt.sh.
+#
+# The file lives next to the hold and is named from the owner, the repo, the PR
+# and the same checked key. Holds keep only the repo base name; this name
+# keeps the owner, so owner-a/x and owner-b/x never share a count.
+# Pruning (holdoff_prune) keeps the file while its PR is open, so a head that
+# waits for days cannot get a new count. The file of a closed PR goes by age.
+#
+# Every failure here leaves the gate as it was before this file existed: a
+# count that cannot be read is 0. A record that cannot be written is the
+# caller's to report (holdoff_dir_writable runs before the model, and a failed
+# record after a post fails the round).
+
+# The owner and the repo in a form that is safe in a file name: owner+repo.
+# $1 = owner/repo. The count file name joins every field with "+": the owner,
+# the repo, the PR and the key. No owner, repo name or key holds a "+", so no
+# name is the prefix of another and a prefix test is exact. An owner may hold
+# an underscore (Enterprise Managed User logins, such as alice_acme). Nothing
+# is printed for a name outside the GitHub name characters.
+holdoff_posted_stem() {
+  local owner="${1%%/*}" repo="${1#*/}"
+  case "$1" in */*) ;; *) return 1 ;; esac
+  case "$owner" in ''|*[!0-9a-zA-Z_-]*) return 1 ;; esac
+  case "$repo"  in ''|*[!0-9a-zA-Z._-]*) return 1 ;; esac
+  # GitHub names ignore case, so the stem is lower case. The prune test
+  # builds its stem here too, so an open entry in any case matches the file.
+  printf '%s+%s' "$owner" "$repo" | LC_ALL=C tr '[:upper:]' '[:lower:]'
+}
+
+# Where the count for this repo, PR and key lives. Same arguments as holdoff_path.
+holdoff_posted_path() {
+  local stem
+  holdoff_path "$@" >/dev/null || return 1
+  stem="$(holdoff_posted_stem "${1-}")" || return 1
+  printf '%s/%s+%s+%s.posted' "$HOLDOFF_DIR" "$stem" "${2-}" "${3-}"
+}
+
+# Can the count be kept? Makes the hold directory (mode 700, from umask 077) when it is
+# missing, then tests that it is writable. The job runs this before any model
+# call: a verdict posted with no way to count it is not bounded.
+holdoff_dir_writable() {
+  [ -d "$HOLDOFF_DIR" ] || ( umask 077; mkdir -p "$HOLDOFF_DIR" ) 2>/dev/null || return 1
+  [ -d "$HOLDOFF_DIR" ] && [ -w "$HOLDOFF_DIR" ]
+}
+
+# How many verdicts are recorded. $1 = path. Prints 0 for a file that is
+# missing or unreadable. A line that is not a time does not count.
+holdoff_posted_count() {
+  local n
+  [ -r "${1-}" ] || { printf '0'; return 0; }
+  n="$(grep -c '^[0-9][0-9]*$' "$1" 2>/dev/null)" || true
+  case "$n" in ''|*[!0-9]*) n=0 ;; esac
+  printf '%s' "$n"
+}
+
+# Record one verdict. $1 = path, $2 = now (epoch seconds). Non-zero when the
+# write fails; the caller logs it and goes on. The file is mode 600 in a 700
+# directory, as the other state files are.
+holdoff_posted_record() {
+  local f="${1-}" now="${2-}" dir
+  [ -n "$f" ] || return 1
+  case "$now" in ''|*[!0-9]*) return 1 ;; esac
+  dir="$(dirname "$f")"
+  mkdir -p "$dir" 2>/dev/null || return 1
+  chmod 700 "$dir" 2>/dev/null || true
+  ( umask 077; printf '%s\n' "$now" >> "$f" ) 2>/dev/null || return 1
+}
+
 # Old holds are junk, not history: once a head is superseded its file can never
 # match a key again. Pruned by age so the directory cannot grow without bound.
+#
+# The count file (.posted) is the exception while its PR is open. $2 lists the
+# open PRs, one per line: "owner/repo#N" for a PR, and a bare "owner/repo" for
+# a repo whose open list is not known (all its count files stay). A count file
+# of any other PR goes by age as the other files do. Without $2, every file
+# goes by age.
 holdoff_prune() {
-  local days="${1:-2}"
+  local days="${1:-2}" open="${2-}" f line stem keep
   [ -d "$HOLDOFF_DIR" ] || return 0
-  find "$HOLDOFF_DIR" -maxdepth 1 -type f -mtime "+$days" -delete 2>/dev/null || true
+  find "$HOLDOFF_DIR" -maxdepth 1 -type f ! -name '*.posted' -mtime "+$days" -delete 2>/dev/null || true
+  find "$HOLDOFF_DIR" -maxdepth 1 -type f -name '*.posted' -mtime "+$days" -print 2>/dev/null \
+    | while IFS= read -r f; do
+        keep=0
+        while IFS= read -r line; do
+          [ -n "$line" ] || continue
+          stem="$(holdoff_posted_stem "${line%%#*}")" || continue
+          case "$line" in
+            *'#'*) case "$f" in "$HOLDOFF_DIR/$stem+${line#*#}+"*) keep=1 ;; esac ;;
+            *)     case "$f" in "$HOLDOFF_DIR/$stem+"*) keep=1 ;; esac ;;
+          esac
+        done <<<"$open"
+        [ "$keep" = 1 ] || rm -f "$f" 2>/dev/null || true
+      done
 }
 
 # ── The verdict cache: re-post what a previous round already paid for ──────

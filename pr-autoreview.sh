@@ -763,6 +763,9 @@ ONCE_ANSWERED=""
 [ -z "$ONCE_NUM" ] || ONCE_ANSWERED="$GATE_SCRATCH/prreview-gate-answered-$$"
 note_answered() { : > "${ONCE_ANSWERED:-/dev/null}" 2>/dev/null || true; }
 
+# For holdoff_prune at the end of the round: the open PRs of each repo whose
+# list this round read, and the repos it read.
+PRUNE_OPEN=""; PRUNE_LISTED=" "
 for REPO in $REPOS_ROTATED; do
 # A named PR (`prreview once --pr`) is the only work of its round.
 [ -z "$ONCE_REPO" ] || [ "$REPO" = "$ONCE_REPO" ] || continue
@@ -962,6 +965,8 @@ review_one_pr() { # $1 = PR number, $2 = the worktree the dispatcher made
     || { note_skip "no review key: the head or the base commit is missing or is not a full commit SHA, or the digest step failed, skipping (fail closed)"; return 0; }
 
   HOLD_F="$(holdoff_path "$REPO" "$PR" "$KEY")" || HOLD_F=""
+  # The count of verdicts this machine posted for this key (lib/holdoff.sh).
+  POSTED_F="$(holdoff_posted_path "$REPO" "$PR" "$KEY")" || POSTED_F=""
 
   # Materialized on purpose, never piped straight
   # into `grep -q`: under pipefail an early-quitting grep SIGPIPEs the
@@ -999,12 +1004,37 @@ review_one_pr() { # $1 = PR number, $2 = the worktree the dispatcher made
     fi
     return 0
   fi
-  # This head's marker from an App outside PRIOR_AUTHORS: the identity list
-  # is wrong, so the review below would be re-run and re-posted every round.
-  # Not reviewing is the safe direction: no second verdict on the same head.
+  # A comment from an App outside PRIOR_AUTHORS carries this head's marker.
+  # The key comes from public fields, and a bot can repeat text that a person
+  # wrote, so the marker does not prove that the reviewer posted it. Write a
+  # warning and review the head. Such comments never stop a review, however
+  # many there are.
+  # Trade-off: if the App is the reviewer's own and the login list is wrong,
+  # the reviewer cannot know its own comments. The local count below stops
+  # that after PROMPT_LOCAL_POST_LIMIT verdicts, and until then each round
+  # reviews and posts once more.
   FOREIGN_APPS="$(prompt_foreign_app_authors "$INFO" "$MARKER $KEY" "$PRIOR_AUTHORS")"
   if [ -n "$FOREIGN_APPS" ]; then
-    note_skip "WARNING — this head's marker was posted by $FOREIGN_APPS, which is not in the gate identity list ($PRIOR_AUTHORS); wrong REVIEW_APP_SLUG or a changed App login — not reviewing it again"
+    echo "PR #$PR: WARNING: a comment from $FOREIGN_APPS carries the marker of this head. $FOREIGN_APPS is not in the list of reviewer logins ($PRIOR_AUTHORS). The reviewer ignores that comment and reviews the head. If $FOREIGN_APPS is your own App, check PRREVIEW_REVIEW_APP_SLUG."
+  fi
+  # This machine already posted PROMPT_LOCAL_POST_LIMIT verdicts for this
+  # key, so the head counts as handled: no review, no model call, one WARNING
+  # line. The auto-merge guard above has already run. The dispatcher asks the
+  # same question, so a round does not start a job.
+  POSTED_N="$([ -n "$POSTED_F" ] && holdoff_posted_count "$POSTED_F" || printf '0')"
+  if prompt_local_post_bound "$POSTED_N"; then
+    echo "PR #$PR: $(prompt_local_post_warning "$POSTED_N")"
+    return 0
+  fi
+  # The count needs a path and a writable directory before the model is
+  # called. Else a wrong login list gives a new verdict every round, and
+  # nothing counts them. The round fails, so the failure alert runs.
+  if [ -z "$POSTED_F" ]; then
+    note_skip "cannot build the path of the count that bounds reposts for $REPO (a name outside the GitHub name characters), so the count cannot be kept — skipping, no model call (fail closed)"
+    return 0
+  fi
+  if ! holdoff_dir_writable; then
+    note_skip "the hold directory $HOLDOFF_DIR cannot be made or written, so the count that bounds reposts cannot be kept — skipping, no model call (fail closed)"
     return 0
   fi
 
@@ -2675,8 +2705,8 @@ $SLICE_CLEAN"
         # section after it; escaped like every other model text.
         V_REFUTED_TAG="refuted (confidence $V_CONF): "
         VERIFIED_OUT="$VERIFIED_OUT
-- ~~**$(findings_escape_markup "$V_LABEL")** $(findings_escape_markup "$(one_line "${VERIFY_ISSUE[$i]:0:100}" | sed 's/[[:space:]]*$//')")~~
-  → $V_REFUTED_TAG$(findings_escape_markup "$V_REASON")"
+- ~~**$(findings_escape_markup "$V_LABEL")** $(findings_escape_prose "$(one_line "${VERIFY_ISSUE[$i]:0:100}" | sed 's/[[:space:]]*$//')")~~
+  → $V_REFUTED_TAG$(findings_escape_prose "$V_REASON")"
       elif [ -n "$V_ANS" ]; then
         # The confidence is part of the answer, not decoration: "tried to
         # refute it and failed" and "refuted it at 0.7, just under the bar"
@@ -2719,7 +2749,7 @@ $SLICE_CLEAN"
   # "MEDIUM/LOW go into a <details> fold" to appear — a literal tag there opens a
   # fold that swallows the findings, the real fold, the unverified list and
   # every notice after it.
-  SUMMARY="$(findings_escape_markup "$(jq -r '.summary // ""' <<<"$CLEANED")")"
+  SUMMARY="$(findings_escape_prose "$(jq -r '.summary // ""' <<<"$CLEANED")")"
   # Only the first sentence stays in the open; the rest of the paragraph goes
   # into a fold under it (FINDINGS_HEAD_SPLIT_JQ, the same split the findings
   # use), so the verdict and the blockers are what a reader sees first.
@@ -2740,7 +2770,7 @@ $SLICE_CLEAN"
   # Residual risk, always stated: a read-only review cannot exercise live
   # services or anything that only shows at runtime. Surfacing this keeps an
   # approve from reading as "everything was verified".
-  UNVERIFIED="$(jq -r "$FINDINGS_ESCAPE_DETAILS_JQ"' (.unverified // [])[]? | select(type == "string") | "- " + (. | esc)' <<<"$CLEANED")"
+  UNVERIFIED="$(jq -r "$FINDINGS_ESCAPE_DETAILS_JQ"' (.unverified // [])[]? | select(type == "string") | "- " + (. | prose)' <<<"$CLEANED")"
   # Blockers stay in the open; MEDIUM/LOW go behind a <details> further down.
   # Both halves come from the same CLEANED list through the same renderer, so
   # nothing is dropped and the two cannot drift — see FINDINGS_PARTITION_JQ for
@@ -3085,6 +3115,12 @@ This change or its review matched the sensitive-data scan, or the scan could not
     [ -n "${HOLD_F:-}" ] && holdoff_clear "$HOLD_F"
     [ -n "${REPLAY_F:-}" ] && holdoff_verdict_clear "$REPLAY_F"
     echo "PR #$PR: review-only verdict comment posted (verdict=$VERDICT)"
+    # Count this post for the key. The post is done, so a record that fails
+    # cannot undo it. It fails the round, as the count is what bounds reposts.
+    if [ -n "${POSTED_F:-}" ]; then
+      holdoff_posted_record "$POSTED_F" "$(date +%s)" \
+        || note_skip "could not record the post in $POSTED_F, so the count that bounds reposts for this head is not kept — failing the round"
+    fi
     # A withheld-scan notice is not a verdict. Only a verdict answers a named PR.
     RO_POSTED=1
     if [ "${SCAN_WITHHELD:-0}" -eq 0 ]; then note_answered; fi
@@ -3174,7 +3210,8 @@ $(findings_threshold_note "$TICKET_MIN_SEV" "${N_BELOW:-0}" "$REPO" "$PR")"
 }
 
 # --limit: gh lists 30 by default, so a repo with more open PRs than that
-# would never reach its oldest ones.
+# would never reach its oldest ones. A list as long as the limit may be cut off.
+PR_LIST_LIMIT=1000
 # What the dispatcher's one pre-check call below reads. baseRefOid is there
 # because a stacked PR's key holds it. DEFAULT_BRANCH, read once for this repo
 # above, says which PR is stacked, so this check and the job compute the same
@@ -3192,8 +3229,21 @@ PRE_FIELDS=headRefOid,isDraft,reviews,comments,title,body,baseRefName,baseRefOid
 # the disarm of skipped PRs below.
 PR_LIST_FIELDS=number,author,isCrossRepository,labels
 [ "$GATE_DISARM_AUTO_MERGE" != 1 ] || PR_LIST_FIELDS="$PR_LIST_FIELDS,autoMergeRequest"
-PR_LIST="$("$GH" pr list --repo "$REPO" --state open --limit 1000 --json "$PR_LIST_FIELDS")" \
+PR_LIST="$("$GH" pr list --repo "$REPO" --state open --limit "$PR_LIST_LIMIT" --json "$PR_LIST_FIELDS")" \
   || { echo "$REPO: could not list open PRs — skipping repo (fail closed)"; GATE_DEGRADED=$((GATE_DEGRADED + 1)); continue; }
+# The open PRs of this repo, for the prune at the end of the round. If the
+# list cannot be read, the repo stays out of PRUNE_LISTED and keeps all its
+# count files. A list as long as the limit may omit open PRs, so it counts as
+# unknown too.
+# Trade-off: a repo with PR_LIST_LIMIT or more open PRs never prunes its count
+# files while it stays that large. They go by age after the list is shorter.
+PRUNE_N="$(jq -r 'length' <<<"$PR_LIST" 2>/dev/null)" || PRUNE_N=""
+if [ "$PRUNE_N" = "$PR_LIST_LIMIT" ]; then
+  echo "$REPO: the list of open PRs may be cut off at $PR_LIST_LIMIT, so no count file of this repo is pruned"
+elif PRUNE_ONE="$(jq -r --arg r "$REPO" '.[] | "\($r)#\(.number)"' <<<"$PR_LIST" 2>/dev/null)"; then
+  PRUNE_LISTED="$PRUNE_LISTED $REPO "
+  PRUNE_OPEN="$PRUNE_OPEN$PRUNE_ONE"$'\n'
+fi
 PR_PLAN="$(trust_plan_prs "$PR_LIST" "$TRUSTED_AUTHORS" "$GATE_FORK_PRS" "$ONCE_NUM")" \
   || { echo "$REPO: could not read the list of open PRs — skipping repo (fail closed)"; GATE_DEGRADED=$((GATE_DEGRADED + 1)); continue; }
 OPEN_PRS="$(sed -n 's/^review //p' <<<"$PR_PLAN")"
@@ -3257,6 +3307,27 @@ for PR in $OPEN_PRS; do
         echo "[$REPO_KEY#$PR] PR #$PR: the reviewer has only a notice on this head, no verdict"
       fi
       continue
+    fi
+    # The same bound as the job (see review_one_pr): a head for which this
+    # machine already posted that many verdicts is not reviewed, so no job and
+    # no worktree is made for it. The job still guards auto-merge on a head it
+    # did not review, so this does the same.
+    # A key with no count path cannot be bounded: the job skips it too (fail
+    # closed), so no job and no worktree is made for it. The round fails.
+    if PRE_KEY="$(prompt_review_key "$PRE" "$DEFAULT_BRANCH")"; then
+      if ! PRE_POSTED_F="$(holdoff_posted_path "$REPO" "$PR" "$PRE_KEY")"; then
+        note_skip "cannot build the path of the count that bounds reposts for $REPO (a name outside the GitHub name characters), so the count cannot be kept — skipping, no model call (fail closed)"
+        disarm_unreviewed_auto_merge "$PRE" "$PR" \
+          || note_skip "auto-merge could not be disarmed — skipping (fail closed)"
+        continue
+      fi
+      PRE_POSTED_N="$(holdoff_posted_count "$PRE_POSTED_F")"
+      if prompt_local_post_bound "$PRE_POSTED_N"; then
+        echo "[$REPO_KEY#$PR] PR #$PR: $(prompt_local_post_warning "$PRE_POSTED_N")"
+        disarm_unreviewed_auto_merge "$PRE" "$PR" \
+          || note_skip "auto-merge could not be disarmed — skipping (fail closed)"
+        continue
+      fi
     fi
     # Same head, a changed key (title, description, base branch or, for a
     # stacked PR, parent branch), and the reviewer commented a moment ago:
@@ -3452,7 +3523,12 @@ rm -rf "$QUOTA_DIR" 2>/dev/null || true
 # Superseded holds are junk: once a head moves on, its file can never match a
 # key again. Pruned here rather than on write so a round that dies early cannot
 # skip it, and by age so the directory has a bound.
-holdoff_prune 2
+# A count file (.posted) stays while its PR is open: a repo this round did not
+# list (a named round, a list that failed) keeps all its count files.
+for PRUNE_R in $REPOS_ROTATED; do
+  case "$PRUNE_LISTED" in *" $PRUNE_R "*) ;; *) PRUNE_OPEN="$PRUNE_OPEN$PRUNE_R"$'\n' ;; esac
+done
+holdoff_prune 2 "$PRUNE_OPEN"
 # Heads this round tried that have now failed three times in a row, the
 # review call or the post: counted like a skip, so the round fails and
 # alerts instead of backing off in silence for ever.

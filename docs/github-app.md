@@ -40,8 +40,19 @@ the loop and `PRREVIEW_GATE_DISARM_AUTO_MERGE` still use `gh`. So `gh` must stay
 logged in. To go back to your own account, run `prreview setup` and pick 1 at
 "Who posts".
 
+The token of the App is for one repository. The reviewer asks for a token for
+the repository of the PR only. The token does not reach the other repositories
+of the installation.
+
 Switching from your account to an App changes whose comments count as comments of
 the reviewer. The next round finds no comment from the App on any open PR. It
-reviews every open PR again. Switching back leaves alone the heads that the App
-already commented on. It logs a warning for each of them in every round until its
-author pushes again.
+reviews every open PR again.
+
+Switching back does the same for each head where the App left one comment. The
+reviewer logs a warning for it. Then it reviews the head once with your account.
+
+The reviewer also counts, on your machine, the verdicts it posted for each head.
+A head with two posted verdicts counts as handled. The reviewer logs a warning
+for it in every round. It reviews the head again after the author pushes. After a
+switch back, such a head stays stopped until then, even though your account has
+not commented on it.

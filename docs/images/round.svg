@@ -111,7 +111,7 @@
 <circle class="chip" cx="56" cy="682" r="12"/>
 <text class="t-chip" x="56" y="686" text-anchor="middle">7</text>
 <text class="t-name" x="80" y="687">Post</text>
-<text class="t-sub" x="192" y="687">Escapes HTML tags in model text that could rewrite the comment.</text>
+<text class="t-sub" x="192" y="687">Escapes HTML tags, @mentions, bot commands and lookalike finding lines in model text.</text>
 <text class="t-sub" x="192" y="703">Matches the comment against your sensitive-patterns file, then posts one comment per new head.</text>
 </g>
 <g data-box="24 740 832 72"><rect class="strip" x="24" y="740" width="832" height="72" rx="6"/><rect class="bar" x="24" y="740" width="6" height="72" rx="2"/><text class="t-title" x="44" y="764">Fails closed.</text><text class="t-sub" x="44" y="784">Output that cannot be parsed means nothing is posted this round.</text><text class="t-sub" x="44" y="800">The PR is tried again later. A verdict whose post failed is kept and sent again with no new review.</text></g>

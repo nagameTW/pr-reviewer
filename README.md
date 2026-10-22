@@ -29,7 +29,8 @@ minute.
   directory of git. The model has no shell and no web tools. Your code never
   runs.
 - **The default branch sets the rules.** `CLAUDE.md`, `AGENTS.md` and the other
-  convention files come from the newest commit of the default branch. A PR cannot loosen its own review.
+  convention files come from the newest commit of the default branch. A PR
+  cannot loosen its own review.
 - **It argues against its own blockers.** A second call tries to refute each
   blocking finding, up to six in a round. This lowers false alarms.
 - **It holds back when a step fails.** It does not post an answer that it
@@ -69,6 +70,14 @@ run has three pushes and three rounds. Round 3 approves.
   your sensitive-patterns file before the reviewer posts it. If the scan finds
   a match, or cannot run, a short notice replaces the comment. The notice does
   not quote the value.
+- **Model text is escaped before it is posted.** In the summary, the findings
+  and the other lists of the comment, an `@name`, a line that starts with
+  `/command` or `bors`, and a line that looks like a finding get a zero-width
+  space. A mention does not notify. A command does not act. A later round does
+  not read the line as a finding. See [SECURITY.md](SECURITY.md) for the
+  limits.
+- **A GitHub App token covers one repository.** The reviewer asks for a token
+  for the repository of the PR only.
 - **It posts what the model wrote.** Your repo can have a bot that acts on
   comment commands such as `/lgtm` or `bors r+`. In that case, post as a GitHub
   App that the bot does not take commands from.

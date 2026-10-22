@@ -11,8 +11,8 @@
 **pr-reviewer 在使用者自己的機器上審查 pull request。它使用使用者自己的 Claude Code 登入。
 它不需要 GitHub Action、App、webhook 與 repo 管理權限。**
 
-它監看使用者列出的 repo。對於作者是[受信任的作者](docs/operations.md#whose-prs-it-reviews)的開啟中 PR，
-它審查每一個新的 head。head 是 PR 最新的提交。對每個新的 head，它請 headless 模式的
+它監控使用者列出的 repo。它審查每個開啟中 PR 的每個新 head，條件是作者為
+[受信任的作者](docs/operations.md#whose-prs-it-reviews)。head 是 PR 最新的提交。對每個新的 head，它請 headless 模式的
 [Claude Code](https://code.claude.com/docs/en/overview) 執行一次審查。headless 模式指
 不需要畫面的執行方式。審查工具檢查回傳的內容。接著它貼出一則留言，內含判定與各項發現。
 
@@ -62,14 +62,25 @@
 - **審查工具貼出前，會掃描含有 PR 文字或模型輸出的每則留言。** 掃描時比對
   sensitive-patterns 檔。若比對命中，或掃描無法執行，一則簡短的通知取代該留言。通知不引用
   命中的值。
-- **它貼出的是模型寫的內容。** 若 repo 中有 bot 依留言指令動作，例如 `/lgtm` 或
-  `bors r+`，請改用該 bot 不接受其指令的 GitHub App 發留言。
+- **模型文字在貼出前會經過跳脫處理。** 在留言的摘要、各項發現與其他清單中，
+  下列文字會被插入零寬空格：
+  - `@name`。
+  - 以 `/command` 或 `bors` 開頭的行。
+  - 外觀像發現的行。
+
+  提及不會發出通知。指令不會執行。後續的輪次不會把該行當成發現。限制見
+  [SECURITY.md](SECURITY.md)。
+- **GitHub App 的 token 只涵蓋一個 repo。** 審查工具只為該 PR 所在的 repo 要求 token。
+- **它貼出的是模型寫的內容。** 若 repo 有 bot 依留言指令動作，請改用 GitHub App
+  發留言。指令例如 `/lgtm` 或 `bors r+`。該 bot 不可接受此 App 的指令。
 - **它使用 Claude Code 登入。** Anthropic 的
-  [法律與合規頁面](https://code.claude.com/docs/en/legal-and-compliance)寫道，Pro 與 Max
-  公告的用量上限以「ordinary, individual usage」為前提。該頁面未給出數字。讀取日期為
-  2026-10-21。全天候運作的輪詢工具是否算在內，由 Anthropic 決定。改用 API key 可避開這個
-  問題。但在 shell 中設定的 key 不會傳給背景服務。請在有該 key 的終端機執行
-  `prreview run`，詳見[說明](docs/operations.md#where-to-run-it)。
+  [法律與合規頁面](https://code.claude.com/docs/en/legal-and-compliance)提到 Pro 與 Max
+  的公告用量上限。該上限以「ordinary, individual usage」為前提。
+  該頁面未給出數字，讀取日期為 2026-10-21。
+  全天候運作的輪詢工具是否算在內，由 Anthropic 決定。
+  使用 API key 可避開這個問題。但在 shell 中設定的 key 不會傳給背景服務。
+  若使用 API key，請在有該 key 的終端機執行 `prreview run`，
+  詳見[說明](docs/operations.md#where-to-run-it)。
 
 **成本。**
 
@@ -87,9 +98,9 @@
   最大的第一輪有 16 次審查呼叫、6 次反駁呼叫與 1 次修復呼叫。尚無測試執行涵蓋這種情況。
   因此費用未知。
 - 展示的第 1 輪花費 $0.54。三輪共花費 $1.14，編號 Run A。第二個測試 PR 花費 $0.75。
-  之後一次未改動內容的推送花費 $0.73，編號 Run B。在一個小型且無問題的 PR 上，紅隊使
-  $0.34 的審查增加 $0.23，編號 Run C。這些執行發生在 2026 年 9 月與 10 月。v0.2.0 之後
-  更換了預設模型。因此這些金額不代表目前預設值的花費。金額取自 `claude -p` 的回報。
+  之後一次未改動內容的推送花費 $0.73，編號 Run B。在一個小型且無問題的 PR 上，審查花費
+  $0.34。紅隊另外增加 $0.23，編號 Run C。這些執行發生在 2026 年 9 月與 10 月。
+  其後 0.2.0 版更換了預設模型。因此這些金額不代表目前預設值的花費。金額取自 `claude -p` 的回報。
   使用訂閱方案時，這些金額計入用量上限，不計入帳單。
 
 ## 狀態與限制
@@ -102,8 +113,8 @@
   系統內建的 bash 執行測試。CI 在 macOS 上以 bash 3.2 的 `/bin/bash` 執行測試。WSL2 不在
   CI 內。只有維護者自己的機器確認過，詳見 [docs/windows.md](docs/windows.md)。Bedrock、
   Vertex 與 gateway 未經測試。
-- **一項已知缺口。** 合併進預設分支的 PR，其 review key 不包含 base commit，詳見
-  [已知限制](SECURITY.md#known-limits)。
+- **一項已知缺口。** 合併進預設分支的 PR，其 review key 不包含 base commit。
+  詳見[已知限制](SECURITY.md#known-limits)。
 - **三種情況不適合：**
   - 多人共用一個 Claude 登入。
   - 需要能阻擋合併的 required check。
@@ -138,9 +149,14 @@ git clone https://github.com/nagameTW/pr-reviewer.git ~/pr-reviewer
 mkdir -p ~/.local/bin && ln -s ~/pr-reviewer/prreview ~/.local/bin/prreview
 ```
 
-不要把 clone 放在 `~/Documents`、`~/Desktop`、`~/Downloads` 與 iCloud Drive 內。iCloud
-Drive 的路徑是 `~/Library/Mobile Documents`。macOS 背景服務無法讀取這些位置。若
-`~/.local/bin` 不在 `PATH` 中，請把它加入 `PATH`。
+不要把 clone 放在以下位置：
+
+- `~/Documents`
+- `~/Desktop`
+- `~/Downloads`
+- iCloud Drive，路徑為 `~/Library/Mobile Documents`
+
+macOS 背景服務無法讀取這些位置。若 `~/.local/bin` 不在 `PATH` 中，請把它加入 `PATH`。
 
 ### 2. 執行 setup
 
@@ -169,8 +185,8 @@ head 已有判定。結束碼 `75` 表示無判定且無步驟失敗，例如草
 ### 4. 啟動服務
 
 > [!WARNING]
-> 注意：在信任本工具之前，只列出自己擁有的 repo。第一輪審查每個列出的 repo 中，所有由
-> 受信任作者開啟的非草稿 PR，並以 `gh` 帳號在每個 PR 上留言。每次審查都消耗模型用量。
+> 注意：在信任本工具之前，只列出自己擁有的 repo。第一輪審查所列 repo 中，由受信任作者
+> 開啟的每個非草稿 PR。審查工具以 `gh` 帳號在每個 PR 上留言。每次審查都消耗模型用量。
 
 ```bash
 prreview start
@@ -277,8 +293,7 @@ CRITICAL 與 HIGH 的發現會阻擋。MEDIUM 與 LOW 的發現只列出，不�
 </picture>
 </p>
 
-選用的紅隊會對核准提出反駁。紅隊的英文名稱是 red team。它預設關閉，因為它使每次核准都
-增加成本與時間。執行 `prreview set PRREVIEW_GATE_REDTEAM 1` 即可開啟。
+選用的紅隊會對核准提出反駁。它預設關閉，因為它使每次核准都增加成本與時間。執行 `prreview set PRREVIEW_GATE_REDTEAM 1` 即可開啟。
 
 <p align="center">
 <picture>
