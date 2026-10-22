@@ -109,8 +109,8 @@ run has three pushes and three rounds. Round 3 approves.
 - Round 1 of the demo cost $0.54. The three rounds cost $1.14 (Run A). A second
   test PR cost $0.75. A push that changed nothing then cost $0.73 (Run B). On a
   small clean PR, the red team added $0.23 to a $0.34 review (Run C). These runs
-  took place in September and October 2026. Version 0.2.0 later changed the
-  default models. The figures do not describe the current defaults. The dollar
+  took place in September and October 2026. The figures come from those runs
+  and do not give the cost of the current defaults. The dollar
   figure is what `claude -p` reports. On a subscription, it counts against your
   usage limits and not against a bill.
 
@@ -294,8 +294,7 @@ The reviewer does not report these:
 CRITICAL and HIGH findings block. MEDIUM and LOW findings are listed and do not
 block. "Block" only decides the verdict text. You can
 [add, remove or change items](docs/configuration.md#adding-your-own-checks).
-[docs/how-it-reviews.md](docs/how-it-reviews.md) has the full list of checks and
-the severity rules.
+The [checks/](checks/) folder has the full text of each check.
 
 One round has seven steps. The first four steps make no model call.
 

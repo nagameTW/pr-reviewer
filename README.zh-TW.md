@@ -9,19 +9,21 @@
 [![bash 3.2+](https://img.shields.io/badge/bash-3.2%2B-4EAA25)](#需求)
 
 **pr-reviewer 在使用者自己的機器上審查 pull request。它使用使用者自己的 Claude Code 登入。
-它不需要 GitHub Action、App、webhook 與 repo 管理權限。**
+它不需要 GitHub Action、App 與 webhook。它不需要 repo 管理權限。**
 
 它監控使用者列出的 repo。它審查每個開啟中 PR 的每個新 head，條件是作者為
-[受信任的作者](docs/operations.md#whose-prs-it-reviews)。head 是 PR 最新的提交。對每個新的 head，它請 headless 模式的
-[Claude Code](https://code.claude.com/docs/en/overview) 執行一次審查。headless 模式指
-不需要畫面的執行方式。審查工具檢查回傳的內容。接著它貼出一則留言，內含判定與各項發現。
+[受信任的作者](docs/operations.md#whose-prs-it-reviews)。head 是 PR 最新的提交。對每個新的 head，它請
+[Claude Code](https://code.claude.com/docs/en/overview) 以 headless 模式執行一次審查。headless 模式指
+不需要畫面的執行方式。
+
+審查工具檢查回傳的內容。接著它貼出一則留言，內含判定與各項發現。
 
 若已設定 [GitHub App](docs/github-app.md)，留言以該 App 發出。否則留言以使用者自己的
-`gh` 帳號發出。整個工具是建立在 `gh`、`git`、`jq` 與 `claude` 之上的純 bash。一個迴圈每分鐘
+`gh` 帳號發出。整個工具是純 bash。它建立在 `gh`、`git`、`jq` 與 `claude` 之上。一個迴圈每分鐘
 檢查一次 GitHub。
 
 - **只留言。** 它不送出 GitHub 核准。它不以正式 review 要求修改。它不合併。
-- **模型只能讀取。** `--tools` 把 Claude Code 限制為只能使用 `Read`、`Grep` 與 `Glob`。
+- **模型只能讀取。** `--tools` 限制 Claude Code 只能使用 `Read`、`Grep` 與 `Glob`。
   範圍是每個 PR 專屬的 worktree。worktree 是 git 的獨立工作目錄。模型無法使用 shell 與
   網路工具。程式碼不會被執行。
 - **規則由預設分支決定。** `CLAUDE.md`、`AGENTS.md` 與其他慣例檔，取自預設分支最新的
@@ -73,14 +75,15 @@
 - **GitHub App 的 token 只涵蓋一個 repo。** 審查工具只為該 PR 所在的 repo 要求 token。
 - **它貼出的是模型寫的內容。** 若 repo 有 bot 依留言指令動作，請改用 GitHub App
   發留言。指令例如 `/lgtm` 或 `bors r+`。該 bot 不可接受此 App 的指令。
-- **它使用 Claude Code 登入。** Anthropic 的
-  [法律與合規頁面](https://code.claude.com/docs/en/legal-and-compliance)提到 Pro 與 Max
-  的公告用量上限。該上限以「ordinary, individual usage」為前提。
-  該頁面未給出數字，讀取日期為 2026-10-21。
-  全天候運作的輪詢工具是否算在內，由 Anthropic 決定。
-  使用 API key 可避開這個問題。但在 shell 中設定的 key 不會傳給背景服務。
-  若使用 API key，請在有該 key 的終端機執行 `prreview run`，
-  詳見[說明](docs/operations.md#where-to-run-it)。
+- **它使用 Claude Code 登入。**
+  - Anthropic 的
+    [法律與合規頁面](https://code.claude.com/docs/en/legal-and-compliance)提到 Pro 與 Max
+    的公告用量上限。該上限以「ordinary, individual usage」為前提。
+    該頁面未給出數字，讀取日期為 2026-10-21。
+  - 全天候運作的輪詢工具是否算在內，由 Anthropic 決定。
+  - 使用 API key 可避開這個問題。在 shell 中設定的 key 不會傳給背景服務。
+    若使用 API key，請在有該 key 的終端機執行 `prreview run`，
+    詳見[說明](docs/operations.md#where-to-run-it)。
 
 **成本。**
 
@@ -97,11 +100,12 @@
 
   最大的第一輪有 16 次審查呼叫、6 次反駁呼叫與 1 次修復呼叫。尚無測試執行涵蓋這種情況。
   因此費用未知。
-- 展示的第 1 輪花費 $0.54。三輪共花費 $1.14，編號 Run A。第二個測試 PR 花費 $0.75。
-  之後一次未改動內容的推送花費 $0.73，編號 Run B。在一個小型且無問題的 PR 上，審查花費
-  $0.34。紅隊另外增加 $0.23，編號 Run C。這些執行發生在 2026 年 9 月與 10 月。
-  其後 0.2.0 版更換了預設模型。因此這些金額不代表目前預設值的花費。金額取自 `claude -p` 的回報。
-  使用訂閱方案時，這些金額計入用量上限，不計入帳單。
+- 實測花費：
+  - 展示的第 1 輪花費 $0.54。三輪共花費 $1.14，編號 Run A。
+  - 第二個測試 PR 花費 $0.75。之後一次未改動內容的推送花費 $0.73，編號 Run B。
+  - 在一個小型且無問題的 PR 上，審查花費 $0.34。紅隊另外增加 $0.23，編號 Run C。
+  - 這些執行發生在 2026 年 9 月與 10 月。這些金額來自上述執行，並未給出目前預設值的花費。
+  - 金額取自 `claude -p` 的回報。使用訂閱方案時，這些金額計入用量上限，不計入帳單。
 
 ## 狀態與限制
 
@@ -109,11 +113,12 @@
 - **偵測能力未知。** 尚無人統計它找出多少 bug。尚無人統計它產生多少誤報。
 - **它只讀程式碼。** 它不執行測試。它不讀取 CI 結果。判定是一則留言，不是 GitHub 的
   review 狀態。核准橫幅的文字是 `Automated review, not a GitHub approval.`。
-- **只支援 GitHub，且僅在機器處於喚醒狀態時有效。** PC 睡眠時它暫停。CI 在 Ubuntu 上以
-  系統內建的 bash 執行測試。CI 在 macOS 上以 bash 3.2 的 `/bin/bash` 執行測試。WSL2 不在
-  CI 內。只有維護者自己的機器確認過，詳見 [docs/windows.md](docs/windows.md)。Bedrock、
-  Vertex 與 gateway 未經測試。
-- **一項已知缺口。** 合併進預設分支的 PR，其 review key 不包含 base commit。
+- **只支援 GitHub，且僅在機器處於喚醒狀態時有效。** PC 睡眠時它暫停。
+  - CI 在 Ubuntu 上以系統內建的 bash 執行測試。
+  - CI 在 macOS 上以 bash 3.2 的 `/bin/bash` 執行測試。
+  - WSL2 不在 CI 內。只有維護者自己的機器確認過，詳見 [docs/windows.md](docs/windows.md)。
+  - Bedrock、Vertex 與 gateway 未經測試。
+- **一項已知缺口。** 合併進預設分支的 PR，其 review key 不含 base commit。
   詳見[已知限制](SECURITY.md#known-limits)。
 - **三種情況不適合：**
   - 多人共用一個 Claude 登入。
@@ -164,9 +169,13 @@ macOS 背景服務無法讀取這些位置。若 `~/.local/bin` 不在 `PATH` �
 prreview setup
 ```
 
-此指令一次問一個問題。按 Enter 即採用方括號內的值。它檢查工具，以及 `claude` 與 `gh`
-的登入狀態。接著詢問要審查的 repo。它列出帳號下最多 30 個 repo。其他 repo 請輸入
-`owner/repo`。請至少列入一個自己擁有的 repo。它也詢問由誰發留言、使用的模型等項目。
+此指令一次問一個問題。按 Enter 即採用方括號內的值。它處理以下項目：
+
+- 檢查工具，以及 `claude` 與 `gh` 的登入狀態。
+- 詢問要審查的 repo。它列出帳號下最多 30 個 repo。其他 repo 請輸入 `owner/repo`。
+  請至少列入一個自己擁有的 repo。
+- 詢問由誰發留言、使用的模型等項目。
+
 問到 **Background service** 時，回答 `n`。第 4 步才啟動服務。答案寫入
 `~/.config/pr-reviewer/config`。
 
@@ -185,7 +194,7 @@ head 已有判定。結束碼 `75` 表示無判定且無步驟失敗，例如草
 ### 4. 啟動服務
 
 > [!WARNING]
-> 注意：在信任本工具之前，只列出自己擁有的 repo。第一輪審查所列 repo 中，由受信任作者
+> 注意：在信任本工具之前，只列出自己擁有的 repo。第一輪會審查所列 repo 中，由受信任作者
 > 開啟的每個非草稿 PR。審查工具以 `gh` 帳號在每個 PR 上留言。每次審查都消耗模型用量。
 
 ```bash
@@ -196,8 +205,12 @@ prreview logs -f
 
 若 `gh` 以 `ssh` 進行 clone，`prreview start` 提議把 `gh` 改為 `https`。原因是 systemd
 使用者服務無 ssh-agent，詳見[說明](docs/operations.md#where-to-run-it)。若無待審 PR，
-迴圈每檢查 15 次才開始一輪。在 Linux 上，登出時 systemd 會停止使用者服務。若要持續
-運作，執行一次 `sudo loginctl enable-linger "$USER"`。在 WSL2 上，服務需要
+迴圈每檢查 15 次才開始一輪。
+
+在 Linux 上，登出時 systemd 會停止使用者服務。若要持續
+運作，執行一次 `sudo loginctl enable-linger "$USER"`。
+
+在 WSL2 上，服務需要
 `systemd=true`。WSL 關閉時服務停止。詳見 [docs/windows.md](docs/windows.md)。
 
 ## 常用指令
@@ -225,15 +238,19 @@ prreview setup
 ```
 
 所有問題都按 Enter，即可保留原本的答案。到 Checklist 步驟時，回答 `y` 採用新的內建
-項目。按 Enter 則拒絕。setup 重新啟動服務，因為迴圈在重新啟動前仍執行舊的程式碼。若
+項目。按 Enter 則拒絕。
+
+setup 重新啟動服務，因為迴圈在重新啟動前仍執行舊的程式碼。
+
+若
 `claude --version` 或 `gh --version` 低於最低版本，setup 會停止。請更新該工具。然後再次
 執行 setup。
 
-在 0.2.0 之後的版本，審查工具略過 fork PR，除非作者列在
-`PRREVIEW_GATE_TRUSTED_AUTHORS` 中。`prreview status` 顯示略過的數量。設定
+在 0.2.0 之後的版本，審查工具略過 fork PR。作者列在
+`PRREVIEW_GATE_TRUSTED_AUTHORS` 中的 PR 除外。`prreview status` 顯示略過的數量。設定
 `PRREVIEW_GATE_FORK_PRS=1` 可恢復舊行為。
 
-檢查清單副本中的項目保留舊的措辭。若要檢視新版改了什麼，執行
+檢查清單副本中的項目保留舊的措辭。若要檢視新版的變更，執行
 `diff -r ~/pr-reviewer/checks ~/.config/pr-reviewer/checks`。
 
 ## 審查運作方式
@@ -243,6 +260,7 @@ prreview setup
 </p>
 
 此留言取自 Run B。留言以判定開頭，每項發現一行。每項發現都指出檔案、行號與修正方式。
+
 審查工具依同一份清單審查每個切片。清單共 13 個項目，每個項目一個檔案，放在 `checks/`
 內。「適用時機」欄說明何時採用該項目。每項發現標明所屬項目與嚴重度。
 
@@ -272,7 +290,7 @@ prreview setup
 
 CRITICAL 與 HIGH 的發現會阻擋。MEDIUM 與 LOW 的發現只列出，不阻擋。「阻擋」只決定判定的
 文字。使用者可以[新增、移除或修改項目](docs/configuration.md#adding-your-own-checks)。
-完整的檢查清單與嚴重度規則見 [docs/how-it-reviews.md](docs/how-it-reviews.md)。
+每個項目的完整內容見 [checks/](checks/) 資料夾。
 
 一輪有七個步驟。前四個步驟不呼叫模型。
 
@@ -302,7 +320,7 @@ CRITICAL 與 HIGH 的發現會阻擋。MEDIUM 與 LOW 的發現只列出，不�
 </picture>
 </p>
 
-[docs/operations.md](docs/operations.md) 說明步驟失敗時的處理方式，也說明各步驟的細節。
+[docs/operations.md](docs/operations.md) 說明各步驟的細節與步驟失敗時的處理方式。
 
 ## 設定
 
@@ -335,7 +353,9 @@ bash tests/run-all.sh
 
 該指令執行 `bash -n`、`shellcheck -S warning` 與每一個 `tests/*.test.sh`。它不需要
 網路、`gh` 或模型。未安裝 `shellcheck` 時該指令失敗。請在 `git clone` 的目錄內執行。
-檢查使用 `git ls-files` 列出腳本，ZIP 下載的內容在這一步失敗。CI 在 Ubuntu 與 macOS 上
+檢查使用 `git ls-files` 列出腳本。ZIP 下載的內容在這一步失敗。
+
+CI 在 Ubuntu 與 macOS 上
 執行相同的指令。請見 [CONTRIBUTING.md](CONTRIBUTING.md)。本專案把可預測的審查行為，置於
 審查範圍的廣度之前。
 
