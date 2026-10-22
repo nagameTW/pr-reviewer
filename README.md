@@ -1013,11 +1013,12 @@ non-draft PR on a watched repo can start these rounds.
 bash tests/run-all.sh
 ```
 
-That runs `bash -n` on every script, `shellcheck -S warning` when it is
-installed, and every `tests/*.test.sh`. Run it in a `git clone`: the checks
-list the scripts with `git ls-files`, so a ZIP download stops at
-`git ls-files failed`. The tests use no network, no `gh` and
-no model. CI runs the same command.
+That runs `bash -n` on every script, `shellcheck -S warning`, and every
+`tests/*.test.sh`. It fails when `shellcheck` is not installed. Run it in a
+`git clone`: the checks list the scripts with `git ls-files`, so a ZIP
+download stops at `git ls-files failed`. The tests use no network, no `gh`
+and no model. CI runs the same command on Ubuntu, and on macOS with
+`/bin/bash` (bash 3.2).
 
 The project puts predictable review behavior ahead of review breadth.
 

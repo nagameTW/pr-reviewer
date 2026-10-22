@@ -6,7 +6,17 @@ All notable changes to this project are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- CI runs the test suite on macOS with `/bin/bash`, which is bash 3.2. The
+  job installs jq, gh, flock, shellcheck and coreutils with Homebrew and does
+  not put the coreutils `gnubin` directory on `PATH`.
+
 ### Changed
+
+- `tests/run-all.sh` fails when `shellcheck` is not installed. It used to
+  skip the lint step. It prints the versions of bash, gh, git, jq and flock
+  first, and it runs every test with the bash that runs it.
 
 - The reviewer finds `gtimeout` and `gsha256sum` on its own. At startup it uses
   `timeout` or `gtimeout` for deadlines. It uses `sha256sum`, `gsha256sum` or
