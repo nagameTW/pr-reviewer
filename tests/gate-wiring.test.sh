@@ -233,6 +233,12 @@ has    'the read rule names the label' 'use the number inside NEW[...]' "$READ_R
 has    '...rules out the number that Read prints' 'never the number that Read prints in front of the line' "$READ_RULE"
 has    '...and still works without labels' 'If the lines have no labels, count from the hunk header' "$READ_RULE"
 pin    'the review prompt puts the read rule right after the first Read instruction' 'The diff you are reviewing is in $SLICE_VIEW — Read it first. $REVIEW_DIFF_READ_RULE You are in the repo root' pr-autoreview.sh
+# Round two carries a blocker forward with its file, severity and issue text.
+# The line moves only when it is wrong (lib/prompt.sh says the same). The slice
+# merge keys a carried finding without its line (tests/chunk.test.sh).
+pin    'the carry rule keeps the line unless it is wrong' 'Never reword or re-rate a carried finding. Keep its line. Change the line only when the old one is wrong: past the end of the file, or not the NEW[...] line of the code the finding names.' pr-autoreview.sh
+pin    'a slice keeps the quoted line of a finding in another slice' 'Keep its line too, unless the line is past the end of that file.' pr-autoreview.sh
+if grep -qF 'Never reword, re-anchor, or re-rate' pr-autoreview.sh; then bad 'no rule forbids re-anchoring a carried finding' 'the old sentence is still in pr-autoreview.sh'; else ok 'no rule forbids re-anchoring a carried finding'; fi
 pin    'the structural repair gets the same definition' 'findings_repair_prompt "$OUT" "$REVIEW_SCHEMA" "$REVIEW_LINE_SPEC")"' pr-autoreview.sh
 
 if [ "$FAILED" -eq 0 ]; then echo "PASS: gate wiring"; else echo "FAIL: gate wiring"; exit 1; fi
