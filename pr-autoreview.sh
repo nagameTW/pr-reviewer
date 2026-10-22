@@ -3518,7 +3518,7 @@ if [ "${GATE_DEGRADED:-0}" -gt 0 ]; then
   exit 1
 fi
 # The lines above say why. 75 is EX_TEMPFAIL, the code of a lock that stays
-# held, so a script can tell this outcome from a failure.
+# held, so a caller can tell this outcome from a failure.
 if [ -n "$ONCE_NUM" ] && [ "$ONCE_REVIEWED" != 1 ]; then
   echo "$ONCE_REPO#$ONCE_NUM was not reviewed: it has no verdict on its current head. The lines above say why."
   exit 75
