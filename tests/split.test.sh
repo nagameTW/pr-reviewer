@@ -81,6 +81,7 @@ is  'l10n: the directory name must be a whole segment, nested is fine' "$(split_
 is  'l10n: a data file under messages or lang without a locale code counts' "$(split_gate_file_count "$(printf 'api/messages/user-created.json\nlang/grammar.toml\n')")" 2
 is  'l10n: ordinary names under messages or lang are not mistaken for a code' "$(split_gate_file_count "$(printf 'api/messages/get-user.json\napi/messages/new-item.json\napi/messages/order_new.json\napi/messages/v1/ack.json\nlang/go.toml\nlang/config.dev.yml\n')")" 6
 is  'l10n: a locale-coded file under messages or lang does not count' "$(split_gate_file_count "$(printf 'messages/en.json\nmessages/messages_de.properties\nlang/pt-BR.json\nmessages/messages.fr.yaml\nmessages/messages_pt_BR.properties\nlang/zh_TW.yml\nmessages/zh_Hant.json\napi/lang/es-419.json\n')")" 0
+is  'l10n: a name that only ends in a code word under messages or lang counts' "$(split_gate_file_count "$(printf 'api/messages/user_id.json\napi/messages/order.id.json\nmessages/how_to.json\nmessages/user_is-ok.json\n')")" 4
 is  'l10n: a three-letter code under messages or lang counts' "$(split_gate_file_count 'lang/fil.toml')" 1
 is  'l10n: a keycloak theme messages file does not count' "$(split_gate_file_count 'themes/src/main/resources-community/theme/base/login/messages/messages_de.properties')" 0
 is  'l10n: the locale code rule leaves the unambiguous directories alone' "$(split_gate_file_count "$(printf 'locales/schema.json\ni18n/app-strings.yml\n')")" 0

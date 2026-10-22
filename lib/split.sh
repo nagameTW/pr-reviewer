@@ -31,9 +31,10 @@ SPLIT_EXEMPT_RE_DEFAULT='(^|/)(package-lock\.json|yarn\.lock|pnpm-lock\.yaml|poe
 #      named as a WHOLE path segment: locale(s), i18n, l10n, translation(s).
 #      `mylocales/`, `locales-old/` and `language/` do not match.
 #   2. The same extensions under `messages` or `lang`, only when the base name
-#      carries a locale code: it is a code (`en.json`, `pt-BR.json`) or ends in
-#      _<code> or .<code> (`messages_de.properties`, `messages.fr.yaml`). These
-#      two names also hold plain data such as `api/messages/user-created.json`.
+#      carries a locale code: it is a code (`en.json`, `pt-BR.json`) or
+#      `messages` then _<code> or .<code> (`messages_de.properties`,
+#      `messages.fr.yaml`). These two names also hold plain data such as
+#      `api/messages/user-created.json` and `messages/user_id.json`.
 #      A code is an ISO 639-1 two-letter language code, then optionally [-_]
 #      and a region (2 letters), a script (4 letters) or a 3-digit region.
 #      Three-letter codes (`fil`) are not accepted: `go`, `new` and `dev` are
@@ -41,9 +42,9 @@ SPLIT_EXEMPT_RE_DEFAULT='(^|/)(package-lock\.json|yarn\.lock|pnpm-lock\.yaml|poe
 #      count.
 #   3. An extension used only for translations, in any directory.
 # Source files always count, even in these directories (`i18n/Foo.java`).
-# Trade-off: rule 2 still matches a plain name that ends in a code and a
-#   2-letter part, such as `messages/user_is-ok.json`. Such a file then does
-#   not count toward the limit. It is still reviewed.
+# Trade-off: a bare file named with a code, such as `messages/id.json`, still
+#   counts as a translation and does not count toward the limit. It is still
+#   reviewed.
 # Any other layout is the author's to explain with `split-exempt:`.
 # ISO 639-1 language codes, 184 entries including the retired `sh`. Source:
 # the alpha_2 column of iso-codes 4.16 (iso_639-3.json), which tracks the
@@ -51,7 +52,7 @@ SPLIT_EXEMPT_RE_DEFAULT='(^|/)(package-lock\.json|yarn\.lock|pnpm-lock\.yaml|poe
 # shellcheck disable=SC2034  # read by SPLIT_L10N_RE
 SPLIT_ISO639_1='aa|ab|ae|af|ak|am|an|ar|as|av|ay|az|ba|be|bg|bi|bm|bn|bo|br|bs|ca|ce|ch|co|cr|cs|cu|cv|cy|da|de|dv|dz|ee|el|en|eo|es|et|eu|fa|ff|fi|fj|fo|fr|fy|ga|gd|gl|gn|gu|gv|ha|he|hi|ho|hr|ht|hu|hy|hz|ia|id|ie|ig|ii|ik|io|is|it|iu|ja|jv|ka|kg|ki|kj|kk|kl|km|kn|ko|kr|ks|ku|kv|kw|ky|la|lb|lg|li|ln|lo|lt|lu|lv|mg|mh|mi|mk|ml|mn|mr|ms|mt|my|na|nb|nd|ne|ng|nl|nn|no|nr|nv|ny|oc|oj|om|or|os|pa|pi|pl|ps|pt|qu|rm|rn|ro|ru|rw|sa|sc|sd|se|sg|sh|si|sk|sl|sm|sn|so|sq|sr|ss|st|su|sv|sw|ta|te|tg|th|ti|tk|tl|tn|to|tr|ts|tt|tw|ty|ug|uk|ur|uz|ve|vi|vo|wa|wo|xh|yi|yo|za|zh|zu'
 # shellcheck disable=SC2034  # read by split_l10n_file_count
-SPLIT_L10N_RE='(^|/)(locales?|i18n|l10n|translations?)/(.*/)?[^/]+\.(json|ya?ml|properties|toml)$|(^|/)(messages|lang)/(.*/)?([^/]*[._])?('"$SPLIT_ISO639_1"')([-_]([A-Za-z]{2}|[A-Za-z]{4}|[0-9]{3}))?\.(json|ya?ml|properties|toml)$|\.(po|pot|xlf|xliff|arb|resx|strings|stringsdict)$'
+SPLIT_L10N_RE='(^|/)(locales?|i18n|l10n|translations?)/(.*/)?[^/]+\.(json|ya?ml|properties|toml)$|(^|/)(messages|lang)/(.*/)?(messages[._])?('"$SPLIT_ISO639_1"')([-_]([A-Za-z]{2}|[A-Za-z]{4}|[0-9]{3}))?\.(json|ya?ml|properties|toml)$|\.(po|pot|xlf|xliff|arb|resx|strings|stringsdict)$'
 
 # $1 newline-separated file list. Prints how many files match SPLIT_L10N_RE.
 split_l10n_file_count() {

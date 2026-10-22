@@ -163,8 +163,8 @@ All notable changes to this project are recorded here. The format follows
 - Localization data files no longer count toward the 40-file limit that
   triggers a split request. They are `.json`, `.yml`, `.yaml`, `.properties`
   and `.toml` files under a directory such as `locales` or `i18n`, or under `messages` or
-  `lang` when the file name carries an ISO 639-1 language code (`en.json`,
-  `messages_de.properties`), and files with a translation extension such as `.po` or `.xlf`. The
+  `lang` when the file name is an ISO 639-1 language code (`en.json`) or `messages`
+  and a code (`messages_de.properties`), and files with a translation extension such as `.po` or `.xlf`. The
   reviewer still reads them in full, and the split request tells the author
   how many files it left out of the count. Source files always count.
 - Every `prreview` command except `set` rejects an argument it does not take.
