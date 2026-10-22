@@ -178,13 +178,18 @@ cannot get the lock in that time, it prints the reason and exits with code 75,
 so you know the PR was not reviewed. It rejects
 anything that is not `owner/repo#N` for a repository you review.
 
-The exit code says if the PR has a verdict:
+The exit code says if the reviewer has commented on the PR:
 
-- `0`: the PR has a verdict on its current head, from this run or an earlier
-  one.
-- `75`: the PR has no verdict, and nothing failed. The PR can be a draft, or
-  a check can have skipped it. The command prints the reason.
+- `0`: the reviewer has a comment on the current head, from this run or an
+  earlier one. The comment can be a verdict or a notice, such as the title
+  format reminder.
+- `75`: the reviewer has no comment on the current head, and nothing failed.
+  The PR can be a draft, or a check can have skipped it. The command prints the
+  reason.
 - `1`: the PR is not open, or the reviewer could not read it.
+
+A check that posts a notice and stops gives `75` on the first run. The second
+run finds the notice on the head and gives `0`.
 
 To review the PRs of one fork author each time, put the login in
 `PRREVIEW_GATE_TRUSTED_AUTHORS`:
