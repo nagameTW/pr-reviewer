@@ -194,7 +194,7 @@ prreview logs -f
 | `prreview version`、`prreview --version` | 顯示版本 |
 | `prreview <command> --help` | 顯示該指令的用法，不執行其他動作 |
 
-指令遇到不接受的參數時，會顯示 `unknown argument:` 與用法，以代碼 2 結束，並且不變更任何狀態。變更設定的指令會重新啟動服務。完整移除的方式見 [docs/operations.md](docs/operations.md#removing-it)。
+指令收到不接受的參數時，顯示 `unknown argument:` 與用法，結束碼為 2，不變更任何狀態。變更設定的指令會重新啟動服務。完整移除的方式見 [docs/operations.md](docs/operations.md#removing-it)。
 
 ## 升級
 
