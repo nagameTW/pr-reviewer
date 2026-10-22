@@ -8,9 +8,10 @@
 # Lines starting with # and blank lines are ignored.
 #
 # Every comment the reviewer is about to post is checked against this list,
-# and so are the title and description of every PR it reviews. A hit in an
-# outgoing comment, or a scan that cannot run, means that comment is not
-# posted. A hit in a PR's title or description means that PR is not reviewed.
+# and so are the title and description of every PR it reviews, and the title
+# and body of the issue the PR links. A hit in an outgoing comment, or a scan
+# that cannot run, means that comment is not posted. A hit in a PR's title,
+# description or linked issue means that PR is not reviewed.
 # The reviewer refuses to start without this file.
 
 # Private keys

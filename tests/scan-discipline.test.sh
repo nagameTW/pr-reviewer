@@ -448,4 +448,74 @@ if [ -n "$TREE_GATED" ]; then
   exit 1
 fi
 
+# ── fifth class: the linked issue text is scanned before the model can read it ──
+# The README promises that a pattern match in the title or body of the issue
+# the PR links stops the review. The issue text goes into the intent file that
+# the model Reads, so the scan must run before that write. The real block
+# runs here, lifted out of the script. Stubs stand in for gh, the post and
+# the nonce.
+LI_TMP="$(mktemp -d)" || { echo "FAIL: mktemp failed"; exit 1; }
+trap 'rm -rf "$LISTF" "$LI_TMP"' EXIT
+LI_BLOCK="$(awk '/^  ISSUE_N=""$/ { p = 1 } /^  # Dimension 11 skips itself/ { p = 0 } p { print }' pr-autoreview.sh)"
+if [ "$(grep -c '' <<<"$LI_BLOCK")" -lt 15 ]; then
+  echo "FAIL: could not lift the linked-issue block out of pr-autoreview.sh"; exit 1
+fi
+. lib/prompt.sh || { echo "FAIL: could not source lib/prompt.sh"; exit 1; }
+. lib/scan.sh || { echo "FAIL: could not source lib/scan.sh"; exit 1; }
+eval "li_block() { $LI_BLOCK
+echo reached; }"
+cat > "$LI_TMP/gh" <<'STUB'
+#!/usr/bin/env bash
+case "$1 $2" in
+  "pr view") [ -n "${LI_REFS-}" ] || exit 1; printf '%s' "$LI_REFS" ;;
+  "issue view") printf 'TITLE: t\n\nBODY:\n%s\n' "${LI_ISSUE_BODY-}" ;;
+  *) exit 1 ;;
+esac
+STUB
+chmod +x "$LI_TMP/gh"
+printf '%s\n' 'sk-secret[0-9]+' > "$LI_TMP/pats"
+gh_post() { printf '%s\n' "$*" >> "$LI_TMP/posted"; }
+findings_fence_nonce() { echo NONCE; }
+# shellcheck disable=SC2034  # read by the lifted block
+GH="$LI_TMP/gh" REPO=o/r PR=5 MARKER=m KEY=k DIFF="$LI_TMP/diff"
+# shellcheck disable=SC2034  # the variables are read by the lifted block
+li_run() {  # $1 refs json ("" = gh cannot report), $2 issue body, $3 patterns file, $4 PR description
+  : > "$LI_TMP/posted"; : > "$LI_TMP/intent"
+  INTENT_FILE="$LI_TMP/intent"; PATS_FILE="$3"
+  INFO="$(jq -cn --arg b "$4" '{title:"t",body:$b}')"
+  LI_REFS="$1" LI_ISSUE_BODY="$2" li_block 2>&1
+}
+li_expect() {  # $1 label, $2 output, $3 want "withheld" or "reviewed"
+  local posted intent; posted="$(cat "$LI_TMP/posted")"; intent="$(cat "$LI_TMP/intent")"
+  if [ "$3" = withheld ]; then
+    case "$2" in *reached*) echo "FAIL: $1 - the round went on to the model"; exit 1 ;; esac
+    grep -qF 'Review withheld' <<<"$posted" || { echo "FAIL: $1 - no withheld notice posted"; exit 1; }
+    grep -qF 'linked issue' <<<"$posted" || { echo "FAIL: $1 - the notice does not say the linked issue matched"; exit 1; }
+    ! grep -qF 'sk-secret' <<<"$posted" || { echo "FAIL: $1 - the notice quotes the value"; exit 1; }
+    ! grep -qF 'sk-secret' <<<"$intent" || { echo "FAIL: $1 - the value reached the intent file"; exit 1; }
+  else
+    case "$2" in *reached*) ;; *) echo "FAIL: $1 - a clean issue stopped the round: $2"; exit 1 ;; esac
+    [ -z "$posted" ] || { echo "FAIL: $1 - a notice was posted for a clean issue"; exit 1; }
+    grep -qF 'LINKED ISSUE #' <<<"$intent" || { echo "FAIL: $1 - the clean issue text did not reach the intent file"; exit 1; }
+  fi
+}
+REFS7='{"closingIssuesReferences":[{"number":7,"url":"https://github.com/o/r/issues/7"}]}'
+li_expect 'issue body matches' "$(li_run "$REFS7" 'key sk-secret123 here' "$LI_TMP/pats" 'plain')" withheld
+li_expect 'issue body is clean' "$(li_run "$REFS7" 'add a retry' "$LI_TMP/pats" 'plain')" reviewed
+li_expect 'scan cannot run (no patterns file)' "$(li_run "$REFS7" 'add a retry' "$LI_TMP/none" 'plain')" withheld
+li_expect 'fallback path, issue body matches' "$(li_run '' 'key sk-secret123 here' "$LI_TMP/pats" 'Fixes #9')" withheld
+li_expect 'fallback path, issue body is clean' "$(li_run '' 'add a retry' "$LI_TMP/pats" 'Fixes #9')" reviewed
+# No model call may sit between the PR title scan and this block.
+LI_LN="$(grep -n '^  ISSUE_N=""$' pr-autoreview.sh | head -1 | cut -d: -f1)"
+LI_PRE="$(sed -n "1,${LI_LN}p" pr-autoreview.sh | grep -vE '^[[:space:]]*#' | sed -n '/^  TITLE_BODY=/,$p')"
+if grep -qE 'claude_call|"\$CLAUDE_BIN"' <<<"$LI_PRE"; then
+  echo "FAIL: a model call sits between the title/description scan and the linked-issue scan"; exit 1
+fi
+SENS_ISSUE='The linked issue matched the sensitive-data scan'
+want 'linked-issue sensitive notice keeps the placeholder instruction' "$SENS_ISSUE" 'placeholder'
+want 'linked-issue sensitive notice keeps the edit-history instruction' "$SENS_ISSUE" 'edit history'
+if [ -n "$WORDING_MISSING" ]; then
+  echo "FAIL: linked-issue notice wording:"; printf '%s\n' "$WORDING_MISSING"; exit 1
+fi
+
 echo "PASS: no scan pipes into grep -q, no unescaped backticks, no prose directives, no gutted notices (${#FILES[@]} files + tests/)"

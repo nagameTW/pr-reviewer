@@ -111,8 +111,8 @@ restored. The author's branch is never checked out.
 carries PR text or model output is checked against the operator's
 sensitive-patterns file before it is posted. A match, or a scan that cannot
 run, means it is not posted. Two fixed notices carry neither and are not
-scanned: the notice that a title or description matched the scan, and the
-title-format reminder. The reviewer will not start without that file.
+scanned: the notice that a title, description or linked issue matched the scan,
+and the title-format reminder. The reviewer will not start without that file.
 The scan matches your patterns against the text as written. Text shaped to
 slip past it, such as a key split by an HTML entity or a zero-width
 character, is not caught, so treat it as a safety net for accidents.

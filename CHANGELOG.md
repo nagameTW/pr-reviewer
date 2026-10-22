@@ -104,6 +104,14 @@ All notable changes to this project are recorded here. The format follows
 
 ### Security
 
+- The reviewer now scans the title and body of the issue a PR links against
+  your sensitive patterns. The README already said so, but only the PR's own
+  title and description were scanned, and the linked issue text reached the
+  model without a scan. On a match, or when the scan cannot run, the reviewer
+  posts a "Review withheld" notice that does not quote the value, and it does
+  not review the PR. To get a new review, edit the issue, then push a commit
+  or edit the PR description.
+
 - A fork PR no longer reaches a model by default. Before, anyone who could
   open a PR on a watched repository made the reviewer read the diff and call
   the model, and each push to the PR or edit of its title or description
