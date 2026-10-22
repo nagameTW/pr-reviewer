@@ -278,58 +278,51 @@ prompt_head_verdict() {
   prompt_key_has_verdict "${1-}" "${2-}" "${3-}" "$key"
 }
 
-# The reviews and comments of App accounts (app/<slug> or <slug>[bot]) whose
-# first line carries $k and whose login is not in $allowed, as their raw
-# logins. The first line, as in prompt_gate_bodies: any bot that quotes a
-# comment (a CI summary, a changelog bot) could carry the marker further
+# Logins of App accounts (app/<slug> or <slug>[bot]) that posted a body
+# whose first line carries $2 but are not in $3, space-separated,
+# deduplicated. The first line, as in prompt_gate_bodies: any bot that quotes
+# a comment (a CI summary, a changelog bot) could carry the marker further
 # down. A person cannot post under an App login, so a hit is a bot that
 # repeats the marker, or the gate login list is wrong (REVIEW_APP_SLUG typo,
-# the App renamed).
-PROMPT_FOREIGN_APP_JQ='($allowed | split(" ") | map(select(length > 0))) as $ok
+# the App renamed). The job writes a warning and reviews the head.
+# Empty on unparseable input.
+prompt_foreign_app_authors() {
+  jq -r --arg k "${2-}" --arg allowed "${3-}" '
+    ($allowed | split(" ") | map(select(length > 0))) as $ok
     | [(.reviews // []) + (.comments // []) | .[]
        | (.author.login // "") as $raw
        | select($raw | test("^app/|\\[bot\\]$"))
        | select(($raw | sub("^app/"; "") | sub("\\[bot\\]$"; "")) as $l | ($ok | index($l)) == null)
        | select((.body // "") | split("\n") | (.[0] // "") | contains($k))
-       | $raw]'
-
-# $1 = view JSON, $2 = marker and key, $3 = the logins of the reviewer.
-# Prints the logins, space-separated and deduplicated. The job writes a
-# warning for them and reviews the head, up to the bound below.
-# Empty on unparseable input.
-prompt_foreign_app_authors() {
-  jq -r --arg k "${2-}" --arg allowed "${3-}" "$PROMPT_FOREIGN_APP_JQ"' | unique | join(" ")' <<<"${1-}" 2>/dev/null
+       | $raw] | unique | join(" ")' <<<"${1-}" 2>/dev/null
 }
 
-# How many such comments there are: comments, not logins, because a reviewer
-# with a wrong login list posts every round from one login. Prints 0 on
-# unparseable input.
-prompt_foreign_app_count() {
-  local n
-  n="$(jq -r --arg k "${2-}" --arg allowed "${3-}" "$PROMPT_FOREIGN_APP_JQ"' | length' <<<"${1-}" 2>/dev/null)"
-  case "$n" in ''|*[!0-9]*) printf '0' ;; *) printf '%s' "$n" ;; esac
+# How many verdicts this machine may post for one review key before it stops
+# reviewing that head. The count is local (holdoff_posted_count in
+# lib/holdoff.sh), so no comment author can raise it. Posting twice for one
+# key means the reviewer does not see its own comments: the list of App logins
+# is probably wrong, and a review per round would repeat each minute with a
+# model call. The dispatcher and the job both ask prompt_local_post_bound, so
+# they agree.
+# Trade-off: a person who deletes the reviewer's comments to ask for a new
+# review gets two before the bound stops it. The author's next push is a new
+# key and starts from zero.
+# Trade-off: after a switch from an App back to your own account, a head that
+# this machine posted for twice stays stopped until the next push.
+PROMPT_LOCAL_POST_LIMIT=2
+
+# 0 when $1 (the count of recorded posts) has reached the limit. An empty
+# count or one that is not a number has not.
+prompt_local_post_bound() {
+  case "${1-}" in ''|*[!0-9]*) return 1 ;; esac
+  [ "$1" -ge "$PROMPT_LOCAL_POST_LIMIT" ]
 }
 
-# One such comment gets a warning and a review. This many get no review: the
-# list of logins is probably wrong, the reviewer cannot know its own
-# comments, and a review per round would repeat each minute with a model
-# call, for as long as the list stays wrong. The dispatcher and the job both
-# ask prompt_foreign_app_bound, so they agree.
-# Trade-off: this many comments from Apps that are not the reviewer also stop
-# the review of a head. An App that repeats the marker twice can do that.
-PROMPT_FOREIGN_APP_LIMIT=2
-
-# 0 when the bound is reached. Same arguments as prompt_foreign_app_authors.
-prompt_foreign_app_bound() {
-  [ "$(prompt_foreign_app_count "$@")" -ge "$PROMPT_FOREIGN_APP_LIMIT" ]
-}
-
-# The WARNING line for a head at the bound. $1 = the count, $2 = the logins
-# (prompt_foreign_app_authors), $3 = the logins of the reviewer. It starts with
+# The WARNING line for a head at the bound. $1 = the count. It starts with
 # `WARNING: ` so that gate.log keeps it. The caller adds the `PR #n: ` prefix.
-prompt_foreign_app_warning() {
-  printf 'WARNING: %s comments from %s carry the marker of this head. %s is not in the list of reviewer logins (%s). The list of App logins is probably wrong. The reviewer treats this head as handled and does not review it. If %s is your own App, check PRREVIEW_REVIEW_APP_SLUG.' \
-    "${1-}" "${2-}" "${2-}" "${3-}" "${2-}"
+prompt_local_post_warning() {
+  printf 'WARNING: this machine posted %s verdicts for this head, and the reviewer does not see its own comments. The list of App logins is probably wrong: check PRREVIEW_REVIEW_APP_SLUG. The reviewer does not review this head again until the author pushes.' \
+    "${1-}"
 }
 
 PROMPT_PRIOR_PER_ROUND_MAX_CHARS="${PROMPT_PRIOR_PER_ROUND_MAX_CHARS:-4500}"

@@ -626,5 +626,36 @@ grep -qE '^holdoff_knobs_ok \|\| exit 2$' pr-autoreview.sh \
   && ok 'pr-autoreview.sh refuses a bad hold before its first review' \
   || fail 'pr-autoreview.sh refuses a bad hold before its first review'
 
+# ── the local count of posted verdicts ────────────────────────────────────
+# One line per verdict this machine posted for a key. No comment author can
+# write it, so a count from here cannot be forged on GitHub.
+PF="$(holdoff_posted_path o/r 42 "abc123-def456")" || PF=""
+case "$PF" in */r-42-abc123-def456.posted) ok "posted path is the hold path plus .posted" ;;
+  *) fail "unexpected posted path: '$PF'" ;; esac
+holdoff_posted_path o/r 42 'a/b' >/dev/null 2>&1 && fail "a key with a slash became a posted path"
+holdoff_posted_path o/r x abc >/dev/null 2>&1 && fail "a bad PR number became a posted path"
+ok "posted path refuses the keys that holdoff_path refuses"
+is "no file counts 0" "$(holdoff_posted_count "$PF")" 0
+is "an empty path counts 0" "$(holdoff_posted_count '')" 0
+holdoff_posted_record "$PF" "$NOW" || fail "holdoff_posted_record failed"
+is "one record counts 1" "$(holdoff_posted_count "$PF")" 1
+holdoff_posted_record "$PF" "$NOW"
+is "two records count 2" "$(holdoff_posted_count "$PF")" 2
+is "the file is mode 600" "$(stat -c %a "$PF" 2>/dev/null || stat -f %Lp "$PF")" 600
+PF2="$(holdoff_posted_path o/r 42 "other-key")"
+is "another key starts from zero" "$(holdoff_posted_count "$PF2")" 0
+printf 'junk\n\n12x\n' > "$TMP/hold/junk.posted"
+is "lines that are not a time count 0" "$(holdoff_posted_count "$TMP/hold/junk.posted")" 0
+holdoff_posted_record "" "$NOW" && fail "an empty path was recorded"
+holdoff_posted_record "$PF" "" && fail "an empty time was recorded"
+mkdir -p "$TMP/hold/dirfile.posted"
+holdoff_posted_record "$TMP/hold/dirfile.posted" "$NOW" 2>/dev/null && fail "a write that fails reported success"
+ok "a write that fails returns non-zero (the caller logs it)"
+touch -d '5 days ago' "$PF" 2>/dev/null || touch -t "$(date -d '5 days ago' +%Y%m%d%H%M 2>/dev/null || date -v-5d +%Y%m%d%H%M)" "$PF"
+holdoff_prune 2
+[ -e "$PF" ] && fail "prune kept a stale posted file"
+ok "prune removes stale posted files"
+is "...and the count of a pruned file is 0 again" "$(holdoff_posted_count "$PF")" 0
+
 [ "$RC" = 0 ] && echo "PASS: lib/holdoff.sh"
 exit "$RC"

@@ -184,6 +184,54 @@ holdoff_stuck() {
       done
 }
 
+# ── The local count of posted verdicts ─────────────────────────────────────
+#
+# One line per verdict that this machine posted for a key: the time, in epoch
+# seconds. The file is state that no comment author can create. The reviewer
+# uses it to see that it posts again and again for one head. That happens when
+# the list of App logins is wrong: the reviewer cannot know its own comments,
+# so each round reads the head as not reviewed. See PROMPT_LOCAL_POST_LIMIT
+# in lib/prompt.sh.
+#
+# The file lives next to the hold, named from the same sanitised key. Like the
+# hold, it is pruned by age (holdoff_prune), so the directory stays small.
+# Trade-off: a pruned file starts the count from zero. A head that waits more
+# than two days after its last post can get two more verdicts.
+#
+# Every failure here leaves the gate as it was before this file existed: a
+# count that cannot be read is 0, and a record that cannot be written changes
+# nothing about the post that already happened.
+
+# Where the count for this repo, PR and key lives. Same arguments as holdoff_path.
+holdoff_posted_path() {
+  local p
+  p="$(holdoff_path "$@")" || return 1
+  printf '%s.posted' "$p"
+}
+
+# How many verdicts are recorded. $1 = path. Prints 0 for a file that is
+# missing or unreadable. A line that is not a time does not count.
+holdoff_posted_count() {
+  local n
+  [ -r "${1-}" ] || { printf '0'; return 0; }
+  n="$(grep -c '^[0-9][0-9]*$' "$1" 2>/dev/null)" || true
+  case "$n" in ''|*[!0-9]*) n=0 ;; esac
+  printf '%s' "$n"
+}
+
+# Record one verdict. $1 = path, $2 = now (epoch seconds). Non-zero when the
+# write fails; the caller logs it and goes on. The file is mode 600 in a 700
+# directory, as the other state files are.
+holdoff_posted_record() {
+  local f="${1-}" now="${2-}" dir
+  [ -n "$f" ] || return 1
+  case "$now" in ''|*[!0-9]*) return 1 ;; esac
+  dir="$(dirname "$f")"
+  mkdir -p "$dir" 2>/dev/null || return 1
+  chmod 700 "$dir" 2>/dev/null || true
+  ( umask 077; printf '%s\n' "$now" >> "$f" ) 2>/dev/null || return 1
+}
+
 # Old holds are junk, not history: once a head is superseded its file can never
 # match a key again. Pruned by age so the directory cannot grow without bound.
 holdoff_prune() {
