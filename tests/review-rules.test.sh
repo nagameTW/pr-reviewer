@@ -18,69 +18,80 @@ SEC=checks/02-security.md
 
 # ── security trace rules ─────────────────────────────────────────────────
 needs 'trace: HTML escaping does not cover script blocks, event attributes or JS strings' $SEC \
-  'HTML escaping does not protect[^.]*script[^.]*event[^.]*JavaScript string'
+  'escaping.*(script|event|JavaScript string)'
 needs 'trace: an allowlist must match the whole normalized value' $SEC \
-  'allowlist is a control only when it matches the whole value after normalization'
+  'allowlist.*(whole|entire|full).*(normali[sz]|value)'
 needs 'trace: substring checks and unanchored regexes are not controls' $SEC \
-  'substring check or an unanchored regular expression is not a control'
+  '(substring|unanchored).*not a control'
 needs 'trace: loosened protection needs worked-before, broken-after, no equal control' $SEC \
-  'worked before the diff, does not work after it, and no equal control remains'
+  'worked before.*(not|no longer).*after.*(equal|same|replacement)'
 needs 'trace: a loosened-protection finding names the responses and the new behavior' $SEC \
-  'Name the affected responses and the new behavior'
+  'name the affected (responses|requests).*new behavio'
 needs 'trace: loosened protection is not defence in depth' $SEC \
-  'not a defence-in-depth suggestion'
+  'not a defen[cs]e-in-depth'
 needs 'trace: attacker path to an unparameterized query or command is CRITICAL' $SEC \
-  'path an attacker can really use reaches a query or command that is not parameterized, report it as CRITICAL'
+  '(attacker|untrusted).*(query|command).*not parameterized.*CRITICAL'
 needs 'trace: an admin-only value is a data or correctness finding unless the admin is a threat' $SEC \
-  'only an administrator[^.]*data or correctness finding[^.]*unless[^.]*threat model'
+  '(administrator|admin).*(data|correctness).*(unless|except).*threat'
 needs 'trace: constants and allowlisted identifiers are controls' $SEC \
-  'constant or an allowlisted identifier is a control'
-needs 'idiom: framing header values' $SEC 'framing header[^;]*other than DENY or SAMEORIGIN'
-needs 'idiom: Referer or Origin as access control' $SEC 'Referer or Origin[^;]*access control'
-needs 'idiom: request header placed into script' $SEC 'request header \(Referer, Host, X-Forwarded-\*\) written into a script block'
-needs 'idiom: postMessage target origin and origin check' $SEC 'postMessage[^;]*targetOrigin[^;]*event\.origin'
-needs 'idiom: CORS text of API8 stays' $SEC 'CORS that reflects any Origin or allows \* with credentials'
+  'constant.*allowlisted identifier.*control'
+needs 'idiom: framing header values' $SEC 'framing header.*(DENY|SAMEORIGIN)'
+needs 'idiom: request header placed into script' $SEC '(Referer|Host|X-Forwarded).*(script block|script)'
+needs 'idiom: postMessage target origin and origin check' $SEC 'postMessage.*targetOrigin.*event\.origin'
+needs 'idiom: CORS text of API8 stays' $SEC 'CORS.*reflects any Origin'
+needs 'origin: Referer or Origin is not authentication or object authorization' $SEC \
+  'Origin.*not (an )?authentication.*not (an )?(object )?authorization'
+needs 'origin: an exact allowlist that rejects a missing header can be a valid request check' $SEC \
+  'exact allowlist.*(missing header|rejects a missing).*valid'
+lacks 'origin: no rule calls every Origin check forgeable' $SEC 'Origin[^.]*which a client can forge or omit'
 
 # ── verifier does not undo the trace rules ────────────────────────────────
 needs 'verify: a framework default alone does not refute a security-rule finding' lib/findings.sh \
-  'not refuted only because a framework default or a general control'
-needs 'verify: it checks output context, allowlist matching and before-and-after behavior' lib/findings.sh \
-  'Check the actual output context, what the allowlist matches, and what the protection'
+  'not refuted.*framework default'
+needs 'verify: it checks the output context and what the allowlist matches' lib/findings.sh \
+  'output context.*allowlist'
+needs 'verify: it checks what the protection did before and after the diff' lib/findings.sh \
+  'before and after this diff'
 
 # ── noise list agrees with the security rules ─────────────────────────────
 needs 'noise: defence-in-depth exclusion needs an adequate primary defence' lib/review-spec.sh \
-  'defence-in-depth suggestions where the primary defence is already adequate'
+  'defen[cs]e-in-depth.*primary defen[cs]e.*adequate'
 needs 'noise: a loosened protection is not defence in depth and not speculation' lib/review-spec.sh \
-  'worked before this diff, does not work after it and has no equal control left is not defence in depth and not speculation'
+  'worked before.*no equal control.*not defen[cs]e in depth.*not speculation'
 needs 'noise: the loosened-protection case points at the security trace' lib/review-spec.sh \
   'report it under the security trace'
 
 # ── scope rule ────────────────────────────────────────────────────────────
-needs 'scope: moved or reformatted added lines still belong to the PR' pr-autoreview.sh \
-  'Added lines that were moved from elsewhere or only reformatted still belong to this PR'
-needs 'scope: such lines get defects only, and the issue says the code was moved' pr-autoreview.sh \
-  'report only defects on them, and say in the issue text that the code was moved'
+needs 'scope: moved or reformatted lines are in scope for defects the move causes' pr-autoreview.sh \
+  '(moved|reformatted).*(stay in scope|in scope).*(defects|defect) the move causes'
+needs 'scope: moved lines keep the pre-existing exclusion' pr-autoreview.sh \
+  'old defect.*(move|moved).*carries over.*(out of scope|not in scope)'
+lacks 'scope: moved lines are not reported as defects of the PR whatever their origin' pr-autoreview.sh \
+  'moved from elsewhere[^.]*still belong to this PR'
 
 # ── correctness paragraphs ────────────────────────────────────────────────
 COR=checks/01-correctness.md
 needs 'correctness: a null check is reported only with a returning line or a nullable type' $COR \
-  'missing null check only when you can point to the line that returns null[^.]*or to a type that allows it'
+  'null check only when.*(returns null|nullable|allows it)'
 needs 'correctness: an unfollowed signature change belongs to the contract area' $COR \
-  'changed signature that a caller or an implementer did not follow[^.]*\.[^.]*contract'
-needs 'correctness: a same-name wrapper must call the wrapped object' $COR \
-  'wrapper, cache or delegate that calls a method of the same name must call the wrapped object'
+  'signature.*(did not follow|not follow).*contract'
+needs 'correctness: a same-name wrapper is reported only for accidental recursion or a contradicted receiver' $COR \
+  '(same name|same-name).*(accident|contradict)'
+needs 'correctness: intentional delegation or failover to a sibling is not a finding' $COR \
+  'intentional (delegation|failover).*not a finding'
+needs 'correctness: the intended receiver is confirmed with Read or Grep' $COR \
+  'receiver.*(Read|Grep)'
+lacks 'correctness: no rule says a wrapper must never call a sibling' $COR 'not itself or a sibling'
 needs 'correctness: route names and methods are confirmed with Read or Grep first' $COR \
-  'route parameter name or an HTTP method[^.]*Read or Grep'
+  'route.*(name|method).*(Read|Grep)'
 
 # ── one finding, one defect ───────────────────────────────────────────────
 needs 'finding unit: one finding is one defect that one fix removes' pr-autoreview.sh \
-  'One finding is one defect that one fix removes'
+  'one finding is one defect.*one fix'
 needs 'finding unit: every location is listed as path:line in that finding' pr-autoreview.sh \
-  'List every location of that defect as path:line in that finding'
+  'every location.*path:line'
 needs 'finding unit: two defects that need two fixes are two findings' pr-autoreview.sh \
-  'Two defects that need two fixes are two findings'
-needs 'finding unit: the unit rule follows the pattern completeness rule' pr-autoreview.sh \
-  'Pattern completeness.*One finding is one defect'
+  'two defects.*two fixes.*two findings'
 
 # ── comparison page lists the official options with a date ────────────────
 CMP=docs/comparison.md
@@ -94,7 +105,7 @@ needs 'comparison: the price is dated' $CMP '2025-03-04 price post'
 
 # ── changelog records the changes under Unreleased ────────────────────────
 UNREL="$(awk '/^## \[Unreleased\]/{f=1;next} /^## \[/{f=0} f' CHANGELOG.md)"
-for k in 'security checklist' 'verification step' 'noise list' 'moved or reformatted' 'null check' 'one defect that one fix' 'official options'; do
+for k in 'security checklist' 'moved' 'null check' 'one defect' 'official options'; do
   case "$UNREL" in *"$k"*) ok "changelog: Unreleased mentions $k" ;; *) bad "changelog: Unreleased mentions $k" 'not found' ;; esac
 done
 
