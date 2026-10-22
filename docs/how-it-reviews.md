@@ -646,7 +646,7 @@ The reviewer reads the diff with a model. The model has no shell, so the reviewe
 
 - **zizmor.** It scans GitHub Actions workflow files for injection and over-wide permissions. The checklist has no item for workflow injection.
 - **CodeQL.** GitHub code scanning. It follows data flow through the code and can scan workflow files. A model that reads a diff can miss a flow that spans many files.
-- **gitleaks.** It scans commits for secrets with fixed rules for known token formats. The reviewer's sensitive-data item asks a model to look at the diff, and the model can miss a token.
+- **A secret scanner, such as GitHub secret scanning with push protection or TruffleHog.** It scans commits for secrets with fixed rules for known token formats. The reviewer's sensitive-data item asks a model to look at the diff, and the model can miss a token.
 
 ## 5. How others review, and how this compares
 
