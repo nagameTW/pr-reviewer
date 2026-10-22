@@ -124,6 +124,29 @@ All notable changes to this project are recorded here. The format follows
 
 ### Fixed
 
+- Review findings often cited the wrong line. The model read the raw diff
+  with the Read tool, which prints a line number in front of each line, and
+  it copied that number instead of the line in the source file. In a bench of
+  404 findings, about 82 cited a line of the diff file, and 46 of those
+  pointed past the end of the file. The review, the red team and the
+  second-round check now read a copy of the diff where each line starts with
+  a label. A context line or an added line starts with `NEW[n]`, where n is
+  its line in the file after the change. A removed line starts with
+  `NEW[-]`. The copy changes only the start of each line. The raw diff stays
+  as it is for `git apply`, the slice splitter and the file lists. If the
+  copy cannot be made, the log shows a `WARNING` and the model reads the raw
+  diff with the old line rule.
+- A finding whose line is past the end of the cited file now keeps its
+  severity and gets line 0, and the log shows the original line. This runs
+  only when the diff was applied to the tree. It drops no finding, so no
+  blocker changes status. `PRREVIEW_GATE_VERIFY_LINES`, which deletes such
+  findings, stays off by default.
+- A blocking finding that round two carries forward could not change its
+  line, so a wrong line stayed wrong in every later round. The round two
+  instructions now keep the file, severity and issue text, and keep the line
+  unless it is past the end of the file or is not the `NEW[...]` line of the
+  code the finding names. When slices give one carried finding two lines,
+  the merge keeps one finding, the first in slice order.
 - With `PRREVIEW_GATE_VERIFY_LINES=1`, the line-number check failed on bash
   3.2, the bash that macOS ships. Bash 3.2 ended a command substitution at the
   `)` of a `case` pattern and printed a syntax error. The loop that counts the
