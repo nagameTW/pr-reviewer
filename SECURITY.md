@@ -1,7 +1,8 @@
 # Security policy
 
-The reviewer passes text from anyone who can open a pull request to a model
-that can read files, and then posts the result under your GitHub account. So
+The reviewer passes the text of pull requests to a model that can read files,
+and then posts the result under your GitHub account. By default it reads only
+PRs from branches of the repository itself and PRs from authors you list. So
 the security model is worth stating plainly.
 
 ## Reporting a vulnerability
@@ -26,6 +27,36 @@ The project is pre-1.0, so only the latest commit on `main` gets fixes.
 ## The security model
 
 These hold by design. If you can break one, that is a vulnerability.
+
+**Fork PRs are skipped unless the author is trusted.** The reviewer reads the
+author and the `isCrossRepository` field of each open PR with one `gh pr list`
+call. A PR that `prreview once --pr` names is read, whatever its other fields
+hold, when its number is a whole number. Any other PR is read only when its
+record holds a number, a boolean `isCrossRepository`, an author object and a
+non-empty login, and either `isCrossRepository` is false or the login is in
+`PRREVIEW_GATE_TRUSTED_AUTHORS`. A missing field or a wrong type means the PR is
+not trusted, even when its author is on the list. A PR whose author account was
+deleted can come back with no login. The reviewer then skips it, unless
+`prreview once --pr` names it. The review job checks the same rule on its own
+read of the PR, before any model call. The reviewer posts nothing on a skipped
+PR and logs its number only. One exception exists. With
+`PRREVIEW_GATE_DISARM_AUTO_MERGE=1`, the reviewer turns off an auto-merge that
+is armed on a skipped PR, with one `gh pr merge --disable-auto` call and nothing
+else. Only a user with write access can arm auto-merge, so a stranger cannot
+cause that write. The list is the point where trust is decided. If a PR turns
+into a fork PR after the list, the dispatcher reads it once with `gh pr view`,
+and the job stops it before the diff fetch. That PR gets no model call and no
+post. With the same setting, the job turns off its auto-merge. The loop that
+starts the rounds counts only the PRs this rule admits, so one open fork PR from
+a stranger no longer starts a full round, merged-PR scan included, every minute.
+With `PRREVIEW_GATE_DISARM_AUTO_MERGE=1`, a skipped fork PR with armed
+auto-merge counts as work too, so the disarm runs within one interval. The scan
+of merged PRs does not look at the author. `PRREVIEW_GATE_FORK_PRS=1` turns the
+rule off. The rule assumes that everyone who can push to the repository is
+trusted. A repository whose workflows build branches from outside input, for
+example with `pull_request_target`, breaks that assumption. Do not list an
+account only because it contributed once. The list lives in the settings of the
+machine that runs the reviewer.
 
 **The pull request is data.** The model reads titles, descriptions, diffs and
 repository files with its read-only tools, and the prompt says that none of
@@ -101,7 +132,10 @@ positives. It does not stop a diff that was written to fool the model.
 **It cannot merge.** It never approves or merges. Its only merge call is
 `gh pr merge --disable-auto`, which is off by default. With the defaults it
 leaves auto-merge alone. `PRREVIEW_GATE_DISARM_AUTO_MERGE=1` lets it turn off
-an auto-merge armed on a head it has not reviewed yet.
+an auto-merge armed on a head it has not reviewed yet. That includes a PR it
+skips because of its author. A head that an earlier `prreview once --pr`
+reviewed loses its auto-merge too, because the PR list does not show that
+review.
 
 **Scratch files stay private.** Diffs, slices and raw model output are written
 under the reviewer's own work directory, not a shared `/tmp`.
@@ -125,6 +159,8 @@ have not changed, so the key stays the same and no new review runs. Version
 
 ## In scope
 
+- A PR from a fork, by an author who is not trusted, that reaches a model call
+  without `prreview once --pr` and without `PRREVIEW_GATE_FORK_PRS=1`.
 - Text in a pull request that makes the reviewer post something it should not:
   content from outside the repository, text the sensitive-data scan should
   have caught, or instructions followed as if they came from the operator.

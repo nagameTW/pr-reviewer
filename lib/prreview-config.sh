@@ -16,6 +16,11 @@ prreview_config_dir() { printf '%s' "$HOME/.config/pr-reviewer"; }
 prreview_config_file() { printf '%s' "$(prreview_config_dir)/config"; }
 prreview_state_dir() { printf '%s' "$HOME/.cache/pr-reviewer"; }
 
+# PRREVIEW_ONCE_PR names the PR of one `prreview once --pr` run, and that
+# command sets it. As a setting, it would name the same PR in every round of
+# the loop.
+prreview_key_is_run_only() { [ "${1-}" = PRREVIEW_ONCE_PR ]; }
+
 # Friendly names for the settings people change most. Anything else is
 # given by its PRREVIEW_ name.
 prreview_key_of() {
@@ -25,7 +30,7 @@ prreview_key_of() {
     model) echo PRREVIEW_REVIEW_MODEL ;;
     checks) echo PRREVIEW_GATE_CHECKS_DIR ;;
     patterns) echo PRREVIEW_SENSITIVE_PATTERNS_FILE ;;
-    *) if [[ "${1-}" =~ $PRREVIEW_CONFIG_KEY_RE ]]; then echo "$1"; else return 1; fi ;;
+    *) if [[ "${1-}" =~ $PRREVIEW_CONFIG_KEY_RE ]] && ! prreview_key_is_run_only "$1"; then echo "$1"; else return 1; fi ;;
   esac
 }
 
@@ -40,6 +45,10 @@ prreview_config_read() {
     n=$((n + 1))
     case "$line" in ''|'#'*) continue ;; esac
     key="${line%%=*}"
+    if prreview_key_is_run_only "$key"; then
+      echo "$file:$n: $key is not a setting; remove the line. 'prreview once --pr owner/repo#N' sets it for one run" >&2
+      return 1
+    fi
     if [ "$key" = "$line" ] || ! [[ "$key" =~ $PRREVIEW_CONFIG_KEY_RE ]]; then
       echo "$file:$n: expected KEY=value with a PRREVIEW_ key, got: $line" >&2
       return 1
@@ -78,7 +87,7 @@ prreview_config_get() {
 # never leaves a truncated settings file.
 prreview_config_set() {
   local file="${1-}" key="${2-}" value="${3-}" tmp
-  [[ "$key" =~ $PRREVIEW_CONFIG_KEY_RE ]] || { echo "not a setting name: $key" >&2; return 1; }
+  [[ "$key" =~ $PRREVIEW_CONFIG_KEY_RE ]] && ! prreview_key_is_run_only "$key" || { echo "not a setting name: $key" >&2; return 1; }
   case "$value" in *$'\n'*) echo "$key: a value must be one line" >&2; return 1 ;; esac
   prreview_config_read "$file" >/dev/null || return 1
   mkdir -p "$(dirname "$file")" || return 1

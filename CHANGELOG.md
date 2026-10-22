@@ -11,13 +11,27 @@ All notable changes to this project are recorded here. The format follows
 - CI runs the test suite on macOS with `/bin/bash`, which is bash 3.2. The
   job installs jq, gh, flock, shellcheck and coreutils with Homebrew and does
   not put the coreutils `gnubin` directory on `PATH`.
+- `prreview once --pr owner/repo#N` reviews one PR now, a fork PR included.
+  It reviews that PR and no other, and it waits for a running round with
+  `flock -w`. If it cannot get the lock in `PRREVIEW_GATE_ONCE_WAIT` seconds
+  (300 by default), it prints the reason and exits with code 75. It rejects
+  any value that is not `owner/repo#N` for a repository on your list. It
+  exits 0 only when the reviewer has a verdict (approve or request changes)
+  on the current head. A notice alone, such as the title format reminder or
+  the sensitive-data notice, gives 75 on every run. `PRREVIEW_GATE_ONCE_WAIT=0`
+  means do not wait: the round tries the lock once with `flock -n`.
+  `PRREVIEW_ONCE_PR` is set by `prreview once --pr` only. The loop clears it
+  for every round, and `prreview set` and the settings file refuse it.
+- `PRREVIEW_GATE_TRUSTED_AUTHORS` lists the logins whose fork PRs are
+  reviewed. `PRREVIEW_GATE_FORK_PRS=1` reviews every PR, as before.
+- `prreview status` shows how many PRs the last round skipped. A round that
+  skips PRs prints one `WARNING:` line with the count.
 
 ### Changed
 
 - `tests/run-all.sh` fails when `shellcheck` is not installed. It used to
   skip the lint step. It prints the versions of bash, gh, git, jq and flock
   first, and it runs every test with the bash that runs it.
-
 - `prreview setup` no longer installs the background service by default. The
   question defaults to `n` while no service is installed, and to `y` once one
   is, so pressing Enter keeps what you have. A new service reviews every open
@@ -30,7 +44,46 @@ All notable changes to this project are recorded here. The format follows
   `n` no longer sees it, and `gh config set` is not called. With no terminal
   on stdin, `prreview start` prints the `gh config set` command and goes on.
   It asks nothing when it starts a service that is installed.
-
+- The reviewer reviews only PRs from a trusted author. A PR is trusted when it
+  comes from a branch of the repository itself, when the author is in
+  `PRREVIEW_GATE_TRUSTED_AUTHORS`, or when `prreview once --pr` names it. A PR
+  from a fork is skipped otherwise, and nothing is posted on it. The round log
+  names a skipped PR by number only. One `gh pr list` call now reads the
+  number, the author, the fork flag and the labels, and the filter runs on that
+  answer, so a skipped PR gets no call of its own, except the disarm of an
+  armed auto-merge (see Security). The review job checks the
+  rule again before any model call. A PR that `prreview once --pr` names needs
+  only a whole number. Every other PR needs a number, a boolean fork flag, an
+  author object and a non-empty login. If one is missing or has the wrong
+  type, the PR is not trusted, even when its author is on the list. A PR whose
+  author account was deleted can come back with no login. The reviewer then
+  skips it, unless `prreview once --pr` names it. Set `PRREVIEW_GATE_FORK_PRS=1`
+  to bring back the old behavior. A fork PR that was open before the upgrade
+  keeps its earlier comment, and its new heads are skipped.
+- `prreview once --pr` exits 0 only when the reviewer has a verdict (approve
+  or request changes) on the current head, from this run or an earlier one.
+  Before, it also exited 0 for a draft and for a PR that a check skipped,
+  such as the title format check. Now it prints the reason and exits 75, the
+  code of a lock that stays held. A PR that is not open still exits 1. A
+  notice alone, such as the title format reminder, is not a verdict. It gives
+  75 on every run.
+- The loop starts a round only when an open PR passes the same rule. Before,
+  it counted every open PR, so one fork PR left open started a round each
+  minute, with the scan of merged PRs and up to ten reads each time. The count
+  reads `PRREVIEW_GATE_TRUSTED_AUTHORS` and `PRREVIEW_GATE_FORK_PRS` from the
+  same environment as the round, and it asks for up to 1000 PRs, as the round
+  does. The count applies the same rule, so a PR with a missing field or a
+  wrong type counts 0. A draft PR counts 0 too, because the round skips it.
+  Only a boolean `isDraft` that is true makes a PR a draft. If the field is
+  missing or has another type, the PR counts, and the round decides. The count
+  asks for `isDraft` in the same `gh pr list` call. With
+  `PRREVIEW_GATE_DISARM_AUTO_MERGE=1`, it asks for `autoMergeRequest` too, and
+  a skipped fork PR with auto-merge armed counts as work. The round then runs
+  within one interval and turns the auto-merge off. A list the loop cannot
+  read counts as work. The scan of merged PRs does not look at the author. The
+  count needs `jq`. If `jq` is
+  missing, the loop stops at startup and names it, as it does for the timeout
+  command.
 - The reviewer finds `gtimeout` and `gsha256sum` on its own. At startup it uses
   `timeout` or `gtimeout` for deadlines. It uses `sha256sum`, `gsha256sum` or
   `shasum -a 256` for the review key digest, whichever it finds first. When only
@@ -48,6 +101,27 @@ All notable changes to this project are recorded here. The format follows
   `)` of a `case` pattern and printed a syntax error. The loop that counts the
   lines of each cited file now writes the pattern with a leading `(`. The check
   is off by default.
+
+### Security
+
+- A fork PR no longer reaches a model by default. Before, anyone who could
+  open a PR on a watched repository made the reviewer read the diff and call
+  the model, and each push to the PR or edit of its title or description
+  started another call on the operator's account. Now the reviewer skips a fork
+  PR unless the author is trusted or `prreview once --pr` names it. The rule
+  assumes that everyone who can push to the repository is trusted. A
+  repository whose workflows build branches from outside input breaks that
+  assumption.
+- With `PRREVIEW_GATE_DISARM_AUTO_MERGE=1`, the reviewer turns off an
+  auto-merge that is armed on a PR it skips because of its author. Before, a
+  skipped fork PR kept its auto-merge, and any approve could merge a head that
+  nobody had reviewed. The round now asks for `autoMergeRequest` in the same
+  `gh pr list` call. A skipped PR with armed auto-merge gets one
+  `gh pr merge --disable-auto` call and no other call. A skipped PR without it
+  gets none. Only a user with write access can arm auto-merge. The review job
+  does the same when a PR turns into a fork PR after the list. A head that an
+  earlier `prreview once --pr` reviewed also loses its auto-merge, because the
+  list does not show that review.
 
 ## [0.2.2] - 2026-10-22
 

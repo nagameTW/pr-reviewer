@@ -8,8 +8,9 @@
 
 It runs on your own machine. It watches the repos you list, asks headless
 [Claude Code](https://code.claude.com/docs/en/overview) to review
-every new head of every open PR, checks what comes back, and posts one comment
-with a verdict and the findings.
+every new head of every open PR from a trusted author (see
+[Whose PRs it reviews](#whose-prs-it-reviews)), checks what comes back, and
+posts one comment with a verdict and the findings.
 
 - **It only comments.** It never submits a GitHub approval, never requests
   changes as a formal review, and never merges. The person who holds the merge
@@ -57,6 +58,7 @@ you say yes, installs the loop as a background service.
 
 - [What a review looks like](#what-a-review-looks-like)
 - [What it does, and what it does not](#what-it-does-and-what-it-does-not)
+- [Whose PRs it reviews](#whose-prs-it-reviews)
 - [Terms](#terms)
 - [What it checks](#what-it-checks)
 - [Adding your own checks](#adding-your-own-checks)
@@ -103,9 +105,11 @@ with no evidence.
 
 It does:
 
-- Review every new head of every open PR in the repos you list, once. A head it
-  has already commented on is skipped until the author pushes again, or edits
-  the PR's title, description or base branch. For a PR based on another branch
+- Review every new head of every open PR in the repos you list, once, when the
+  PR comes from a trusted author. A PR from a fork is skipped unless its
+  author is trusted (see [Whose PRs it reviews](#whose-prs-it-reviews)). A head
+  it has already commented on is skipped until the author pushes again, or
+  edits the PR's title, description or base branch. For a PR based on another branch
   (a stacked PR), a push to that parent branch counts too. Each of these is a
   new review, and a new model call. Draft PRs are skipped until they are marked
   ready.
@@ -136,6 +140,88 @@ It does not:
 - Review a PR whose title or description matches your sensitive-data patterns,
   or post a comment that does.
 
+## Whose PRs it reviews
+
+The reviewer reads a PR in three cases:
+
+- The PR comes from a branch of the repository itself, not from a fork.
+- The author's login is in `PRREVIEW_GATE_TRUSTED_AUTHORS`.
+- You named the PR with `prreview once --pr owner/repo#N`.
+
+It skips every other PR. In practice, a skipped PR comes from a fork, and its
+author is not on the list. Anyone can open a fork PR, and each push to it would
+start a new model call on your account.
+
+The reviewer posts nothing on a skipped PR. One exception exists. With
+`PRREVIEW_GATE_DISARM_AUTO_MERGE=1`, the reviewer turns off an auto-merge that
+is armed on a skipped PR. That is one `gh pr merge --disable-auto` call, and
+the skipped PR gets nothing else. Only a user with write access to the
+repository can arm auto-merge. The loop that starts the rounds
+applies the same rule to its check, with the same two settings. A skipped PR
+then does not start a round each minute, and the loop keeps its idle schedule.
+The exception is `PRREVIEW_GATE_DISARM_AUTO_MERGE=1` with auto-merge armed on
+the PR: the loop counts that PR as work, draft or not, so the disarm runs
+within one interval. The loop does not count any other draft PR, because the
+round skips it.
+The scan of merged PRs does not look at the author. The round log names a
+skipped PR by number and never by title. A round that skips PRs prints one `WARNING:` line with the
+count, and `prreview status` shows the count for the last round.
+
+To review one outside PR, name it:
+
+```bash
+./prreview once --pr owner/repo#12
+```
+
+The command reviews the current head of that PR and no other PR. When the
+author pushes again, the new head is skipped until you run the command again.
+If a round is running, the command waits for it up to `PRREVIEW_GATE_ONCE_WAIT`
+seconds (300 by default). A value of `0` means do not wait. If the command
+cannot get the lock in that time, it prints the reason and exits with code 75,
+so you know the PR was not reviewed. It rejects
+anything that is not `owner/repo#N` for a repository you review.
+
+The exit code says if the reviewer has posted a verdict on the PR:
+
+- `0`: the reviewer has a verdict comment on the current head, from this run
+  or an earlier one. A verdict is an approve or a request for changes.
+- `75`: the reviewer has no verdict on the current head, and nothing failed.
+  The PR can be a draft, or a check can have skipped it. The command prints the
+  reason.
+- `1`: the PR is not open, or the reviewer could not read it.
+
+A notice is not a verdict. The title format reminder and the sensitive-data
+notice are notices. A check that posts a notice and stops gives `75` on the
+first run, and `75` on every later run, until the title or description is
+fixed and the reviewer posts a verdict. The loop still posts a notice once per
+head.
+
+To review the PRs of one fork author each time, put the login in
+`PRREVIEW_GATE_TRUSTED_AUTHORS`:
+
+```bash
+./prreview set PRREVIEW_GATE_TRUSTED_AUTHORS "alice bob"
+```
+
+Write each login as `gh pr list --json author` prints it. Separate logins with
+spaces or commas. Letter case does not matter. To review every PR, as the
+reviewer did before this rule, set `PRREVIEW_GATE_FORK_PRS=1`.
+
+Four limits apply:
+
+- Do not add an account only because it contributed once. List only accounts
+  that you would let push to the repository.
+- The rule treats everyone who can push to the repository as trusted. If a
+  workflow of yours builds branches from outside input, for example with
+  `pull_request_target`, a branch of the repository can carry outside text.
+- The list is a setting of the machine that runs the reviewer. When several
+  maintainers each run a reviewer, each one sets the list.
+- The reviewer decides on the list it reads at the start of the repository's
+  round. If a PR turns into a fork PR after that read, the reviewer reads the
+  PR once with `gh pr view`. The review job then checks the rule again and
+  stops. That PR gets no model call and no post. With
+  `PRREVIEW_GATE_DISARM_AUTO_MERGE=1`, the job also turns off its auto-merge.
+
 ## Terms
 
 The rest of this README uses these words in one sense each.
@@ -144,7 +230,8 @@ The rest of this README uses these words in one sense each.
 | --- | --- |
 | **Gate** | The name the code and its settings use for the reviewer: `pr-autoreview.sh`, the `PRREVIEW_GATE_*` settings, `gate.log`. It only comments; it does not block or merge anything, which is why its log calls the comment a review-only verdict. |
 | **Head** | The latest commit on a PR's branch. The reviewer reviews heads, not branches. |
-| **Round** | One run of `pr-autoreview.sh`. It goes over every listed repo and reviews each PR whose head has no comment yet. The loop checks for open PRs once a minute and starts a round when it finds any; with none open, it starts one only on every 15th check. The loop's log counts checks, so `[round 12]` there is the 12th check, whether or not a round ran. For a single PR, "round 2" means the second verdict comment on it: a push, an edited title, description or base branch, or (for a stacked PR) a push to its parent branch leads to the next one. |
+| **Trusted author** | The author of a PR that comes from a branch of the repository itself, or a login in `PRREVIEW_GATE_TRUSTED_AUTHORS`. A PR that `prreview once --pr` names is reviewed as if its author were trusted. |
+| **Round** | One run of `pr-autoreview.sh`. It goes over every listed repo and reviews each PR from a trusted author whose head has no comment yet. The loop checks once a minute for open PRs that the reviewer would read (see [Whose PRs it reviews](#whose-prs-it-reviews)) and starts a round when it finds any. A fork PR that the reviewer skips does not count, unless `PRREVIEW_GATE_DISARM_AUTO_MERGE=1` and auto-merge is armed on it. A draft PR does not count, with the same exception. With none to review, the loop starts a round only on every 15th check. The loop's log counts checks, so `[round 12]` there is the 12th check, whether or not a round ran. For a single PR, "round 2" means the second verdict comment on it: a push, an edited title, description or base branch, or (for a stacked PR) a push to its parent branch leads to the next one. |
 | **Slice** | Part of a large diff, reviewed by its own model call (`PRREVIEW_GATE_CHUNK_*`). |
 | **Verdict** | The first line of the comment: ✅ Approved or ❌ Changes requested. It is text in a comment, not a GitHub review state. |
 | **Blocking finding** | A CRITICAL or HIGH finding that counts toward ❌ Changes requested. MEDIUM and LOW are listed without changing the verdict. |
@@ -323,7 +410,9 @@ export XDG_RUNTIME_DIR=/run/user/$(id -u) # in the reviewer's session
 ## Quick start
 
 > [!WARNING]
-> The first run reviews every open non-draft PR in each repo you list.
+> The first run reviews every open non-draft PR in each repo you list, except
+> PRs from forks whose author is not trusted (see
+> [Whose PRs it reviews](#whose-prs-it-reviews)).
 > Comments post as your own `gh` account unless you set up a
 > [GitHub App](#posting-as-a-github-app). Each push, each edit of a PR's
 > title, description or base branch, and each push to the parent branch of a
@@ -389,13 +478,15 @@ line. A value is taken literally: no quotes, nothing expanded. Run
 ### 3. Check that it works
 
 Once installed, the service looks for open PRs right away and reviews any it
-finds. With none open, it runs a round only every 15 minutes
-(`PRREVIEW_LOOP_IDLE_EVERY`), to catch PRs merged in the meantime. If you
-answered `n` at the service step, nothing reviews until you run
-`./prreview start`, `./prreview run` or `./prreview once`.
+finds from a trusted author. With no such PR open, it runs a round only every
+15 minutes (`PRREVIEW_LOOP_IDLE_EVERY`), to catch PRs merged in the meantime. An
+open fork PR that the reviewer skips does not start a round, and an open draft PR does not either. The exception is
+`PRREVIEW_GATE_DISARM_AUTO_MERGE=1` with auto-merge armed on the PR. If you answered `n`
+at the service step, nothing reviews until you run `./prreview start`,
+`./prreview run` or `./prreview once`.
 
 ```bash
-./prreview status    # the main settings, service state, the last log lines
+./prreview status    # the main settings, service state, skipped PRs, the last log lines
 ./prreview logs -f   # follow the background service
 ./prreview once      # run one round in this terminal
 ```
@@ -446,6 +537,7 @@ afterwards; a stopped service stays stopped.
 | `prreview checks add 50-migrations` | Write a new item and open it in `$EDITOR`; needs the copy of the checklist from setup step 9. An item left as the template is not added |
 | `prreview checks remove 50` | Delete an item from your copy |
 | `prreview once`, `prreview run` | One round, or the loop, in this terminal instead of the background service |
+| `prreview once --pr owner/repo#12` | Review that one PR now, a fork PR included (see [Whose PRs it reviews](#whose-prs-it-reviews)) |
 | `prreview stop`, `prreview start`, `prreview restart` | Control the background service; after `prreview stop` it stays off across reboots and logins until `prreview start` |
 | `prreview uninstall` | Remove the background service; settings stay (see [Removing it](#removing-it)) |
 
@@ -484,6 +576,11 @@ to take the new ones, since Enter declines. Setup then restarts the
 background service. The restart matters: each round runs the new `pr-autoreview.sh`,
 but the loop that starts the rounds keeps running the old code until it
 restarts. `./prreview restart` does only that step.
+
+After this upgrade, the reviewer skips PRs from forks unless the author is in
+`PRREVIEW_GATE_TRUSTED_AUTHORS`. A PR it already reviewed keeps its comment.
+`./prreview status` shows how many PRs the last round skipped, and
+`PRREVIEW_GATE_FORK_PRS=1` brings back the old behavior.
 
 Items your copy of the checklist already has keep their old wording. To see
 what a new version changed in them:
@@ -650,8 +747,10 @@ works in place of the loop, and a lock stops two rounds from overlapping.
   <img src="docs/images/round.svg" alt="Seven steps: pick, scan, build, slice, review, verify, post. Output that cannot be parsed or scanned is not posted." width="100%">
 </p>
 
-1. **Pick.** For each repo, list the open PRs that are not drafts and keep the
-   ones whose current head has no comment from this reviewer yet. The comment
+1. **Pick.** For each repo, list the open PRs with their authors in one call.
+   Keep the PRs from a trusted author that are not drafts and whose current
+   head has no comment from this reviewer yet. The job checks the author
+   again, with its own read of the PR, before any model call. The comment
    carries a hidden marker with the head SHA and a hash of the title,
    description and base branch (for a stacked PR, also the base commit), and
    only comments by the reviewer's own account count. A PR on hold after a
@@ -817,6 +916,9 @@ even when you run `prreview once` from a terminal. After moving a tool, run
 | Variable | Default | What it does |
 | --- | --- | --- |
 | `PRREVIEW_GATE_REPOS` | none (required) | Space-separated `owner/repo` list to review |
+| `PRREVIEW_GATE_TRUSTED_AUTHORS` | empty | Logins whose fork PRs are reviewed, separated by spaces or commas (see [Whose PRs it reviews](#whose-prs-it-reviews)) |
+| `PRREVIEW_GATE_FORK_PRS` | `0` | `1` reviews PRs from forks like any other PR |
+| `PRREVIEW_GATE_ONCE_WAIT` | `300` | Seconds that `prreview once --pr` waits for a running round. A whole number; `0` means do not wait |
 | `PRREVIEW_OWNER_LOGIN` | `gh api user` | The account whose marked comments count as this reviewer's own; with a GitHub App set, only the App's comments count |
 | `PRREVIEW_REVIEW_APP_ID` | empty | A GitHub App's ID; when set, comments are posted as the App (see [Posting as a GitHub App](#posting-as-a-github-app)) |
 | `PRREVIEW_REVIEW_APP_KEY` | empty | The App's private key file |
@@ -861,11 +963,11 @@ even when you run `prreview once` from a terminal. After moving a tool, run
 | `PRREVIEW_GATE_ISSUE_NOTE` | `0` | `1` adds a note when a PR links no issue |
 | `PRREVIEW_GATE_TICKETS` | `0` | `1` opens follow-up issues for some findings that do not block (see [Follow-up issues](#follow-up-issues)); the token then needs to open issues |
 | `PRREVIEW_GATE_ISSUE_MIN_SEVERITY` | `high` | Which of those findings get an issue: `critical`, `high`, `medium` or `low` |
-| `PRREVIEW_GATE_DISARM_AUTO_MERGE` | `0` | `1` turns off an auto-merge that was armed on a head the reviewer has not reviewed yet; the token then needs write access |
+| `PRREVIEW_GATE_DISARM_AUTO_MERGE` | `0` | `1` turns off an auto-merge that was armed on a head the reviewer has not reviewed yet, and on a PR it skips because of its author; the token then needs write access |
 | `PRREVIEW_ALERT_REPO` | empty | `owner/repo` where the loop opens an issue when a round fails, or when `pr-autoreview.sh` itself no longer parses (the token then needs to open issues there); empty only logs it. Use a private repository. Each alert issue records a time when the host was up. |
 | `PRREVIEW_ALERT_REPEAT_HOURS` | `6` | Hours between "Still failing" comments on an alert issue that is still open |
-| `PRREVIEW_LOOP_INTERVAL` | `60` | Seconds between the loop's checks for open PRs; a check that finds any starts a round |
-| `PRREVIEW_LOOP_IDLE_EVERY` | `15` | With no open PRs, start a round only on every this-many-th check |
+| `PRREVIEW_LOOP_INTERVAL` | `60` | Seconds between the loop's checks for open PRs; a check that finds any PR the reviewer would read starts a round |
+| `PRREVIEW_LOOP_IDLE_EVERY` | `15` | With no PR to review, start a round only on every this-many-th check |
 | `PRREVIEW_LOOP_ROUND_TIMEOUT` | `3900` | Seconds before the loop stops a round (see [When something fails](#when-something-fails)) |
 | `PRREVIEW_LOOP_ROUND_KILL_AFTER` | `60` | Seconds a round gets to exit after that before it is killed |
 | `PRREVIEW_LOOP_READY_FAIL_LIMIT` | `5` | Checks in a row that `pr-autoreview.sh` may fail to parse before the loop files an alert issue in `PRREVIEW_ALERT_REPO` |
@@ -922,7 +1024,7 @@ Who controls each input, and how the reviewer treats it:
 | Convention files: `CLAUDE.md`, `AGENTS.md`, `.claude/`, README, CONTRIBUTING, `.github/review-checks.md` | The PR's merge base. For a PR based on another branch, the default branch | Rules the review follows. A PR's edits to them are reverted before the review, when the file name matches in exact case |
 | The checklist, the settings, the sensitive-data patterns | You | Rules. They live outside the reviewed repo |
 | The model's answer | The model, after reading all of the above | Untrusted. Shape-checked, blocking findings argued against, scanned before it is posted |
-| Who can make it spend model budget | Anyone who can open a non-draft PR on a watched repo | The reviewer does not filter by author. Each push, each edit of the PR's title, description or base branch, and each push to the parent branch of a stacked PR, starts a new round that costs model usage |
+| Who can make it spend model budget | Anyone who can push a branch to a watched repo, and the logins in `PRREVIEW_GATE_TRUSTED_AUTHORS` | The reviewer skips a PR from a fork unless its author is trusted or you name the PR with `prreview once --pr`. For the PRs it reads, each push, each edit of the PR's title, description or base branch, and each push to the parent branch of a stacked PR, starts a new round that costs model usage |
 
 - **The PR is data.** The model reads the diff, the PR's title and
   description, and the repo's files with its read-only tools, and the prompt
@@ -1016,8 +1118,9 @@ The largest first round at the defaults can make up to 16 review calls, 6
 refutation calls and 1 repair call. No run measured what that round costs.
 Every push starts a new round, and so does an edit to the PR's title,
 description or base branch. For a stacked PR, so does a push to its parent
-branch. The reviewer does not filter PRs by author, so anyone who can open a
-non-draft PR on a watched repo can start these rounds.
+branch. The reviewer skips PRs from forks unless the author is trusted, so only
+people who can push to a watched repo, and the logins you list, can start
+these rounds.
 
 ## Development
 

@@ -248,6 +248,36 @@ prompt_head_handled() {
   grep -qF "${2-} $key" <<<"$bodies"
 }
 
+# 0 when $1 (the same output plus comments and reviews) holds a VERDICT from
+# one of the logins in $3 for key $4: its first line carries marker $2 and the
+# key, and it prints an approve or request_changes banner. A notice (title
+# reminder, sensitive-data notice, split request) carries the same marker and
+# no verdict banner, so it does not count. `prreview once --pr` uses this to
+# decide if the named PR was reviewed. The count is materialized, not piped
+# into `grep -q`, for the SIGPIPE reason given at HANDLED_BODIES.
+prompt_key_has_verdict() {
+  local n
+  [ -n "${4-}" ] || return 1
+  n="$(jq -r --arg allowed "${3-}" --arg m "<!-- ${2-}" --arg k "${4-}" '
+    ($allowed | split(" ") | map(select(length > 0))) as $ok
+    | [(.reviews // [])[], (.comments // [])[]
+       | select((((.author.login // "") | sub("^app/"; "") | sub("\\[bot\\]$"; "")) as $l
+                 | ($ok | index($l)) != null))
+       | select(((.body // "") | split("\n") | .[0]) | contains($m + " " + $k))
+       | select(((.body // "") | test("^<!-- [^ ]+ [^>]*('"$PROMPT_ROUND_SKIP_TAGS"')")) | not)
+       | select((.body // "") | test("'"$PROMPT_BANNER_RE"'['"$PROMPT_VERDICT_BANNERS"']"))]
+    | length' <<<"${1-}" 2>/dev/null)" || return 1
+  [ "${n:-0}" -gt 0 ] 2>/dev/null
+}
+
+# Same test from the PR fields: $1 = view JSON, $2 = marker, $3 = logins,
+# $4 = the default branch, as for prompt_head_handled.
+prompt_head_verdict() {
+  local key
+  key="$(prompt_review_key "${1-}" "${4-}")" && [ -n "$key" ] || return 1
+  prompt_key_has_verdict "${1-}" "${2-}" "${3-}" "$key"
+}
+
 # Logins of App accounts (app/<slug> or <slug>[bot]) that posted a body
 # whose first line carries $2 but are not in $3, space-separated,
 # deduplicated. The first line, as in prompt_gate_bodies: any bot that quotes

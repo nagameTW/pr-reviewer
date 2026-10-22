@@ -17,6 +17,7 @@ PRREVIEW_HOME="$(cd "$(dirname "$_src")" && pwd -P)"
 . "$PRREVIEW_HOME/lib/app.sh" || { echo "lib/app.sh missing" >&2; exit 1; }
 . "$PRREVIEW_HOME/lib/claude-call.sh" || { echo "lib/claude-call.sh missing" >&2; exit 1; }
 . "$PRREVIEW_HOME/lib/tools.sh" || { echo "lib/tools.sh missing" >&2; exit 1; }
+. "$PRREVIEW_HOME/lib/trust.sh" || { echo "lib/trust.sh missing" >&2; exit 1; }
 
 CONFIG="$(prreview_config_file)"
 STATE_DIR="$(prreview_state_dir)"
@@ -158,7 +159,7 @@ checked_value() { # <key> <value>; prints the value to store
     # The reviewer reads anything but 1 as off (PRREVIEW_GATE_SYMBOLS: anything but
     # 0 as on), and an unknown severity as high, each with no more than a log
     # line; say so here instead.
-    PRREVIEW_GATE_REDTEAM|PRREVIEW_GATE_TICKETS|PRREVIEW_GATE_TITLE_CHECK|PRREVIEW_GATE_ISSUE_NOTE|PRREVIEW_GATE_DISARM_AUTO_MERGE|PRREVIEW_GATE_VERIFY_LINES|PRREVIEW_GATE_SYMBOLS)
+    PRREVIEW_GATE_REDTEAM|PRREVIEW_GATE_TICKETS|PRREVIEW_GATE_TITLE_CHECK|PRREVIEW_GATE_ISSUE_NOTE|PRREVIEW_GATE_DISARM_AUTO_MERGE|PRREVIEW_GATE_VERIFY_LINES|PRREVIEW_GATE_SYMBOLS|PRREVIEW_GATE_FORK_PRS)
       case "$value" in 0|1) ;; *) die "$key takes 0 (off) or 1 (on)" ;; esac ;;
     PRREVIEW_GATE_ISSUE_MIN_SEVERITY)
       value="$(tr '[:upper:]' '[:lower:]' <<<"$value")"
@@ -544,14 +545,50 @@ cmd_run() {
   local own_log=""
   load_config; mkdir -p "$STATE_DIR"
   [ "${1-}" = --service ] && own_log="$LOG"
-  PRREVIEW_LOOP_LOG_FILE="$own_log" exec bash "$PRREVIEW_HOME/review-loop.sh" "$STATE_DIR/gate-logs"
+  # Only `prreview once --pr` names a PR, so a value in the environment is
+  # cleared here. Else the loop would name the same PR in every round.
+  PRREVIEW_ONCE_PR='' PRREVIEW_LOOP_LOG_FILE="$own_log" exec bash "$PRREVIEW_HOME/review-loop.sh" "$STATE_DIR/gate-logs"
 }
+# `--pr owner/repo#N` reviews that one PR, even a fork PR whose author is not
+# trusted. The reviewer reads PRREVIEW_ONCE_PR, checks it again, and waits for
+# a running round instead of exiting.
 cmd_once() {
+  local ref="" named=0 parsed listed
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --pr) [ $# -ge 2 ] || die "usage: prreview once --pr owner/repo#N"; ref="$2"; named=1; shift 2 ;;
+      *) die "usage: prreview once [--pr owner/repo#N]" ;;
+    esac
+  done
   load_config
   [ -n "${PRREVIEW_GATE_REPOS-}" ] || die "no repositories are set; run prreview setup first"
+  if [ "$named" = 1 ]; then
+    parsed="$(trust_parse_pr_ref "$ref")" || die "'$ref' is not a PR in the form owner/repo#N, for example owner/repo#12"
+    listed="$(trust_listed_repo "${parsed% *}" "$PRREVIEW_GATE_REPOS")" \
+      || die "${parsed% *} is not one of the repositories under review ($PRREVIEW_GATE_REPOS); 'prreview repos add' adds it"
+    ref="$listed#${parsed#* }"
+  fi
   # The locale the service runs it in (review-loop.sh), so a round run by
-  # hand cuts text by character too, not by byte.
-  exec env LC_ALL=C.UTF-8 LANG=C.UTF-8 bash "$PRREVIEW_HOME/pr-autoreview.sh"
+  # hand cuts text by character too, not by byte. PRREVIEW_ONCE_PR is set even
+  # when empty, so a value left in the caller's environment cannot name a PR.
+  exec env LC_ALL=C.UTF-8 LANG=C.UTF-8 PRREVIEW_ONCE_PR="$ref" bash "$PRREVIEW_HOME/pr-autoreview.sh"
+}
+
+# What the newest round log says the last round left unreviewed.
+# Trade-off: the count is as old as that log. With the service stopped, it
+# stays at the last round that ran.
+skipped_prs_line() {
+  local last n=0 fork
+  # An exported value wins over the settings file, as in a round
+  # (prreview_config_export). An exported empty value wins too.
+  fork="${PRREVIEW_GATE_FORK_PRS-$(setting PRREVIEW_GATE_FORK_PRS)}"
+  if [ "$fork" = 1 ]; then
+    echo "none, PRREVIEW_GATE_FORK_PRS=1 reviews fork PRs"
+    return 0
+  fi
+  last="$(ls -t "$STATE_DIR"/gate-logs/round-*.log 2>/dev/null | head -1)"
+  [ -z "$last" ] || n="$(trust_warning_count "$last")"
+  if [ "$n" -eq 0 ]; then echo 0; else echo "$n in the last round (fork PRs by authors who are not trusted; 'prreview once --pr owner/repo#N' reviews one)"; fi
 }
 
 cmd_status() {
@@ -565,6 +602,7 @@ cmd_status() {
   say "Model:        $(setting PRREVIEW_REVIEW_MODEL "$REVIEW_MODEL_DEFAULT (default)")"
   say "Checklist:    $(checks_dir)"
   say "Service:      $(prreview_service_state "$PLATFORM")"
+  say "Skipped PRs:  $(skipped_prs_line)"
   if [ -s "$LOG" ]; then say "Last lines of $LOG:"; tail -5 "$LOG" | sed 's/^/  /'; fi
 }
 
@@ -718,6 +756,7 @@ prreview: set up and run pr-reviewer
   prreview checks path           print the checklist directory in use
 
   prreview once                  review the open PRs one time, in this terminal
+  prreview once --pr <o/r#N>     review one PR now, a fork PR included
   prreview run                   the loop, in this terminal (what the service runs)
   prreview start | stop | restart | uninstall
 EOF
@@ -730,7 +769,7 @@ esac
 case "${1-help}" in
   setup) cmd_setup ;;
   run) shift; cmd_run "$@" ;;
-  once) cmd_once ;;
+  once) shift; cmd_once "$@" ;;
   status) cmd_status ;;
   logs) shift; cmd_logs "$@" ;;
   repos) shift; cmd_repos "$@" ;;
