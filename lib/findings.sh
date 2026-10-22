@@ -1118,7 +1118,7 @@ You are the second round of an automated review gate for $repo, PR #$pr. A first
 review reported the finding quoted below at $severity, which $FINDINGS_BLOCKS_MERGE. Your job is
 to try to REFUTE it by reading the actual code, not to agree with it.
 
-The full diff of this PR is in $diff — Read it FIRST. $tree_para A diff line that starts with NEW[n] is line n of the file after this change. Line n is not the number that Read prints in front of the line. A NEW[-] line was removed.
+The full diff of this PR is in $diff — Read it FIRST. $tree_para A diff line that starts with NEW[n] is line n of the file after this change. Line n is not the number that Read prints in front of the line. A NEW[-] line was removed. If the diff lines have no labels, count the new-side line from the hunk header "@@ -a,b +c,d @@": the first line of the hunk is line c, and each context line and each added line adds one.
 
 If the finding cites a file the diff does not touch at all, it may still be right: a change
 breaks its callers, leaves a doc stale, or needs an existing guard that is missing.

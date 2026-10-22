@@ -237,7 +237,8 @@ pin    'the review prompt puts the read rule right after the first Read instruct
 # The line moves only when it is wrong (lib/prompt.sh says the same). The slice
 # merge keys a carried finding without its line (tests/chunk.test.sh).
 pin    'the carry rule keeps the line unless it is wrong' 'Never reword or re-rate a carried finding. Keep its line. Change the line only when the old one is wrong: past the end of the file, or not the NEW[...] line of the code the finding names (if the diff has no labels, the new-side line counted from the hunk header). Then give that line of the code.' pr-autoreview.sh
-pin    'a slice keeps the quoted line of a finding in another slice' 'Keep its line too, unless the line is past the end of that file.' pr-autoreview.sh
+pin    'a slice keeps the quoted line of a finding in another slice' 'Keep its line too. Change the line only when the old one is wrong, as in duty (a): past the end of the file, or not the NEW[...] line of the code the finding names (if the diff has no labels, the new-side line counted from the hunk header).' pr-autoreview.sh
+pin    'a slice moves the line of a finding outside its slice only past the end of that file' 'for a file outside your slice change the line only when it is past the end of that file' pr-autoreview.sh
 if grep -qF 'Never reword, re-anchor, or re-rate' pr-autoreview.sh; then bad 'no rule forbids re-anchoring a carried finding' 'the old sentence is still in pr-autoreview.sh'; else ok 'no rule forbids re-anchoring a carried finding'; fi
 pin    'the structural repair gets the same definition' 'findings_repair_prompt "$OUT" "$REVIEW_SCHEMA" "$REVIEW_LINE_SPEC")"' pr-autoreview.sh
 
