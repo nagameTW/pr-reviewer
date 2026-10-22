@@ -25,7 +25,7 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="../images/round-zh-dark.svg">
-  <img src="../images/round-zh.svg" alt="一輪審查的七步驟流程圖。步驟 1 到 4 不呼叫模型。步驟 1 Pick：選出目前 head 尚無留言的開啟中 PR，略過來自不受信任作者的 fork PR。若 head 未變，且上一則審查留言距今不到 10 分鐘，該輪等待。編輯標題、描述或 base，以及推送到堆疊式 PR 的父分支，會造成這種等待。推送到 PR 分支從不等待。步驟 2 Scan：以 sensitive-patterns 檔比對標題、描述與關聯 issue。若命中或掃描無法執行，貼出不含命中內容的 Review withheld 通知，不審查該 PR。步驟 3 Build：組合 merge base 與 PR diff，另加入取自預設分支的審查規則檔。變更超過 2000 行或 40 個檔案的 PR 會收到拆分請求，不予審查，不受大小限制的 PR 除外。步驟 4 Slice：切成約 250 行的 diff 區段，最多 8 個。步驟 5 Review：Claude Code 讀取 worktree。步驟 6 Verify：捨棄引用不存在檔案的問題。每個會擋下核准的問題再呼叫一次模型，請他再次檢查是否誤判。步驟 7 Post：讓模型文字中的特殊文字失效，留言比對 sensitive-patterns 檔後，貼出一則留言。無法解析的輸出不貼出。" width="640">
+  <img src="../images/round-zh.svg" alt="一輪審查的七步驟流程圖。步驟 1 到 4 不呼叫模型。步驟 1 Pick：選出目前 head 尚無留言的開啟中 PR，略過來自不受信任作者的 fork PR。若 head 未變，且上一則審查留言距今不到 10 分鐘，該輪等待。編輯標題、描述或 base，以及推送到堆疊式 PR 的父分支，會造成這種等待。推送到 PR 分支從不等待。步驟 2 Scan：以 sensitive-patterns 檔比對標題、描述與關聯 issue。若命中或掃描無法執行，貼出不含命中內容的 Review withheld 通知，不審查該 PR。步驟 3 Build：組合 merge base 與 PR diff，另加入取自預設分支的審查規則檔。變更超過 2000 行或 40 個檔案的 PR 會收到拆分請求，不予審查，不受大小限制的 PR 除外。語系資料檔不計入 40 個檔案，仍會完整審查。步驟 4 Slice：切成約 250 行的 diff 區段，最多 8 個。步驟 5 Review：Claude Code 讀取 worktree。步驟 6 Verify：捨棄引用不存在檔案的問題。每個會擋下核准的問題再呼叫一次模型，請他再次檢查是否誤判。步驟 7 Post：讓模型文字中的特殊文字失效，留言比對 sensitive-patterns 檔後，貼出一則留言。無法解析的輸出不貼出。" width="640">
 </picture>
 
 </details>

@@ -189,7 +189,9 @@ reads the settings named `PRREVIEW_LOOP_*`. It starts the rounds.
      [When something fails](#when-something-fails)).
 4. **Slice.** Cut a diff of more than 300 lines by file into slices of about 250
    lines. A round has at most 8 slices. A PR over 2000 changed lines or 40 files
-   gets a "please split" comment and no review. Three exceptions apply:
+   gets a "please split" comment and no review. Localization data files do not
+   count toward the 40 files, and they are still reviewed in full. The list is
+   in [How it reviews](how-it-reviews.md). Three exceptions apply:
    - At least 90% of the changed lines are deletions.
    - The PR touches only lock files, generated code, snapshots or migrations.
    - Its description has a paragraph that starts with `split-exempt:` and says
@@ -221,6 +223,10 @@ verdict and do not block. Two kinds of HIGH finding are listed and do not block:
 - On any PR, a HIGH finding that the model tags as wording, judgment or a
   half-finished fix. The comment shows it as MEDIUM, with its original severity
   next to it.
+
+When two or more findings that do not block are about tests, conventions,
+wording, process or a doc for maintainers or team members, the comment lists them as one item,
+`Tests, docs and process (N)`. A HIGH finding is never in this item.
 
 "Block" here only decides the verdict. The reviewer itself never stops a merge.
 

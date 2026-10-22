@@ -20,6 +20,56 @@
 # shellcheck disable=SC2034  # read by pr-autoreview.sh
 SPLIT_EXEMPT_RE_DEFAULT='(^|/)(package-lock\.json|yarn\.lock|pnpm-lock\.yaml|poetry\.lock|Pipfile\.lock|Cargo\.lock|go\.sum|uv\.lock|composer\.lock)$|\.gen\.(ts|js|py|go)$|\.snap$|(^|/)migrations/|(^|/)(generated|__generated__|dist|build|vendor)/'
 
+# Localization data files do not count toward the file ceiling. A translation
+# bot or a new language can touch dozens of them, and each one is a flat list
+# of strings the author did not shape. They are still reviewed in full: this
+# only changes the number compared with the ceiling, never the diff, the
+# slices or the file list. A translated string can carry HTML, so these files
+# are a way in for XSS and are not skipped.
+# Three rules, all exact:
+#   1. A data extension (json, yml, yaml, properties, toml) under a directory
+#      named as a WHOLE path segment: locale(s), i18n, l10n, translation(s).
+#      `mylocales/`, `locales-old/` and `language/` do not match.
+#   2. The same extensions under `messages` or `lang`, only when the base name
+#      carries a locale code: it is a code (`en.json`, `pt-BR.json`) or
+#      `messages` then _<code> or .<code> (`messages_de.properties`,
+#      `messages.fr.yaml`). These two names also hold plain data such as
+#      `api/messages/user-created.json` and `messages/user_id.json`.
+#      A code is an ISO 639-1 two-letter language code, then optionally [-_]
+#      and a region (2 capital letters, `BR`), a script (capital then 3
+#      lowercase letters, `Hant`) or a 3-digit region. So `to-user.json`
+#      and `no_op.yml` count, and so does a lowercase region (`zh_tw.json`).
+#      Three-letter codes (`fil`) are not accepted: `go`, `new` and `dev` are
+#      not codes either, so `lang/go.toml` and `api/messages/new-item.json`
+#      count.
+#   3. An extension used only for translations, in any directory.
+# Source files always count, even in these directories (`i18n/Foo.java`).
+# Trade-off: a bare file named with a code, such as `messages/id.json`, still
+#   counts as a translation and does not count toward the limit. It is still
+#   reviewed.
+# Any other layout is the author's to explain with `split-exempt:`.
+# ISO 639-1 language codes, 184 entries including the retired `sh`. Source:
+# the alpha_2 column of iso-codes 4.16 (iso_639-3.json), which tracks the
+# ISO 639-1 registry kept by the Library of Congress.
+# shellcheck disable=SC2034  # read by SPLIT_L10N_RE
+SPLIT_ISO639_1='aa|ab|ae|af|ak|am|an|ar|as|av|ay|az|ba|be|bg|bi|bm|bn|bo|br|bs|ca|ce|ch|co|cr|cs|cu|cv|cy|da|de|dv|dz|ee|el|en|eo|es|et|eu|fa|ff|fi|fj|fo|fr|fy|ga|gd|gl|gn|gu|gv|ha|he|hi|ho|hr|ht|hu|hy|hz|ia|id|ie|ig|ii|ik|io|is|it|iu|ja|jv|ka|kg|ki|kj|kk|kl|km|kn|ko|kr|ks|ku|kv|kw|ky|la|lb|lg|li|ln|lo|lt|lu|lv|mg|mh|mi|mk|ml|mn|mr|ms|mt|my|na|nb|nd|ne|ng|nl|nn|no|nr|nv|ny|oc|oj|om|or|os|pa|pi|pl|ps|pt|qu|rm|rn|ro|ru|rw|sa|sc|sd|se|sg|sh|si|sk|sl|sm|sn|so|sq|sr|ss|st|su|sv|sw|ta|te|tg|th|ti|tk|tl|tn|to|tr|ts|tt|tw|ty|ug|uk|ur|uz|ve|vi|vo|wa|wo|xh|yi|yo|za|zh|zu'
+# shellcheck disable=SC2034  # read by split_l10n_file_count
+SPLIT_L10N_RE='(^|/)(locales?|i18n|l10n|translations?)/(.*/)?[^/]+\.(json|ya?ml|properties|toml)$|(^|/)(messages|lang)/(.*/)?(messages[._])?('"$SPLIT_ISO639_1"')([-_]([A-Z]{2}|[A-Z][a-z]{3}|[0-9]{3}))?\.(json|ya?ml|properties|toml)$|\.(po|pot|xlf|xliff|arb|resx|strings|stringsdict)$'
+
+# $1 newline-separated file list. Prints how many files match SPLIT_L10N_RE.
+split_l10n_file_count() {
+  printf '%s\n' "${1-}" | grep '[^[:space:]]' | grep -cE -- "$SPLIT_L10N_RE"
+  return 0
+}
+
+# $1 file list. Prints the number of files that count toward the file ceiling.
+split_gate_file_count() {
+  local total l10n
+  total="$(printf '%s\n' "${1-}" | grep -c '[^[:space:]]' || true)"
+  l10n="$(split_l10n_file_count "${1-}")"
+  printf '%s\n' $((total - l10n))
+}
+
 # $1 additions, $2 deletions. Deletions are 90% or more of the change: a
 # removal is reviewed for what it takes away, and that does not get harder
 # with size the way new code does.
@@ -93,13 +143,16 @@ split_group_suggestion() {
 }
 
 # $1 changed lines, $2 file count, $3 line ceiling, $4 file ceiling, $5 file
-# list. The request body, minus the marker/banner the caller adds. Fixed
+# list, $6 how many of the files are localization data files (default 0).
+# The request body, minus the marker/banner the caller adds. Fixed
 # wording on purpose: whoever reads it, a person or an agent, has one
 # sentence to find, the `split-exempt:` escape hatch.
 split_request_text() {
-  local lines="${1:-0}" nfiles="${2:-0}" maxl="${3:-0}" maxf="${4:-0}" files="${5-}" groups
+  local lines="${1:-0}" nfiles="${2:-0}" maxl="${3:-0}" maxf="${4:-0}" files="${5-}" skipped="${6:-0}" groups l10n_note=""
+  case "$skipped" in ''|*[!0-9]*) skipped=0 ;; esac
+  [ "$skipped" -gt 0 ] && l10n_note=" Of the ${nfiles} files, ${skipped} are localization data files: they do not count toward the file limit and are still reviewed."
   groups="$(split_group_suggestion "$files")"
-  printf '%s\n' "This PR changes ${lines} lines across ${nfiles} files, which is more than one review pass can check reliably (${maxl} lines or ${maxf} files): the larger the diff, the smaller the share of problems a single pass catches. This round did **not** review it. Please split it into several PRs that can each merge on their own, and open each one for review.
+  printf '%s\n' "This PR changes ${lines} lines across ${nfiles} files, which is more than one review pass can check reliably (${maxl} lines or ${maxf} files): the larger the diff, the smaller the share of problems a single pass catches.${l10n_note} This round did **not** review it. Please split it into several PRs that can each merge on their own, and open each one for review.
 
 Suggested split (grouped by directory, largest first):
 ${groups:-  - (the file list could not be read)}

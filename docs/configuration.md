@@ -43,7 +43,7 @@ Settings come from two layers. The first layer is a config file. The second laye
 | `PRREVIEW_GATE_CHUNK_TARGET_LINES` | `250` | Target lines for each slice |
 | `PRREVIEW_GATE_CHUNK_MAX` | `8` | Most slices for each PR |
 | `PRREVIEW_GATE_MAX_REVIEW_LINES` | `2000` | Above this many changed lines, the reviewer asks for a split and does not review |
-| `PRREVIEW_GATE_MAX_REVIEW_FILES` | `40` | The same ceiling in files |
+| `PRREVIEW_GATE_MAX_REVIEW_FILES` | `40` | The same ceiling in files. Localization data files do not count. They are still reviewed (see [How one round works](operations.md#how-one-round-works)) |
 | `PRREVIEW_GATE_SPLIT_EXEMPT_RE` | lock files, `*.gen.ts`, `*.gen.js`, `*.gen.py`, `*.gen.go`, `*.snap`, `migrations/`, `generated/`, `__generated__/`, `dist/`, `build/`, `vendor/` | Extended regex for paths that count as generated. A PR over the ceiling is reviewed, and not asked to split, when every file matches |
 | `PRREVIEW_GATE_FILE_CAP` | `7` | Most findings shown for one file. Blocking and non-blocking findings count separately. The rest fold into one line that still counts toward the verdict. `0` shows all |
 | `PRREVIEW_GATE_COACH_MAX_LINES` | `300` | From this many changed lines, a HIGH finding about tests, conventions, wording or process no longer blocks (see [How one round works](operations.md#how-one-round-works)) |

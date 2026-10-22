@@ -38,6 +38,14 @@ All notable changes to this project are recorded here. The format follows
 
 ### Changed
 
+- The comment lists the findings that do not block and are about tests,
+  conventions, wording, process, or a doc for maintainers or team members as
+  one item, `Tests, docs and process (N)`, when there are two or more. The
+  item holds one line for each finding with its severity, `path:line` and
+  issue. A HIGH finding, a finding that blocks, and a doc finding for
+  operators or users stay on their own lines. Only the display changes. The
+  count, the verdict, the follow-up tickets and the files that the next round
+  reads are the same as before.
 - `checks/02-security.md` states CC BY 3.0 for the OWASP Top 10:2025 page. It
   said CC BY-SA 4.0.
 - `tests/run-all.sh` fails when `shellcheck` is not installed. It used to
@@ -152,6 +160,13 @@ All notable changes to this project are recorded here. The format follows
 
 ### Fixed
 
+- Localization data files no longer count toward the 40-file limit that
+  triggers a split request. They are `.json`, `.yml`, `.yaml`, `.properties`
+  and `.toml` files under a directory such as `locales` or `i18n`, or under `messages` or
+  `lang` when the file name is an ISO 639-1 language code (`en.json`) or `messages`
+  and a code (`messages_de.properties`), and files with a translation extension such as `.po` or `.xlf`. The
+  reviewer still reads them in full, and the split request tells the author
+  how many files it left out of the count. Source files always count.
 - Every `prreview` command except `set` rejects an argument it does not take.
   It prints `unknown argument: X` and the usage line of that command, exits
   with code 2, and changes nothing. Before, `prreview uninstall --help` removed the

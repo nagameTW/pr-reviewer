@@ -1481,6 +1481,60 @@ FINDINGS_FILE_CAP_JQ="def rank: (($FINDINGS_SEVERITY_JQ) as \$s | if \$s == \"CR
           end)
     | add // [] | sort_by(.idx_) | map(del(.idx_)))"
 
+# ── one list item for the non-product findings that do not block ──────────
+#
+# A PR can collect many findings about tests, docs, conventions, wording and
+# process. They do not block and they are not product defects, so the comment
+# lists them as ONE item with one sub-item each, behind the same fold as the
+# other non-blocking findings. This is a render-time grouping and nothing
+# else: CLEANED, the tally, the verdict, the refutation pass, the tickets and
+# the next round's carry-over all read the ungrouped list.
+#
+# Which finding joins. All four hold:
+#   - the blocking rule (FINDINGS_IS_BLOCKING_JQ) says it does not block;
+#   - its severity is MEDIUM or LOW, so a HIGH never joins, in gatekeeper mode
+#     too (a HIGH about tests that does not block still stands on its own line);
+#   - its area is test, convention, wording or process, or doc with the
+#     audience maintainer or member (operators and users act on a doc, so a
+#     doc written for them is a product defect);
+#   - no rule has rewritten it: a finding the convergence cap demoted keeps its
+#     own line and its note, and the per-file fold line is not a finding.
+# A finding with no area, or an area that is off the list, normalises to
+# correctness and stays out.
+# shellcheck disable=SC2034  # read by findings_render_soft and the tests
+FINDINGS_GROUPABLE_JQ="(type == \"object\")
+  and ((($FINDINGS_IS_BLOCKING_JQ)) | not)
+  and ((.capped // null) == null)
+  and ((($FINDINGS_SEVERITY_JQ) as \$sev | (\$sev == \"MEDIUM\" or \$sev == \"LOW\")))
+  and (($FINDINGS_AREA_JQ) as \$area | ($FINDINGS_AUDIENCE_JQ) as \$aud
+       | ([\"test\", \"convention\", \"wording\", \"process\"] | index(\$area)) != null
+         or (\$area == \"doc\" and (\$aud == \"maintainer\" or \$aud == \"member\")))"
+
+FINDINGS_GROUP_TITLE='Tests, docs and process'
+
+# Reads a cleaned review on stdin and prints the non-blocking half of the
+# comment. With two or more groupable findings it prints the other findings
+# first, then one item titled "Tests, docs and process (N)" with one nested
+# sub-item per finding (the same render as FINDINGS_RENDER_JQ, indented two
+# spaces, so the line, its tail and its nested details are unchanged). With
+# fewer than two, the output is exactly the plain render. Any jq failure falls
+# back to the plain render: showing every finding beats a tidy list.
+findings_render_soft() {
+  local cleaned soft n rest grp
+  cleaned="$(cat)"
+  soft="$(jq -c --argjson blocking false "$FINDINGS_PARTITION_JQ" <<<"$cleaned" 2>/dev/null)" || return 0
+  n="$(jq -r "[.findings[]? | select($FINDINGS_GROUPABLE_JQ)] | length" <<<"$soft" 2>/dev/null)"
+  case "$n" in ''|*[!0-9]*) n=0 ;; esac
+  if [ "$n" -lt 2 ] \
+     || ! rest="$(jq -c ".findings |= map(select(($FINDINGS_GROUPABLE_JQ) | not))" <<<"$soft" 2>/dev/null | jq -r "$FINDINGS_RENDER_JQ" 2>/dev/null)" \
+     || ! grp="$(jq -c ".findings |= map(select($FINDINGS_GROUPABLE_JQ))" <<<"$soft" 2>/dev/null | jq -r "$FINDINGS_RENDER_JQ" 2>/dev/null | sed 's/^\(.\)/  \1/')"; then
+    jq -r "$FINDINGS_RENDER_JQ" <<<"$soft" 2>/dev/null
+    return 0
+  fi
+  [ -z "$rest" ] || printf '%s\n' "$rest"
+  printf '%s\n%s\n' "- **$FINDINGS_GROUP_TITLE ($n)**" "$grp"
+}
+
 # The folded line is not a finding of its own: it never earns a ticket
 # (FINDINGS_TICKET_RANK_JQ ranks capped:"file-cap" 0) and blocks exactly as
 # the first finding it stands in for would.

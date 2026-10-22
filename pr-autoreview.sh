@@ -1414,8 +1414,12 @@ the default branch. Edit the title and it is checked again automatically."
   # change this size (merge_size_allowed carries the evidence).
   SIZE=$(( $(jq -r '.additions // 0' <<<"$INFO") + $(jq -r '.deletions // 0' <<<"$INFO") ))
   PR_FILE_COUNT="$(grep -c '' <<<"$PR_FILES")"
+  # Localization data files stay in PR_FILES and are reviewed in full; only
+  # the count compared with the file ceiling leaves them out (lib/split.sh).
+  L10N_FILE_COUNT="$(split_l10n_file_count "$PR_FILES")"
+  GATE_FILE_COUNT="$(split_gate_file_count "$PR_FILES")"
   SPLIT_EXEMPT=""
-  if ! merge_size_allowed "$SIZE" "$PR_FILE_COUNT" \
+  if ! merge_size_allowed "$SIZE" "$GATE_FILE_COUNT" \
        "$GATE_MAX_REVIEW_LINES" "$GATE_MAX_REVIEW_FILES"; then
     if SPLIT_EXEMPT="$(split_exempt_reason "$(jq -r '.additions // 0' <<<"$INFO")" \
                           "$(jq -r '.deletions // 0' <<<"$INFO")" "$PR_FILES" \
@@ -1438,10 +1442,10 @@ the default branch. Edit the title and it is checked again automatically."
         BODY="$(jq -r '.body' <<<"$SPLIT_PARKED")"
         echo "PR #$PR: re-posting the split request an earlier round already built"
       else
-        SPLIT_TEXT="$(split_request_text "$SIZE" "$PR_FILE_COUNT" "$GATE_MAX_REVIEW_LINES" "$GATE_MAX_REVIEW_FILES" "$PR_FILES")"
+        SPLIT_TEXT="$(split_request_text "$SIZE" "$PR_FILE_COUNT" "$GATE_MAX_REVIEW_LINES" "$GATE_MAX_REVIEW_FILES" "$PR_FILES" "$L10N_FILE_COUNT")"
         if scan_hit_or_unknown "$PATS_FILE" "$SPLIT_TEXT"; then
           echo "PR #$PR: split request matched sensitive patterns (or the scan could not run) — posting it without the file grouping"
-          SPLIT_TEXT="$(split_request_text "$SIZE" "$PR_FILE_COUNT" "$GATE_MAX_REVIEW_LINES" "$GATE_MAX_REVIEW_FILES" "")"
+          SPLIT_TEXT="$(split_request_text "$SIZE" "$PR_FILE_COUNT" "$GATE_MAX_REVIEW_LINES" "$GATE_MAX_REVIEW_FILES" "" "$L10N_FILE_COUNT")"
         fi
         SPLIT_BANNER="
 > **Automated review: ❌ Please split**"
@@ -2847,8 +2851,10 @@ $SLICE_CLEAN"
   fi
   FINDINGS="$(jq -c --argjson blocking true "$FINDINGS_PARTITION_JQ" <<<"$CLEANED" \
               | jq -r "$FINDINGS_RENDER_JQ")"
-  SOFT_FINDINGS="$(jq -c --argjson blocking false "$FINDINGS_PARTITION_JQ" <<<"$CLEANED" \
-                   | jq -r "$FINDINGS_RENDER_JQ")"
+  # Display only: two or more non-product findings that do not block are
+  # listed as one item (findings_render_soft). N_SOFT below and every reader
+  # of CLEANED still see each finding.
+  SOFT_FINDINGS="$(findings_render_soft <<<"$CLEANED")"
   N_SOFT="$(jq -r --argjson blocking false \
             "$FINDINGS_PARTITION_JQ | [.findings[]?] | length" <<<"$CLEANED")"
 

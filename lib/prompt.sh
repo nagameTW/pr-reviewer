@@ -368,7 +368,9 @@ prompt_last_reviewed_head() {
 # deduped. The late-finding rule must not demote a CARRIED finding — a
 # blocker re-raised because the author has not fixed it — and "the file was
 # already on the table" is the mechanical form of that. Two line shapes are
-# parsed: the one FINDINGS_RENDER_JQ emits (`- **SEV** path:...`) and the
+# parsed: the one FINDINGS_RENDER_JQ emits (`- **SEV** path:...`, also at
+# two spaces of indent, where findings_render_soft nests the findings it lists
+# under its "Tests, docs and process" item) and the
 # refuted-blocker line the harness assembles (`- ~~**SEV path:...**`) —
 # a file whose only prior mention was a refuted finding is still a file the
 # gate has looked at, and a DIFFERENT new blocker on it must not be
@@ -387,8 +389,8 @@ prompt_prior_cited_files() {
   jq -r --arg m "${2-}" --arg allowed "${3-}" \
       "$PROMPT_REAL_REVIEWS_JQ"' | map(.body) | join("\n")' \
       <<<"${1-}" 2>/dev/null \
-    | grep -oE '^- (\*\*(CRITICAL|HIGH|MEDIUM|LOW)\*\* |~~\*\*(CRITICAL|HIGH) )[^:[:space:]]+:' \
-    | sed -E 's/^- \*\*(CRITICAL|HIGH|MEDIUM|LOW)\*\* //; s/^- ~~\*\*(CRITICAL|HIGH) //; s|^\./||; s/:$//' | sort -u
+    | grep -oE '^( {2})?- (\*\*(CRITICAL|HIGH|MEDIUM|LOW)\*\* |~~\*\*(CRITICAL|HIGH) )[^:[:space:]]+:' \
+    | sed -E 's/^( {2})?- \*\*(CRITICAL|HIGH|MEDIUM|LOW)\*\* //; s/^( {2})?- ~~\*\*(CRITICAL|HIGH) //; s|^\./||; s/:$//' | sort -u
 }
 
 # The last VERDICT-shaped gate body on a PR — any verdict banner, ⛔

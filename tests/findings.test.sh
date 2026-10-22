@@ -1721,4 +1721,73 @@ VF_AT="$(grep -n '^  VERIFIED_OUT=""' pr-autoreview.sh | head -1 | cut -d: -f1)"
 RT_AT="$(grep -n 'RT_MERGED="$(jq' pr-autoreview.sh | head -1 | cut -d: -f1)"
 if [ -n "$CL_AT" ] && [ -n "$VF_AT" ] && [ -n "$RT_AT" ] && [ "$RT_AT" -lt "$CL_AT" ] && [ "$CL_AT" -lt "$VF_AT" ]; then ok '...after the red team merge and before the second-round verification'; else bad '...after the red team merge and before the second-round verification' 'red team < clamp < verify' "rt=$RT_AT clamp=$CL_AT verify=$VF_AT"; fi
 
+# ── one list item for the non-product findings that do not block ──────────
+# Render time only: CLEANED, the tally and the verdict never see the group.
+GRP_IN='{"verdict":"request_changes","findings":[
+  {"severity":"MEDIUM","file":"src/a.py","line":1,"area":"correctness","issue":"Product defect one. More detail."},
+  {"severity":"MEDIUM","file":"tests/t_a.py","line":2,"area":"test","issue":"Test gap for a."},
+  {"severity":"LOW","file":"docs/guide.md","line":3,"area":"doc","audience":"maintainer","issue":"Doc drifted. Second sentence for details."},
+  {"severity":"MEDIUM","file":"src/b.py","line":4,"area":"security","issue":"Product defect two."},
+  {"severity":"LOW","file":"ci.yml","line":5,"area":"process","issue":"Process note."}]}'
+GRP_OUT="$(findings_render_soft <<<"$GRP_IN")"
+GRP_HEADS="$(grep -n -E '^- \*\*|^  - \*\*' <<<"$GRP_OUT" | cut -d: -f2- | cut -c1-60)"
+is 'group: product findings first, then one titled item, then its sub-items' \
+   "$GRP_HEADS" "$(printf '%s\n' '- **MEDIUM** src/a.py:1 — Product defect one.' '- **MEDIUM** src/b.py:4 — Product defect two.' '- **Tests, docs and process (3)**' '  - **MEDIUM** tests/t_a.py:2 — Test gap for a.' '  - **LOW** docs/guide.md:3 — Doc drifted.' '  - **LOW** ci.yml:5 — Process note.')"
+is 'group: the title appears once' "$(grep -c 'Tests, docs and process' <<<"$GRP_OUT")" 1
+contains 'group: a sub-item keeps its details in a nested fold' "$GRP_OUT" '    <details><summary>Details</summary>'
+contains 'group: the nested details hold the rest of the issue' "$GRP_OUT" 'Second sentence for details.'
+is 'group: every line of a sub-item sits under the title (no unindented sub-item text)' \
+   "$(sed -n '/Tests, docs and process/,$p' <<<"$GRP_OUT" | tail -n +2 | grep -c -v -E '^$|^  ')" 0
+is 'group: N_SOFT is the count of every soft finding, group included' \
+   "$(jq -r --argjson blocking false "$FINDINGS_PARTITION_JQ | [.findings[]?] | length" <<<"$GRP_IN")" 5
+is 'group: the rendered finding lines equal N_SOFT' "$(grep -c -E '^(  )?- \*\*(CRITICAL|HIGH|MEDIUM|LOW)\*\* ' <<<"$GRP_OUT")" 5
+is 'group: the blocking count does not change' "$(jq -r "$FINDINGS_BLOCKING_COUNT_JQ" <<<"$GRP_IN")" 0
+is 'group: the verdict still resolves from the unchanged counts (request_changes with no blocker and 5 findings approves)' \
+   "$(findings_resolve_verdict request_changes "$(jq -r "$FINDINGS_BLOCKING_COUNT_JQ" <<<"$GRP_IN")" "$(jq -r '[.findings[]?] | length' <<<"$GRP_IN")" 0 0)" approve
+GRP_ONE='{"findings":[
+  {"severity":"MEDIUM","file":"src/a.py","line":1,"area":"correctness","issue":"Product defect."},
+  {"severity":"MEDIUM","file":"tests/t_a.py","line":2,"area":"test","issue":"Test gap."}]}'
+is 'group: a single candidate renders exactly as before' \
+   "$(findings_render_soft <<<"$GRP_ONE")" "$(jq -c --argjson blocking false "$FINDINGS_PARTITION_JQ" <<<"$GRP_ONE" | jq -r "$FINDINGS_RENDER_JQ")"
+is 'group: no soft finding renders nothing' "$(findings_render_soft <<<'{"findings":[{"severity":"HIGH","file":"a","line":1,"issue":"x"}]}')" ''
+is 'group: an input that is not a review renders nothing and succeeds' "$(findings_render_soft <<<'not json'; echo "rc=$?")" 'rc=0'
+GRP_ONLY='{"findings":[
+  {"severity":"MEDIUM","file":"tests/t_a.py","line":2,"area":"test","issue":"Test gap."},
+  {"severity":"LOW","file":"README.md","line":3,"area":"doc","audience":"member","issue":"Readme drifted."}]}'
+is 'group: with nothing else the title leads the list' "$(findings_render_soft <<<"$GRP_ONLY" | head -1)" '- **Tests, docs and process (2)**'
+
+# The predicate: the real blocking rule decides, severity HIGH never joins.
+grp_files() { jq -r "[.findings[] | select($FINDINGS_GROUPABLE_JQ) | .file] | join(\",\")" <<<"$1"; }
+EDGE='{"findings":[
+  {"severity":"MEDIUM","file":"t1","area":"test"},
+  {"severity":"LOW","file":"c1","area":"convention"},
+  {"severity":"LOW","file":"w1","area":"wording"},
+  {"severity":"MEDIUM","file":"p1","area":"process"},
+  {"severity":"MEDIUM","file":"dm","area":"doc","audience":"maintainer"},
+  {"severity":"MEDIUM","file":"dt","area":"doc","audience":"member"},
+  {"severity":"MEDIUM","file":"do","area":"doc","audience":"operator"},
+  {"severity":"MEDIUM","file":"du","area":"doc","audience":"user"},
+  {"severity":"MEDIUM","file":"dn","area":"doc"},
+  {"severity":"HIGH","file":"h1","area":"test","coach":false},
+  {"severity":"HIGH","file":"h2","area":"test","coach":true},
+  {"severity":"CRITICAL","file":"k1","area":"process"},
+  {"severity":"MEDIUM","file":"s1","area":"security"},
+  {"severity":"MEDIUM","file":"x1"},
+  {"severity":"MEDIUM","file":"x2","area":"nonsense"},
+  {"severity":"BLOCKER","file":"b1","area":"test"},
+  {"file":"n1","area":"test"},
+  {"severity":" medium ","file":"t2","area":" TEST "},
+  {"severity":"MEDIUM","file":"cp","area":"test","capped":"late","orig_severity":"HIGH"},
+  {"severity":"MEDIUM","file":"ff","area":"test","capped":"file-cap","line":"…"}]}'
+is 'predicate: test, convention, wording, process and maintainer/member docs join' \
+   "$(grp_files "$EDGE")" 't1,c1,w1,p1,dm,dt,t2'
+is 'predicate: a HIGH never joins, blocking or not' "$(grp_files '{"findings":[{"severity":"HIGH","file":"h","area":"test","coach":false},{"severity":"HIGH","file":"d","area":"doc","audience":"maintainer","coach":false}]}')" ''
+is 'predicate: it reads the blocking rule (a finding the rule blocks never joins)' \
+   "$(jq -r "[.findings[] | select(($FINDINGS_IS_BLOCKING_JQ) and ($FINDINGS_GROUPABLE_JQ))] | length" <<<"$EDGE")" 0
+is 'predicate: a non-object entry never joins' "$(jq -r "[.findings[] | select($FINDINGS_GROUPABLE_JQ)] | length" <<<'{"findings":["text",7,null]}')" 0
+# The followed-doc override runs before the render: README/docs findings written
+# "for the maintainer" arrive as member and still join.
+STAMPED="$(jq -c --argjson coach false "$FINDINGS_STAMP_JQ" <<<'{"findings":[{"severity":"MEDIUM","file":"README.md","line":1,"area":"doc","audience":"maintainer","issue":"x"},{"severity":"MEDIUM","file":"docs/a.md","line":1,"area":"doc","audience":"operator","issue":"y"}]}')"
+is 'predicate: after the stamp a followed-doc maintainer finding joins and an operator one does not' "$(grp_files "$STAMPED")" 'README.md'
+
 if [ "$FAILED" -eq 0 ]; then echo "PASS: lib/findings.sh"; else echo "FAIL: lib/findings.sh"; exit 1; fi
