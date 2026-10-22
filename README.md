@@ -129,8 +129,9 @@ run has three pushes and three rounds. Round 3 approves.
   macOS with `/bin/bash` (bash 3.2). WSL2 is not in CI. Only the maintainer's
   own machine checks it ([docs/windows.md](docs/windows.md)). Bedrock, Vertex
   and gateways are not tested.
-- **One known gap.** The review key of a PR into the default branch does not
-  include the base commit ([Known limits](SECURITY.md#known-limits)).
+- **Two known limits.** The review key of a PR into the default branch does not
+  include the base commit. The cooldown limits edits and does not limit pushes
+  to the PR branch ([Known limits](SECURITY.md#known-limits)).
 - **A poor fit in three cases:**
   - Several people share one Claude login.
   - You need a required check that blocks a merge.
@@ -167,9 +168,19 @@ git clone https://github.com/nagameTW/pr-reviewer.git ~/pr-reviewer
 mkdir -p ~/.local/bin && ln -s ~/pr-reviewer/prreview ~/.local/bin/prreview
 ```
 
+If `~/.local/bin` is not on your `PATH`, add it. A fresh macOS does not have it
+there. For zsh, run this command and open a new terminal:
+
+```bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+```
+
+Without the link, run `~/pr-reviewer/prreview` in place of `prreview` in the
+steps below.
+
 Keep the clone out of `~/Documents`, `~/Desktop`, `~/Downloads` and iCloud
 Drive (`~/Library/Mobile Documents`). A macOS background service cannot read
-these folders. If `~/.local/bin` is not on your `PATH`, add it.
+these folders.
 
 ### 2. Run the setup
 
@@ -248,9 +259,10 @@ the service, because the loop keeps the old code until it restarts. If
 `claude --version` or `gh --version` is older than the minimum, setup stops.
 Update the tool. Then run setup again.
 
-In versions after 0.2.0, the reviewer skips fork PRs unless the author is in
-`PRREVIEW_GATE_TRUSTED_AUTHORS`. `prreview status` shows how many PRs it
-skipped. Set `PRREVIEW_GATE_FORK_PRS=1` to bring back the old behavior.
+From the release after 0.2.2, the reviewer skips fork PRs unless the author is
+in `PRREVIEW_GATE_TRUSTED_AUTHORS`. Release 0.2.2 and earlier releases review
+every fork PR. `prreview status` shows how many PRs the reviewer skipped. Set
+`PRREVIEW_GATE_FORK_PRS=1` to bring back the old behavior.
 
 Items in your copy of the checklist keep their old wording. To see what a new
 version changed in them, run
@@ -336,9 +348,10 @@ fails. It also describes each step in detail.
 Settings come from a config file and from overrides. The file is
 `~/.config/pr-reviewer/config`. It has one `KEY=value` per line, and
 `prreview set` writes it. A variable set in the environment overrides the file.
-Two settings are required: `PRREVIEW_GATE_REPOS` and
-`PRREVIEW_SENSITIVE_PATTERNS_FILE`. The second one names the sensitive-patterns
-file that `prreview setup` writes. People change these settings most:
+`PATH` is the exception. See [docs/configuration.md](docs/configuration.md). `PRREVIEW_GATE_REPOS` is required. A sensitive-patterns file must also exist.
+`prreview setup` writes it to `~/.config/pr-reviewer/sensitive-patterns`.
+`PRREVIEW_SENSITIVE_PATTERNS_FILE` moves it to another path. People change
+these settings most:
 
 - `PRREVIEW_GATE_TRUSTED_AUTHORS`
 - `PRREVIEW_GATE_FORK_PRS`

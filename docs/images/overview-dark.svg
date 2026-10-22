@@ -105,8 +105,8 @@
 <rect class="optional" x="24" y="444" width="408" height="88" rx="6"/>
 <text class="t-title" x="40" y="468">Fork PRs from untrusted authors: skipped</text>
 <text class="t-sub" x="40" y="488">A fork PR is reviewed only if its author is in</text>
-<text class="t-sub" x="40" y="504"><tspan class="t-code">PRREVIEW_GATE_TRUSTED_AUTHORS</tspan>, or you run</text>
-<text class="t-sub" x="40" y="520"><tspan class="t-code">prreview once --pr</tspan>.</text>
+<text class="t-sub" x="40" y="504"><tspan class="t-code">PRREVIEW_GATE_TRUSTED_AUTHORS</tspan>, you run</text>
+<text class="t-sub" x="40" y="520"><tspan class="t-code">prreview once --pr</tspan>, or you set <tspan class="t-code">PRREVIEW_GATE_FORK_PRS=1</tspan>.</text>
 </g>
 <g data-box="448 444 408 88">
 <rect class="strip" x="448" y="444" width="408" height="88" rx="6"/>

@@ -3,7 +3,7 @@
 Settings come from two layers. The first layer is a config file. The second layer is overrides in the environment.
 
 - **The config file** is `~/.config/pr-reviewer/config`, with one `KEY=value` per
-  line. `prreview setup` writes it. `prreview set <name> <value>` changes one
+  line. `prreview` reads it before it starts the reviewer. `prreview setup` writes it. `prreview set <name> <value>` changes one
   line. `prreview get <name>` reads one. `prreview unset <name>` removes one.
   The reviewer takes a value literally. It removes no quotes and expands
   nothing.
@@ -130,7 +130,7 @@ The reviewer reads every `.md` file in it at the start of each round.
 - **Remove an item:** delete its file. The other items keep their numbers.
 - **Change an item:** edit its file. The text goes to the model as written.
 
-Item 3 treats a host address in any RFC 1918 private range as a finding, in tests too. It allows the address ranges and names that RFC 5737, RFC 3849 and RFC 2606 reserve for documentation. If your test fixtures use other ranges, edit `checks/03-sensitive-data.md` to match.
+Item 3 treats a host address in any RFC 1918 private range as a finding, in tests too. The exception is code that recognises or blocks private addresses, such as an SSRF guard (code that stops the server from fetching URLs on private networks), and the tests of that code. Item 3 also allows the address ranges and names that RFC 5737, RFC 3849 and RFC 2606 reserve for documentation. If your test fixtures use other ranges, edit `checks/03-sensitive-data.md` to match.
 
 An item can apply to only some files. Say so in front matter. This item is sent
 only when the PR changes a Python file:
@@ -195,7 +195,9 @@ chooses a severity in the same way as for the built-in items.
 ## Without prreview
 
 `prreview` only writes settings and starts the loop. Everything also works from
-environment variables. The reviewer refuses to start without a
+environment variables. The scripts do not read the config file. A setting that
+you made with `prreview set` has no effect when you run a script directly.
+Export it as an environment variable. The reviewer refuses to start without a
 sensitive-data patterns file. So copy the example first:
 
 ```bash

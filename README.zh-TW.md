@@ -118,7 +118,8 @@
   - CI 在 macOS 上以 bash 3.2 的 `/bin/bash` 執行測試。
   - WSL2 不在 CI 內。只有維護者自己的機器確認過，詳見 [docs/windows.md](docs/windows.md)。
   - Bedrock、Vertex 與 gateway 未經測試。
-- **一項已知缺口。** 以預設分支為目標的 PR，其 review key 不含 base commit。
+- **兩項已知限制。** 以預設分支為目標的 PR，其 review key 不含 base commit。
+  冷卻時間限制編輯，不限制推送到 PR 分支。
   詳見[已知限制](SECURITY.md#known-limits)。
 - **三種情況不適合：**
   - 多人共用一個 Claude 登入。
@@ -154,6 +155,15 @@ git clone https://github.com/nagameTW/pr-reviewer.git ~/pr-reviewer
 mkdir -p ~/.local/bin && ln -s ~/pr-reviewer/prreview ~/.local/bin/prreview
 ```
 
+若 `~/.local/bin` 不在 `PATH` 中，請把它加入 `PATH`。新安裝的 macOS 預設不含此路徑。
+使用 zsh 時，執行下列指令，然後開啟新的終端機：
+
+```bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+```
+
+若未建立連結，後續步驟中的 `prreview` 改為 `~/pr-reviewer/prreview`。
+
 不要把 clone 放在以下位置：
 
 - `~/Documents`
@@ -161,7 +171,7 @@ mkdir -p ~/.local/bin && ln -s ~/pr-reviewer/prreview ~/.local/bin/prreview
 - `~/Downloads`
 - iCloud Drive，路徑為 `~/Library/Mobile Documents`
 
-macOS 背景服務無法讀取這些位置。若 `~/.local/bin` 不在 `PATH` 中，請把它加入 `PATH`。
+macOS 背景服務無法讀取這些位置。
 
 ### 2. 執行 setup
 
@@ -242,9 +252,9 @@ setup 重新啟動服務，因為迴圈在重新啟動前仍執行舊的程式�
 
 若 `claude --version` 或 `gh --version` 低於最低版本，setup 會停止。請更新 `claude` 或 `gh`，然後再次執行 setup。
 
-在 0.2.0 之後的版本，審查工具略過 fork PR。作者列在
-`PRREVIEW_GATE_TRUSTED_AUTHORS` 中的 PR 除外。`prreview status` 顯示略過的數量。設定
-`PRREVIEW_GATE_FORK_PRS=1` 可恢復舊行為。
+自 0.2.2 之後發行的版本起，審查工具略過 fork PR。作者列在
+`PRREVIEW_GATE_TRUSTED_AUTHORS` 中的 PR 除外。0.2.2 與更早的版本會審查每一個 fork PR。
+`prreview status` 顯示略過的數量。設定 `PRREVIEW_GATE_FORK_PRS=1` 可恢復舊行為。
 
 檢查清單副本中的項目保留舊的措辭。若要檢視新版的變更，執行
 `diff -r ~/pr-reviewer/checks ~/.config/pr-reviewer/checks`。
@@ -321,9 +331,11 @@ CRITICAL 與 HIGH 的發現會阻擋。MEDIUM 與 LOW 的發現只列出，不�
 ## 設定
 
 設定由設定檔與覆寫值組成。設定檔是 `~/.config/pr-reviewer/config`，每行一個
-`KEY=value`，由 `prreview set` 寫入。環境中設定的變數覆寫設定檔。有兩項設定為必填：
-`PRREVIEW_GATE_REPOS` 與 `PRREVIEW_SENSITIVE_PATTERNS_FILE`。後者指向 `prreview setup`
-寫出的 sensitive-patterns 檔。最常修改的設定如下：
+`KEY=value`，由 `prreview set` 寫入。環境中設定的變數覆寫設定檔。`PATH` 是例外，詳見 [docs/configuration.md](docs/configuration.md)。
+`PRREVIEW_GATE_REPOS` 為必填。
+另須存在一個 sensitive-patterns 檔，`prreview setup` 會把它寫到
+`~/.config/pr-reviewer/sensitive-patterns`。`PRREVIEW_SENSITIVE_PATTERNS_FILE` 可把它移到其他路徑。
+最常修改的設定如下：
 
 - `PRREVIEW_GATE_TRUSTED_AUTHORS`
 - `PRREVIEW_GATE_FORK_PRS`

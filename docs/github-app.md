@@ -27,12 +27,13 @@ permissions of the App, not those of your account.
    organization. In that case, make the App public under **Advanced** on its
    settings page first. That lets other accounts install it. Each installation
    still sees only the repositories it is given.
-3. Give `prreview setup` the App ID and the downloaded `.pem` file. It copies the
-   key to `~/.config/pr-reviewer/app.pem`. Only you can read that copy. It checks
-   that the App can see every listed repository. It names each repository that
-   the App cannot see. It gives the link to install the App there or to add the
-   repository to it. An App installed on "Only select repositories" sees only
-   those.
+3. Give `prreview setup` the App ID and the downloaded `.pem` file. It checks
+   that GitHub accepts the key. Then it checks that the App can see every listed
+   repository. It names each repository that the App cannot see. It gives the
+   link to install the App there or to add the repository to it. An App
+   installed on "Only select repositories" sees only those. When every
+   repository passes, it copies the key to `~/.config/pr-reviewer/app.pem`. Only
+   you can read that copy. If a repository fails, it copies nothing.
 
 Only posting goes through the App. This covers comments and the follow-up issues
 that `PRREVIEW_GATE_TICKETS=1` opens. Reading PRs, cloning, the alert issues of

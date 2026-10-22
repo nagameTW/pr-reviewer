@@ -11,7 +11,7 @@ Each point names the code that does it. The code paths are at the commit that yo
 
 - **It runs on your machine and needs no admin rights.** A loop polls once a minute. It needs your `gh` login and your Claude Code login. It needs no workflow file, GitHub App or webhook. [`prreview`](../prreview) checks the Claude Code login with `claude auth status`.
 - **The default branch supplies the rules for every PR.** The reviewer applies the diff of the PR first. Then it copies these files from the default branch:
-  - `CLAUDE.md` and `AGENTS.md`
+  - `CLAUDE.md`, `CLAUDE.local.md` and `AGENTS.md`
   - any README or CONTRIBUTING file
   - `.mcp.json` and `.claude/`
   - `.github/review-checks.md`
@@ -23,8 +23,8 @@ Each point names the code that does it. The code paths are at the commit that yo
 - **It posts nothing when a step fails.** If the output cannot be parsed, even after one repair call, the result is "no action (fail closed)" ([`pr-autoreview.sh`](../pr-autoreview.sh), function `review_one_pr`).
 - **Unfixed blocking findings carry over to the next round.** The round prompt tells the model to mark them "Carried over:" ([`pr-autoreview.sh`](../pr-autoreview.sh), function `review_one_pr`).
 - **Claims in the PR text are checked against the diff.** The prompt gives the model sentences such as "tests pass" or "verified" as claims to check ([`lib/prompt.sh`](../lib/prompt.sh), function `prompt_claims_section`).
-- **It comments and nothing more.** Every verdict is a `gh pr comment` ([`pr-autoreview.sh`](../pr-autoreview.sh), function `review_one_pr`). It makes one merge-related call: `gh pr merge --disable-auto`. This call disarms an auto-merge on a head that the reviewer has not reviewed ([`lib/merge.sh`](../lib/merge.sh), function `disarm_unreviewed_auto_merge`).
-- **A second, adversarial pass is off by default.** The red team runs only when `PRREVIEW_GATE_REDTEAM` is set ([`lib/redteam.sh`](../lib/redteam.sh), function `redteam_enabled`).
+- **It comments, and it opens issues only when you ask.** Every verdict is a `gh pr comment` ([`pr-autoreview.sh`](../pr-autoreview.sh), function `review_one_pr`). `PRREVIEW_GATE_TICKETS=1` adds follow-up issues, and `PRREVIEW_ALERT_REPO` adds alert issues ([`owner-alert.sh`](../owner-alert.sh)). It makes one merge-related call: `gh pr merge --disable-auto`. This call runs only with `PRREVIEW_GATE_DISARM_AUTO_MERGE=1`. It disarms an auto-merge on a head that the reviewer has not reviewed ([`lib/merge.sh`](../lib/merge.sh), function `disarm_unreviewed_auto_merge`).
+- **A second, adversarial pass is off by default.** The red team runs only when `PRREVIEW_GATE_REDTEAM` is `1`, `true`, `yes` or `on` ([`lib/redteam.sh`](../lib/redteam.sh), function `redteam_enabled`).
 
 ## Tools side by side
 
