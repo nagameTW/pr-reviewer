@@ -107,12 +107,19 @@ All notable changes to this project are recorded here. The format follows
   Now the reviewer writes a `WARNING` line to the log and reviews the head.
   After a switch from a GitHub App back to your own account, each head with
   one App comment gets one new review, and the log has a warning for it.
-  A wrong App login list would repeat that review every round. So two such
-  comments on one head are a bound. The reviewer then treats the head as
-  handled until the next push: no review, no model call, no job, and one
-  `WARNING` line that says the list of App logins is probably wrong and names
-  `PRREVIEW_REVIEW_APP_SLUG`. The guard on an armed auto-merge still runs. A
-  comment from a person never counts toward the bound.
+  Any number of such comments never stops a review.
+- A wrong App login list (`PRREVIEW_REVIEW_APP_SLUG`) hides the reviewer's own
+  comments from it, so each round would review and post again. The reviewer
+  now keeps a count on the machine: one line in the hold directory
+  (`PRREVIEW_GATE_HOLDOFF_DIR`) for each verdict it posted for a head. At two
+  verdicts for one head, the reviewer treats the head as handled until the
+  next push: no review, no model call, no job, and one `WARNING` line that
+  says it does not see its own comments and names the setting. No comment
+  author can change this count. The guard on an armed auto-merge still runs.
+  The count file expires with the other hold files, after two days. If the
+  reviewer cannot write the count file, the post stays and the log says so.
+  After a switch from an App back to your own account, a head that the
+  machine posted for twice stays stopped until the next push.
 
 ### Security
 

@@ -664,10 +664,12 @@ Switching from your account to an App changes whose comments count as the
 reviewer's own: the next round finds no comment from the App on any open PR
 and reviews every one of them again. Switching back does the same for the
 heads where the App left one comment: the reviewer logs a warning for each of
-them, then reviews it once with your account. A head where the App left two
-comments or more (a verdict and a notice, say) counts as handled. The reviewer
-logs a warning for it every round, and reviews it again after the author
-pushes.
+them, then reviews it once with your account. The reviewer also counts, on
+your machine, the verdicts it posted for each head. A head for which the
+machine posted two verdicts counts as handled, and the reviewer logs a warning
+for it every round. It reviews the head again after the author pushes. After a
+switch back, such a head stays stopped until then, even though your account
+has not commented on it yet.
 
 ## Windows
 
@@ -758,10 +760,13 @@ works in place of the loop, and a lock stops two rounds from overlapping.
    description and base branch (for a stacked PR, also the base commit), and
    only comments by the reviewer's own account count. A comment from another
    App that carries the marker gets a `WARNING` line in the log, and the head
-   is reviewed anyway. Two such comments on one head mean the list of App
-   logins is probably wrong (`PRREVIEW_REVIEW_APP_SLUG`). The head then counts
-   as handled: no review, no model call, and a `WARNING` line in the log
-   every round. A PR on hold after a
+   is reviewed anyway, however many such comments there are. The reviewer also
+   keeps a count of the verdicts it posted for the head, in the hold directory
+   (`PRREVIEW_GATE_HOLDOFF_DIR`). At two, the list of App logins is probably
+   wrong (`PRREVIEW_REVIEW_APP_SLUG`) and the reviewer does not see its own
+   comments. The head then counts as handled: no review, no model call, and a
+   `WARNING` line in the log every round. The count file expires after two
+   days, like the hold files. A PR on hold after a
    failure waits out its hold (see [When something fails](#when-something-fails)).
 2. **Scan.** Check the PR's title and description against your
    sensitive-patterns file. A hit stops the review of that PR. The title and
@@ -955,7 +960,7 @@ even when you run `prreview once` from a terminal. After moving a tool, run
 | `PRREVIEW_GATE_HOLDOFF_FAIL` | `300` | Seconds a head waits after a failed review or post (see [When something fails](#when-something-fails)) |
 | `PRREVIEW_GATE_HOLDOFF_QUOTA` | `1800` | Seconds a head waits after a usage-limit error |
 | `PRREVIEW_GATE_HOLDOFF_MAX` | `3600` | Longest wait after repeated failures |
-| `PRREVIEW_GATE_HOLDOFF_DIR` | `~/.cache/pr-reviewer/review-holdoff` | Where those holds are kept, along with verdicts waiting to be posted again |
+| `PRREVIEW_GATE_HOLDOFF_DIR` | `~/.cache/pr-reviewer/review-holdoff` | Where those holds are kept, along with verdicts waiting to be posted again and the count of verdicts posted for each head |
 | `PRREVIEW_GATE_PARALLEL` | `2` | PRs reviewed at the same time |
 | `PRREVIEW_GATE_CALL_CAP` | `8` | Model calls in flight for one PR |
 | `PRREVIEW_GATE_ROUND_BUDGET` | `900` | Seconds a round may spend starting new reviews |

@@ -148,11 +148,20 @@ earlier reviews.
 
 If a wrong list of App logins (`PRREVIEW_REVIEW_APP_SLUG`) hides the
 reviewer's own comments, the same review would repeat every round. So the
-reviewer stops at two such comments on one head. It treats the head as
-handled: no review, no model call, and one `WARNING:` line in the log that
-names the setting. A person cannot reach this bound, because only comments
-from App logins count. Two comments from an App that is not the reviewer therefore stop the
-review of that head, until its author pushes again. The guard on an armed auto-merge still runs for such a head.
+reviewer keeps a count on the machine: one line in its hold directory for each
+verdict it posted for a head. At two verdicts for one head, it treats the head
+as handled: no review, no model call, and one `WARNING:` line in the log that
+names the setting. No comment author can raise this count, because the
+reviewer writes it only after its own post. An App that prints the marker
+cannot stop a review. The guard on an armed auto-merge still runs for such a
+head.
+
+The count has limits. The file expires after two days, then the head can get
+two more verdicts. If the reviewer cannot write the file, the post stays and
+the bound does not apply to that head. A person who deletes the reviewer's
+comments to ask for a new review gets two before the bound stops it. After a
+switch from an App back to your own account, a head that the machine posted for
+twice stays stopped until its author pushes again.
 
 **The App token is for one repository.** When the reviewer posts as a GitHub
 App, it asks for an installation token for the repository of the PR only, and
