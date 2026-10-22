@@ -211,16 +211,18 @@ holdoff_stuck() {
 
 # The owner and the repo in a form that is safe in a file name: owner__repo.
 # $1 = owner/repo. A GitHub owner has no underscore, so the first "__" splits
-# the two. The count file name joins the stem, the PR and the key with "+",
-# which no GitHub owner, repo name or key holds, so no stem is the prefix of
-# another and a prefix test is exact. Nothing is printed for a name outside
+# the two. The stem is lower case. The count file name joins the stem, the PR
+# and the key with "+", which no GitHub owner, repo name or key holds, so no
+# stem is the prefix of another and a prefix test is exact. Nothing is printed for a name outside
 # the GitHub name characters.
 holdoff_posted_stem() {
   local owner="${1%%/*}" repo="${1#*/}"
   case "$1" in */*) ;; *) return 1 ;; esac
   case "$owner" in ''|*[!0-9a-zA-Z-]*) return 1 ;; esac
   case "$repo"  in ''|*[!0-9a-zA-Z._-]*) return 1 ;; esac
-  printf '%s__%s' "$owner" "$repo"
+  # GitHub names ignore case, so the stem is lower case. The prune test
+  # builds its stem here too, so an open entry in any case matches the file.
+  printf '%s__%s' "$owner" "$repo" | tr '[:upper:]' '[:lower:]'
 }
 
 # Where the count for this repo, PR and key lives. Same arguments as holdoff_path.

@@ -721,6 +721,23 @@ holdoff_prune 2 "o/r#1"
 [ -e "$P12" ] && fail "open r#1 kept the count of PR 12"
 ok "open r#1 does not keep the count of PR 12"
 
+# GitHub owner and repo names are case-insensitive: a spelling change must not
+# reset the count.
+PU="$(holdoff_posted_path Owner/Repo 7 abc)"; PL="$(holdoff_posted_path owner/repo 7 abc)"
+[ -n "$PU" ] && [ "$PU" = "$PL" ] \
+  && ok "Owner/Repo and owner/repo give the same posted path" \
+  || fail "case changed the posted path: '$PU' '$PL'"
+# The open list may spell the repo in another case than the file name.
+PK="$(holdoff_posted_path owner/repo 4 abc)"
+holdoff_posted_record "$PK" "$NOW"; old "$PK"
+holdoff_prune 2 "Owner/Repo#4"
+[ -e "$PK" ] \
+  && ok "an open entry in another case keeps the count of the same PR" \
+  || fail "prune dropped the count when the open entry differed in case"
+holdoff_prune 2 "OWNER/REPO"
+[ -e "$PK" ] \
+  && ok "a bare entry in another case keeps the count of the repo" \
+  || fail "prune dropped the count when the bare entry differed in case"
 # Finding 2: the check that the directory can hold the count.
 D2="$TMP/newhold"; rm -rf "$D2"
 HOLDOFF_DIR="$D2" holdoff_dir_writable || fail "a missing directory could not be made"
