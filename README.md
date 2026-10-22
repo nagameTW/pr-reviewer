@@ -64,12 +64,13 @@ pushes, three rounds, and an approval in round 3.
 - **It posts what the model wrote.** If a bot in your repo acts on comment
   commands such as `/lgtm` or `bors r+`, post as a GitHub App that the bot does
   not take commands from.
-- **It uses your Claude Code login.** Whether an always-on reviewer counts as
-  ordinary individual use of a subscription is Anthropic's call, and its terms
-  have changed before. Read the current terms. An API key avoids the question,
-  but a key set in your shell does not reach the background service. Run
-  `prreview run` from a terminal that has the key
-  ([details](docs/operations.md#where-to-run-it)).
+- **It uses your Claude Code login.** Anthropic's
+  [legal and compliance page](https://code.claude.com/docs/en/legal-and-compliance)
+  says the advertised Pro and Max limits "assume ordinary, individual usage"
+  and gives no number (read 2026-10-21). Anthropic decides whether an always-on
+  poller counts. An API key avoids the question, but a key set in your shell
+  does not reach the background service. Run `prreview run` from a terminal
+  that has the key ([details](docs/operations.md#where-to-run-it)).
 
 **Cost.**
 

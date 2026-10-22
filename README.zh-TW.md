@@ -60,9 +60,11 @@
   命中，或掃描無法執行，該則留言會改為一則簡短的通知，通知中不會引用命中的值。
 - **它貼出的是模型寫的內容。** 如果你的 repo 中有 bot 會依留言指令（例如 `/lgtm`
   或 `bors r+`）動作，請改用該 bot 不接受其指令的 GitHub App 發留言。
-- **它使用你的 Claude Code 登入。** 全天候運作的審查工具是否屬於訂閱方案的一般個人
-  使用，由 Anthropic 決定，其條款也曾變動。請閱讀最新條款。改用 API key 可避開這個
-  問題，但在 shell 中設定的 key 不會傳給背景服務。請在有該 key 的終端機執行
+- **它使用你的 Claude Code 登入。** Anthropic 的
+  [法律與合規頁面](https://code.claude.com/docs/en/legal-and-compliance)寫道，Pro 與 Max
+  公告的用量上限以「ordinary, individual usage」為前提，且未給出數字（2026-10-21 讀取）。
+  全天候運作的輪詢工具是否算在內，由 Anthropic 決定。改用 API key 可避開這個問題，但在
+  shell 中設定的 key 不會傳給背景服務。請在有該 key 的終端機執行
   `prreview run`（[詳情](docs/operations.md#where-to-run-it)）。
 
 **成本。**
