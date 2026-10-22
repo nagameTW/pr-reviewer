@@ -180,8 +180,10 @@ prreview logs -f
 | `prreview status`、`prreview logs -f` | 顯示狀態與略過的 PR，並持續追蹤日誌 |
 | `prreview checks` | 列出、新增或移除審查項目 |
 | `prreview uninstall` | 移除背景服務，設定保留 |
+| `prreview version`、`prreview --version` | 顯示版本 |
+| `prreview <command> --help` | 顯示該指令的用法，不執行其他動作 |
 
-變更設定的指令會重新啟動服務。完整移除的方式見 [docs/operations.md](docs/operations.md#removing-it)。
+指令遇到不接受的參數時，會顯示 `unknown argument:` 與用法，以代碼 2 結束，並且不變更任何狀態。變更設定的指令會重新啟動服務。完整移除的方式見 [docs/operations.md](docs/operations.md#removing-it)。
 
 ## 升級
 
