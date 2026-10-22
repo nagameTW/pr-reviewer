@@ -13,7 +13,7 @@ set -uo pipefail
 
 REPOS="${PRREVIEW_GATE_REPOS:?set PRREVIEW_GATE_REPOS to the space-separated owner/repo list to review}"
 OWNER_LOGIN="${PRREVIEW_OWNER_LOGIN:-$("${GH_BIN:-gh}" api user -q .login 2>/dev/null)}"
-[ -n "$OWNER_LOGIN" ] || { echo "could not tell which GitHub account this runs as: 'gh api user' failed. Check 'gh auth status' first (gh missing or logged out is the usual cause); PRREVIEW_OWNER_LOGIN overrides the lookup — refusing to run"; exit 1; }
+[ -n "$OWNER_LOGIN" ] || { echo "could not tell which GitHub account this runs as: 'gh api user' failed. Run 'gh auth status'. If it fails, run 'gh auth login'. PRREVIEW_OWNER_LOGIN overrides the lookup. Refusing to run"; exit 1; }
 MARKER="pr-reviewer"
 
 CLAUDE_BIN="${CLAUDE_BIN:-$(command -v claude)}"

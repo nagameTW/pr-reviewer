@@ -241,8 +241,12 @@ down. See [docs/windows.md](docs/windows.md).
 | `prreview status`, `prreview logs -f` | Show the state and the skipped PRs. Follow the log |
 | `prreview checks` | List, add or remove review items |
 | `prreview uninstall` | Remove the background service. The settings stay |
+| `prreview version`, `prreview --version` | Print the version |
+| `prreview <command> --help` | Print the usage of one command. Nothing else happens |
 
-A command that changes a setting restarts the service. To remove everything,
+A command rejects an argument it does not take. It prints `unknown argument:`
+and its usage, exits with code 2, and changes nothing. A command that changes a
+setting restarts the service. To remove everything,
 see [docs/operations.md](docs/operations.md#removing-it).
 
 ## Upgrading

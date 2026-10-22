@@ -58,7 +58,7 @@ edit_file() {
   say "Opening $1 in $ed; save and quit to go on."
   # Through sh, as git runs it: EDITOR may carry arguments ("code --wait"),
   # and a path with spaces in it needs quotes inside the value.
-  sh -c "$ed \"\$@\"" "$ed" "$1" || { say "The editor ($ed) did not run or failed."; return 1; }
+  sh -c "$ed \"\$@\"" "$ed" "$1" || { echo "The editor ($ed) did not run or failed. prreview uses \$EDITOR, else \$VISUAL, else vi. Set EDITOR to an editor that runs, for example EDITOR=nano." >&2; return 1; }
 }
 
 # A setting, or $2 when it is not set. The file was checked when prreview
@@ -86,6 +86,12 @@ repo_name() {
   name="$("${GH_BIN:-gh}" repo view "$1" --json nameWithOwner --jq .nameWithOwner 2>/dev/null)" || return 1
   [[ "$name" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || return 1
   printf '%s' "$name"
+}
+
+# Text to append to a "cannot see" message: when gh is logged out, that is
+# the likely cause, and the fix is one command.
+gh_login_hint() {
+  "${GH_BIN:-gh}" auth status >/dev/null 2>&1 || printf ' gh is not logged in. Run: gh auth login'
 }
 
 item_count() { local f n=0; for f in "$1"/*.md; do [ -e "$f" ] && n=$((n + 1)); done; echo "$n"; }
@@ -265,6 +271,12 @@ setup_github() {
   gh_version_check "${GH_BIN:-gh}" || return 1
   if ! "${GH_BIN:-gh}" auth status >/dev/null 2>&1; then
     say "gh is not logged in. The reviewer reads through gh, and comments as that account unless you set up a GitHub App next."
+    # gh auth login waits for a browser or a typed code. With no terminal on
+    # stdin it would wait for ever, so setup prints the command and stops here.
+    if [ ! -t 0 ]; then
+      say "Run 'gh auth login' in a terminal, then run prreview setup again."
+      return 1
+    fi
     yes_no "Run 'gh auth login' now?" y || return 1
     "${GH_BIN:-gh}" auth login || return 1
   fi
@@ -305,7 +317,7 @@ setup_repos() {
       *) repo="$(sed -n "${item}p" <<<"$listed")"
          [ -n "$repo" ] || { say "No repository number $item in the list."; return 1; } ;;
     esac
-    repo="$(repo_name "$repo")" || { say "Cannot see $item with this gh login."; return 1; }
+    repo="$(repo_name "$repo")" || { say "Cannot see $item with this gh login.$(gh_login_hint)"; return 1; }
     case " $picked " in *" $repo "*) ;; *) picked="${picked:+$picked }$repo" ;; esac
   done
   [ -n "$picked" ] || { say "At least one repository is needed."; return 1; }
@@ -515,6 +527,11 @@ cmd_setup() {
     say "── $title"
     until "setup_$step"; do
       [ "$step" = tools ] && die "install the missing tools, then run prreview setup again"
+      # Claude Code and GitHub need a login made in another terminal. With no
+      # terminal on stdin a retry cannot succeed, and a pipe of y would repeat it.
+      if [ ! -t 0 ]; then
+        case "$step" in claude|github) die "setup stopped at '$title'; run prreview setup again to continue" ;; esac
+      fi
       yes_no "Try again?" y || die "setup stopped at '$title'; run prreview setup again to continue"
     done
   done
@@ -615,7 +632,7 @@ cmd_repos() {
     list) [ -z "$repos" ] || tr ' ' '\n' <<<"$repos" ;;
     add)
       [ -n "${2-}" ] || die "usage: prreview repos add owner/repo"
-      repo="$(repo_name "$2")" || die "cannot see $2 with this gh login"
+      repo="$(repo_name "$2")" || die "cannot see $2 with this gh login.$(gh_login_hint)"
       case " $repos " in *" $repo "*) say "$repo is already on the list."; return 0 ;; esac
       prreview_config_set "$CONFIG" PRREVIEW_GATE_REPOS "${repos:+$repos }$repo" && say "Added $repo." && restart_if_running ;;
     remove)
@@ -636,7 +653,7 @@ cmd_repos() {
 cmd_set() {
   local key value
   [ $# -ge 2 ] || die "usage: prreview set <name> <value>   (names: repos, parallel, model, checks, patterns, or any PRREVIEW_ setting)"
-  key="$(prreview_key_of "$1")" || die "not a setting name: $1"
+  key="$(prreview_key_of "$1")" || die "not a setting name: $1 (use repos, parallel, model, checks, patterns, or a PRREVIEW_ name. docs/configuration.md lists them)"
   prreview_key_known "$PRREVIEW_HOME" "$key" || die "$key is not a setting the reviewer reads (check the spelling; docs/configuration.md lists them)"
   shift
   value="$(checked_value "$key" "$*")" || exit 1
@@ -759,24 +776,110 @@ prreview: set up and run pr-reviewer
   prreview once --pr <o/r#N>     review one PR now, a fork PR included
   prreview run                   the loop, in this terminal (what the service runs)
   prreview start | stop | restart | uninstall
+
+  prreview version               print the version (also prreview --version)
+  prreview <command> --help      the usage of one command
 EOF
 }
 
-case "${1-help}" in help|-h|--help) ;; *)
+# The usage line of command $1.
+sub_usage() {
+  case "$1" in
+    run) echo "usage: prreview run [--service]" ;;
+    once) echo "usage: prreview once [--pr owner/repo#N]" ;;
+    logs) echo "usage: prreview logs [-f]" ;;
+    repos) echo "usage: prreview repos [list | add owner/repo | remove owner/repo]" ;;
+    set) echo "usage: prreview set <name> <value>   (names: repos, parallel, model, checks, patterns, or any PRREVIEW_ setting)" ;;
+    get|unset) echo "usage: prreview $1 <name>" ;;
+    checks) echo "usage: prreview checks [list | path | add <number-name> | remove <number>]" ;;
+    *) echo "usage: prreview $1" ;;
+  esac
+}
+
+# Prints the first argument that command $1 does not take; status 1 when it
+# takes them all. Missing arguments are the command's own business.
+bad_arg() {
+  local cmd="$1" n=0
+  shift
+  case "$cmd" in
+    run) [ $# -eq 0 ] || [ "$1" = --service ] || { printf '%s' "$1"; return 0; }; n=1 ;;
+    logs) [ $# -eq 0 ] || [ "$1" = -f ] || { printf '%s' "$1"; return 0; }; n=1 ;;
+    once)
+      while [ $# -gt 0 ]; do
+        [ "$1" = --pr ] || { printf '%s' "$1"; return 0; }
+        shift; [ $# -eq 0 ] || shift
+      done
+      return 1 ;;
+    repos|checks)
+      [ $# -gt 0 ] || return 1
+      case "$cmd $1" in
+        "repos list"|"checks list"|"checks path") n=1 ;;
+        "repos add"|"repos remove"|"checks add"|"checks remove") n=2 ;;
+        *) printf '%s' "$1"; return 0 ;;
+      esac ;;
+    get|unset) n=1 ;;
+    set) return 1 ;;
+  esac
+  [ $# -gt "$n" ] || return 1
+  shift "$n"
+  printf '%s' "$1"
+}
+
+# Runs before the settings are read, so nothing here can touch the service or
+# the settings: -h and --help print the usage and stop, an argument the
+# command does not take stops with status 2. `set` takes any value, so only
+# its first argument can be -h.
+args_gate() {
+  local cmd="$1" a bad
+  shift
+  for a in "$@"; do
+    case "$a" in -h|--help)
+      [ "$cmd" != help ] || { cmd_help; exit 0; }
+      sub_usage "$cmd"; exit 0 ;;
+    esac
+    [ "$cmd" != set ] || break
+  done
+  if bad="$(bad_arg "$cmd" "$@")"; then
+    echo "unknown argument: $bad" >&2
+    sub_usage "$cmd" >&2
+    exit 2
+  fi
+}
+
+cmd_version() {
+  local v
+  v="$(sed -n 's/^## \[\([0-9][^]]*\)\].*/\1/p' "$PRREVIEW_HOME/CHANGELOG.md" 2>/dev/null | head -1)"
+  [ -n "$v" ] || die "cannot read the version from $PRREVIEW_HOME/CHANGELOG.md"
+  say "prreview $v"
+}
+
+SUB="${1-help}"
+[ $# -eq 0 ] || shift
+case "$SUB" in
+  -h|--help) SUB=help ;;
+  --version) SUB=version ;;
+esac
+case "$SUB" in
+  setup|run|once|status|logs|repos|set|get|unset|checks|start|stop|restart|uninstall|help|version) ;;
+  *) echo "unknown command: $SUB" >&2; cmd_help >&2; exit 2 ;;
+esac
+args_gate "$SUB" "$@"
+
+case "$SUB" in help|version) ;; *)
   prreview_config_read "$CONFIG" >/dev/null || die "fix $CONFIG first (above)" ;;
 esac
 
-case "${1-help}" in
+case "$SUB" in
   setup) cmd_setup ;;
-  run) shift; cmd_run "$@" ;;
-  once) shift; cmd_once "$@" ;;
+  run) cmd_run "$@" ;;
+  once) cmd_once "$@" ;;
   status) cmd_status ;;
-  logs) shift; cmd_logs "$@" ;;
-  repos) shift; cmd_repos "$@" ;;
-  set) shift; cmd_set "$@" ;;
-  get) shift; cmd_get "$@" ;;
-  unset) shift; cmd_unset "$@" ;;
-  checks) shift; cmd_checks "$@" ;;
+  logs) cmd_logs "$@" ;;
+  repos) cmd_repos "$@" ;;
+  set) cmd_set "$@" ;;
+  get) cmd_get "$@" ;;
+  unset) cmd_unset "$@" ;;
+  checks) cmd_checks "$@" ;;
   start) cmd_start ;;
   stop)
     need_service_manager
@@ -797,6 +900,6 @@ case "${1-help}" in
       exit 0
     fi
     prreview_service_remove "$PLATFORM" && say "Removed the background service. Settings stay in $CONFIG." || die "could not remove the service (above)" ;;
-  help|-h|--help) cmd_help ;;
-  *) echo "unknown command: $1" >&2; cmd_help >&2; exit 2 ;;
+  help) cmd_help ;;
+  version) cmd_version ;;
 esac
