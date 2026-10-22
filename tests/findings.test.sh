@@ -992,6 +992,9 @@ has 'the verify prompt carries the finding text' 'this line does not validate it
 has 'the verify prompt names the diff to read' '/tmp/d.diff' "$VP"
 has 'the verify prompt is adversarial, not confirmatory' 'try to REFUTE' "$VP"
 has 'the verify prompt states the asymmetry' "$FINDINGS_MERGE_STAKES" "$VP"
+has 'the verify prompt does not refute a security-rule finding for a framework default alone' \
+    'is not refuted only because a framework default or a general control' "$VP"
+has '...and tells the verifier to check the actual output context' 'Check the actual output context' "$VP"
 has 'the verify prompt forbids refuting on a line-number mismatch alone' \
     'Never refute on a line-number mismatch alone' "$VP"
 has 'the verify prompt explains the NEW[...] labels of the diff it reads' \

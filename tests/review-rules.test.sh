@@ -41,4 +41,10 @@ needs 'idiom: request header placed into script' $SEC 'request header \(Referer,
 needs 'idiom: postMessage target origin and origin check' $SEC 'postMessage[^;]*targetOrigin[^;]*event\.origin'
 needs 'idiom: CORS text of API8 stays' $SEC 'CORS that reflects any Origin or allows \* with credentials'
 
+# ── verifier does not undo the trace rules ────────────────────────────────
+needs 'verify: a framework default alone does not refute a security-rule finding' lib/findings.sh \
+  'not refuted only because a framework default or a general control'
+needs 'verify: it checks output context, allowlist matching and before-and-after behavior' lib/findings.sh \
+  'Check the actual output context, what the allowlist matches, and what the protection'
+
 if [ "$FAILED" -eq 0 ]; then echo "PASS: review rules"; else echo "FAIL: review rules"; exit 1; fi

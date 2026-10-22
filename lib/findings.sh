@@ -1134,6 +1134,11 @@ Check, concretely:
 - If the finding is about a missing test, doc, or pin: does the thing it says is missing
   exist somewhere in the tree already?
 
+A finding about an output context, an allowlist, a protection this diff loosens, or SQL or
+shell interpolation is not refuted only because a framework default or a general control
+exists. Check the actual output context, what the allowlist matches, and what the protection
+did before and after this diff.
+
 Answer refuted=true ONLY when you can point at the code that makes the finding wrong, and
 say where. Never refute on a line-number mismatch alone: a finding whose claim is right but
 whose anchor is off by a few lines is still right, and mis-citation is the single easiest
