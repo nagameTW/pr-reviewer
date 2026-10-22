@@ -1710,8 +1710,10 @@ ok 'LINE_COUNTS keys strip the same ./ prefix the filter strips from .file'
 # not the dropping filter above and does not wait for the knob.
 CLAMP_CALL="$(grep -n 'findings_clamp_lines' pr-autoreview.sh | grep -v '^[0-9]*:[[:space:]]*#')"
 case "$CLAMP_CALL" in *'findings_clamp_lines "$REPO_DIR"'*) ok 'the clamp is wired in pr-autoreview.sh' ;; *) bad 'the clamp is wired in pr-autoreview.sh' 'a call' "$CLAMP_CALL" ;; esac
-CLAMP_WIN="$(grep -B4 'findings_clamp_lines "$REPO_DIR"' pr-autoreview.sh)"
-case "$CLAMP_WIN" in *'DIFF_APPLIED'*) ok '...only when the diff was applied' ;; *) bad '...only when the diff was applied' 'DIFF_APPLIED within 4 lines before the call' "$CLAMP_WIN" ;; esac
+# The condition is the line directly above the call, so the check does not
+# depend on how many comment lines sit higher up.
+CLAMP_WIN="$(grep -B1 'findings_clamp_lines "$REPO_DIR"' pr-autoreview.sh | head -1)"
+case "$CLAMP_WIN" in *'if '*'DIFF_APPLIED'*) ok '...only when the diff was applied' ;; *) bad '...only when the diff was applied' 'an if on DIFF_APPLIED directly above the call' "$CLAMP_WIN" ;; esac
 case "$CLAMP_WIN" in *PRREVIEW_GATE_VERIFY_LINES*) bad '...and not behind the line-validation knob' 'no VERIFY_LINES test' "$CLAMP_WIN" ;; *) ok '...and not behind the line-validation knob' ;; esac
 CL_AT="$(grep -n 'findings_clamp_lines "$REPO_DIR"' pr-autoreview.sh | head -1 | cut -d: -f1)"
 VF_AT="$(grep -n '^  VERIFIED_OUT=""' pr-autoreview.sh | head -1 | cut -d: -f1)"

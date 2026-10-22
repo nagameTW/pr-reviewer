@@ -56,6 +56,26 @@ NEW[22]${TAB}+added
 NEW[23]${TAB} end"
 is 'a modified file with two hunks: exact labels' "$(render "$IN")" "$EXP"
 
+# An empty line inside a hunk is a context line that a tool stripped down to
+# nothing. It advances the counter, so the labels after it stay right.
+IN='diff --git a/e.txt b/e.txt
+--- a/e.txt
++++ b/e.txt
+@@ -1,3 +1,3 @@
+ a
+
+-b
++c'
+EXP="META[-]${TAB}diff --git a/e.txt b/e.txt
+META[-]${TAB}--- a/e.txt
+META[-]${TAB}+++ b/e.txt
+HUNK[-]${TAB}@@ -1,3 +1,3 @@
+NEW[1]${TAB} a
+NEW[2]${TAB}
+NEW[-]${TAB}-b
+NEW[3]${TAB}+c"
+is 'an empty line inside a hunk counts as a context line' "$(render "$IN")" "$EXP"
+
 # ── new file, deleted file ───────────────────────────────────────────────
 IN='diff --git a/n.txt b/n.txt
 new file mode 100644
@@ -244,6 +264,12 @@ fails 'a malformed hunk header fails' 'diff --git a/x b/x
 +++ b/x
 @@ -1,x +1 @@
  a'
+fails 'a combined diff header (@@@) fails' 'diff --cc x
+--- a/x
++++ b/x
+@@@ -1,2 -1,2 +1,3 @@@
+  a
+ +b'
 fails 'a hunk with more added lines than declared fails' 'diff --git a/x b/x
 --- a/x
 +++ b/x
@@ -276,6 +302,11 @@ check_labels() {
 # ── property test on real git diffs ──────────────────────────────────────
 # For every labelled line NEW[n] the payload (without its first character)
 # must equal line n of the new file. This is the contract the model relies on.
+# The scratch repo ignores the developer's git config. A global
+# commit.gpgsign=true makes the base commit fail, and diff.noprefix or
+# diff.mnemonicPrefix changes the "+++ b/" headers that check_labels reads.
+mkdir "$TMP/home"
+export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 HOME="$TMP/home"
 G="$TMP/repo"; mkdir "$G"
 git -C "$G" init -q . && git -C "$G" config user.email t@example.com && git -C "$G" config user.name t
 seq 1 40 > "$G/multi.txt"
@@ -285,7 +316,7 @@ printf 'a\nb\nc\nd\ne\n' > "$G/rename-old.txt"
 printf 'x\n' > "$G/mode.sh"
 printf 'no newline at end' > "$G/nonl.txt"
 printf '\000\001\002' > "$G/bin.dat"
-git -C "$G" add -A && git -C "$G" commit -q -m base
+git -C "$G" add -A && git -C "$G" commit -q -m base || bad 'the base commit succeeds' 'git commit failed'
 # awk, not sed: the "a" command of BSD sed (macOS) needs a different syntax.
 awk 'NR == 3 { next } NR == 30 { $0 = "changed 30" } { print } NR == 12 { print "added after 12" }' "$G/multi.txt" > "$G/multi.new" && mv "$G/multi.new" "$G/multi.txt"
 awk 'NR == 11990 { next } NR == 100 { $0 = "changed 100" } { print } NR == 11050 { print "added deep" }' "$G/big.txt" > "$G/big.new" && mv "$G/big.new" "$G/big.txt"
