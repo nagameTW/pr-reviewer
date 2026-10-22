@@ -16,6 +16,8 @@
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 . lib/loop.sh || { echo "FAIL: cannot source lib/loop.sh"; exit 1; }
+. lib/trust.sh || { echo "FAIL: cannot source lib/trust.sh"; exit 1; }
+. lib/prreview-config.sh || { echo "FAIL: cannot source lib/prreview-config.sh"; exit 1; }
 . lib/tools.sh || { echo "FAIL: cannot source lib/tools.sh"; exit 1; }
 # macOS without the coreutils gnubin directory has gtimeout and no timeout.
 # Find the commands the way the scripts do.
@@ -50,41 +52,108 @@ loop_repos_of "$NOREPOS" >/dev/null 2>&1 \
 rm -f "$NOREPOS"
 
 # ── loop_open_pr_count sums, and fails toward "there is work" ─────────────
+# The count applies the rule the round applies (lib/trust.sh), so it reads
+# the trust settings from the environment. Start from a known state.
+unset PRREVIEW_GATE_TRUSTED_AUTHORS PRREVIEW_GATE_FORK_PRS
 STUB_DIR="$(mktemp -d)"
 mkstub() {  # $1 = body
   printf '#!/usr/bin/env bash\n%s\n' "$1" > "$STUB_DIR/gh"
   chmod +x "$STUB_DIR/gh"
 }
+# PRs as `gh pr list --json number,author,isCrossRepository` prints them.
+PR_OWN='{"number":1,"author":{"login":"maint"},"isCrossRepository":false}'
+PR_FORK='{"number":2,"author":{"login":"stranger"},"isCrossRepository":true}'
+PR_FORK2='{"number":3,"author":{"login":"other"},"isCrossRepository":true}'
+PR_ALICE='{"number":4,"author":{"login":"Alice"},"isCrossRepository":true}'
+list() { local IFS=,; printf '[%s]' "$*"; }  # the JSON array of the PRs given
+# Every repo answers with the list $1.
+stub_list() { printf '%s\n' "$1" > "$STUB_DIR/all.json"; mkstub "cat '$STUB_DIR/all.json'"; }
+# The LAST repo answers with the list $1 and every other repo with $2.
+stub_last() {
+  printf '%s\n' "$1" > "$STUB_DIR/last.json"; printf '%s\n' "$2" > "$STUB_DIR/rest.json"
+  mkstub "case \"\$*\" in *bike-shop*) cat '$STUB_DIR/last.json' ;; *) cat '$STUB_DIR/rest.json' ;; esac"
+}
+count() { loop_open_pr_count ./pr-autoreview.sh "$STUB_DIR/gh"; }
 
 # One PR on the LAST repo in the list and none on the first: the shape a
 # single-repo count answers with 0.
-mkstub 'case "$*" in *bike-shop*) echo 1 ;; *) echo 0 ;; esac'
-is 'a PR on the last repo alone still admits the round' \
-   "$(loop_open_pr_count ./pr-autoreview.sh "$STUB_DIR/gh")" '1'
+stub_last "$(list "$PR_OWN")" '[]'
+is 'a PR on the last repo alone still admits the round' "$(count)" '1'
 
-mkstub 'echo 2'
-is 'counts are summed across every repo' \
-   "$(loop_open_pr_count ./pr-autoreview.sh "$STUB_DIR/gh")" '6'
+stub_list "$(list "$PR_OWN" "$PR_OWN")"
+is 'counts are summed across every repo' "$(count)" '6'
 
-mkstub 'echo 0'
-is 'a genuinely empty queue skips the round' \
-   "$(loop_open_pr_count ./pr-autoreview.sh "$STUB_DIR/gh")" '0'
+stub_list '[]'
+is 'a genuinely empty queue skips the round' "$(count)" '0'
 
 # gh down, gh unauthenticated, gh printing an error onto stdout: all of them
 # must count as work, never as an empty queue. A transient failure read as
 # zero is a review silently not happening.
 mkstub 'exit 1'
-is 'a failing gh counts as work, not as zero' \
-   "$(loop_open_pr_count ./pr-autoreview.sh "$STUB_DIR/gh")" '3'
+is 'a failing gh counts as work, not as zero' "$(count)" '3'
 mkstub 'echo "error: not logged in"'
-is 'non-numeric gh output counts as work' \
-   "$(loop_open_pr_count ./pr-autoreview.sh "$STUB_DIR/gh")" '3'
+is 'non-numeric gh output counts as work' "$(count)" '3'
 mkstub 'echo ""'
-is 'empty gh output counts as work' \
-   "$(loop_open_pr_count ./pr-autoreview.sh "$STUB_DIR/gh")" '3'
+is 'empty gh output counts as work' "$(count)" '3'
+stub_list '{"message":"Bad credentials"}'
+is 'an answer that is not a list counts as work' "$(count)" '3'
+# The round refuses a list with such an entry and reports it. Admitting the
+# round makes that report appear.
+stub_list '[{"author":{"login":"maint"},"isCrossRepository":false}]'
+is 'an entry with no number counts as work' "$(count)" '3'
 
 is 'an unreadable driven script admits the round rather than skipping it' \
    "$(loop_open_pr_count /nonexistent/script.sh "$STUB_DIR/gh")" '1'
+
+# ── the count skips what the round skips ──────────────────────────────────
+# One fork PR from a stranger, left open, must not start a round every
+# interval: the round skips it, and a round that skips everything still pays
+# for the merged-PR scan.
+stub_list "$(list "$PR_FORK" "$PR_FORK2")"
+is 'open PRs that are all untrusted fork PRs count 0' "$(count)" '0'
+stub_last "$(list "$PR_FORK" "$PR_OWN" "$PR_FORK2")" "$(list "$PR_FORK")"
+is 'one trusted PR among fork PRs counts 1' "$(count)" '1'
+stub_list "$(list "$PR_FORK" "$PR_FORK2")"
+is 'with PRREVIEW_GATE_FORK_PRS=1 fork PRs count' \
+   "$( export PRREVIEW_GATE_FORK_PRS=1; count )" '6'
+stub_last "$(list "$PR_FORK" "$PR_ALICE")" "$(list "$PR_FORK")"
+is 'a fork PR by an allowlisted author counts, whatever the letter case' \
+   "$( export PRREVIEW_GATE_TRUSTED_AUTHORS='bob, alice'; count )" '1'
+is 'the same fork PR counts 0 when its author is not on the list' \
+   "$( export PRREVIEW_GATE_TRUSTED_AUTHORS='bob'; count )" '0'
+
+# A field that is missing or of the wrong type is not trusted.
+stub_list '[{"number":5,"author":{"login":"stranger"}}]'
+is 'a PR with no isCrossRepository field counts 0' "$(count)" '0'
+stub_list '[{"number":5,"author":{"login":"stranger"},"isCrossRepository":"false"}]'
+is 'a PR whose isCrossRepository is not a boolean counts 0' "$(count)" '0'
+stub_list '[{"number":5,"isCrossRepository":true}]'
+is 'a fork PR with no author counts 0' \
+   "$( export PRREVIEW_GATE_TRUSTED_AUTHORS='stranger'; count )" '0'
+stub_list '[{"number":5,"author":null,"isCrossRepository":true}]'
+is 'a fork PR with a null author counts 0' \
+   "$( export PRREVIEW_GATE_TRUSTED_AUTHORS='stranger'; count )" '0'
+
+# One list call for each repo, and it carries what the rule reads. The default
+# limit of gh is 30; the round asks for 1000, and so does the count, or a
+# trusted PR behind 30 forks would not be seen.
+mkstub "echo \"\$*\" >> '$STUB_DIR/args'; echo '[]'"
+count >/dev/null
+is  'one list call for each repo' "$(wc -l < "$STUB_DIR/args" | tr -d ' ')" '3'
+has 'the list call reads the number, author and fork flag' '--json number,author,isCrossRepository' "$(cat "$STUB_DIR/args")"
+has 'the list call asks for the same limit as the round' '--limit 1000' "$(cat "$STUB_DIR/args")"
+
+# The loop and the round read the same process environment, and
+# `prreview run` fills that from the settings file before it starts the loop
+# (lib/prreview-config.sh): a login in the file counts here, and an exported
+# value wins over the file here as it does in the round.
+CFG="$STUB_DIR/config"
+printf 'PRREVIEW_GATE_TRUSTED_AUTHORS=alice\n' > "$CFG"
+stub_last "$(list "$PR_ALICE" "$PR_FORK")" '[]'
+is 'a login from the settings file counts' \
+   "$( prreview_config_export "$CFG"; count )" '1'
+is 'an exported login wins over the settings file' \
+   "$( export PRREVIEW_GATE_TRUSTED_AUTHORS=carol; prreview_config_export "$CFG"; count )" '0'
 rm -rf "$STUB_DIR"
 
 # ── loop_rotate_log keeps the driver's own log bounded ────────────────────
@@ -365,6 +434,12 @@ COUNTING_DRIVERS="review-loop.sh"
 for d in $COUNTING_DRIVERS; do
   has "$d sources lib/loop.sh"        'lib/loop.sh'         "$(cat "$d")"
   has "$d asks for the whole list"    'loop_open_pr_count'  "$(cat "$d")"
+  has "$d sources lib/trust.sh"       'lib/trust.sh'        "$(cat "$d")"
+  # The count reads the trust settings from the environment the round
+  # inherits. A line that sets or clears them for the round alone would split
+  # the two.
+  is  "$d does not change the trust settings for the round" \
+      "$(grep -cE 'env +-[iu]|unset +PRREVIEW_GATE_(TRUSTED_AUTHORS|FORK_PRS)|PRREVIEW_GATE_(TRUSTED_AUTHORS|FORK_PRS)=' "$d")" 0
   has "$d prunes its own log dir"     'loop_prune_logs'     "$(cat "$d")"
   # Matched on `pr list --repo` alone, NOT on a leading `gh`: the drivers
   # keep the binary in "$GH", so a pattern anchored on a literal lowercase
