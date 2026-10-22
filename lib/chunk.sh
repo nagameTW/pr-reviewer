@@ -164,8 +164,12 @@ chunk_plan() {
 # findings: deduped on file+line+issue text. Slices are told to report only
 # about their own files, so exact duplicates should be rare — except for the
 # one case where they are guaranteed and wanted: a carried finding from a
-# prior round, which the prompt requires be copied VERBATIM, so two slices
-# that both think they own it collapse to one here.
+# prior round, which the prompt requires be copied with its issue text, so two
+# slices that both think they own it collapse to one here.
+# A carried finding is keyed on file+issue and not on its line, because the
+# round task lets a slice move a wrong line to the right one. Two slices can
+# then give two lines for one finding.
+# Trade-off: the first slice in the input wins, even if its line is the old one.
 #
 # unverified: unioned and capped at 3, matching the single-pass contract. Six
 # slices each declaring three residual risks would otherwise bury the reader
@@ -197,7 +201,8 @@ CHUNK_MERGE_JQ='
     unverified: ([.[].unverified[]? | select(type == "string")] | unique | .[0:3]),
     findings: ([.[].findings[]? | select(type == "object")]
                | unique_by([(.file // "" | tostring),
-                            (.line // 0 | tostring),
+                            (if ((.issue // "" | tostring) | test("^\\s*carried[ -]over"; "i"))
+                             then "carried" else (.line // 0 | tostring) end),
                             (.issue // "" | tostring)])
                | sort_by(sev_rank)) }'
 

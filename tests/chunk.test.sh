@@ -217,6 +217,21 @@ DIFF2='{"verdict":"request_changes","summary":"x","unverified":[],"findings":[{"
 is 'merge: two different findings on one line both survive' \
    "$(printf '%s\n%s\n' "$B" "$DIFF2" | merge | jq -r '.findings | length')" '2'
 
+# A carried finding may be re-anchored when its old line is wrong (the round
+# task says so). Slices that disagree on the new anchor must still collapse
+# to one finding, so the merge keys a carried finding on file and issue.
+CA='{"verdict":"request_changes","summary":"x","unverified":[],"findings":[{"severity":"HIGH","file":"b.py","line":412,"issue":"Carried over: major issue"}]}'
+CB='{"verdict":"request_changes","summary":"x","unverified":[],"findings":[{"severity":"HIGH","file":"b.py","line":9,"issue":"Carried over: major issue"}]}'
+is 'merge: a carried finding with two different anchors collapses to one' \
+   "$(printf '%s\n%s\n' "$CA" "$CB" | merge | jq -r '.findings | length')" '1'
+CC='{"verdict":"request_changes","summary":"x","unverified":[],"findings":[{"severity":"HIGH","file":"b.py","line":9,"issue":"carried over: other issue"}]}'
+is 'merge: two different carried findings both survive' \
+   "$(printf '%s\n%s\n' "$CB" "$CC" | merge | jq -r '.findings | length')" '2'
+NA='{"verdict":"request_changes","summary":"x","unverified":[],"findings":[{"severity":"HIGH","file":"b.py","line":412,"issue":"same text"}]}'
+NB='{"verdict":"request_changes","summary":"x","unverified":[],"findings":[{"severity":"HIGH","file":"b.py","line":9,"issue":"same text"}]}'
+is 'merge: a finding that is not carried is still keyed on its line' \
+   "$(printf '%s\n%s\n' "$NA" "$NB" | merge | jq -r '.findings | length')" '2'
+
 # Eight slices of prose must not eat the cross-round memory window: the
 # comment puts the summary before the findings and the next round keeps only
 # the first 4500 characters, so an uncapped join cuts every finding off the

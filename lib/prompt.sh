@@ -552,7 +552,7 @@ prompt_repeat_blocking_files() {
 prompt_round_task_section() {
   local round="${1:-1}" known="${2:-0}" cap_on="${3:-0}"
   [ "${round:-1}" -ge 2 ] 2>/dev/null || return 0
-  printf '%s' "THIS ROUND'S TASK (round $round of this review). Two duties, in this order. (a) Verify: for every blocking finding of the previous round — quoted in the DATA block further down — report it as fixed, not-fixed or refuted; a not-fixed one is carried into your findings verbatim (same file:line, same issue text). (b) Look for new defects on the delta only: apply the review dimensions below ONLY to the files changed since the last reviewed round"
+  printf '%s' "THIS ROUND'S TASK (round $round of this review). Two duties, in this order. (a) Verify: for every blocking finding of the previous round — quoted in the DATA block further down — report it as fixed, not-fixed or refuted; a not-fixed one is carried into your findings with the same file, same severity, same issue text, and the same line. Change the line only when it is wrong: it is past the end of the file, or it is not the NEW[...] line of the code the finding names. Then give the NEW[...] line of that code. (b) Look for new defects on the delta only: apply the review dimensions below ONLY to the files changed since the last reviewed round"
   if [ "$known" = 1 ]; then
     printf '%s' " (listed in that same DATA block)"
   else
