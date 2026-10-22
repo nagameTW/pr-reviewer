@@ -63,6 +63,33 @@ has 'request: names the escape hatch verbatim'         '`split-exempt:`' "$TXT"
 has 'request: names the mechanical exemptions'         'mostly deletions' "$TXT"
 has 'request: an empty file list still renders'        '(the file list could not be read)' "$(split_request_text 2543 12 2000 40 '')"
 
+# ── localization data files do not count toward the file limit ───────────
+# The count only: the files stay in PR_FILES, the diff and the slices.
+KC_THEME="$(seq 1 39 | sed 's|^|themes/base/login/messages/messages_x|; s|$|.properties|')"
+KC="$(printf '%s\n' pom.xml services/src/main/java/org/example/A.java services/src/main/java/org/example/B.java \
+  src/test/resources/a.properties src/test/resources/b.properties src/test/resources/c.properties \
+  src/test/resources/d.properties src/test/resources/e.properties src/test/resources/f.properties "$KC_THEME")"
+is  'l10n: a keycloak-shaped list counts only the files outside localization directories' "$(split_gate_file_count "$KC")" 9
+is  'l10n: Rails, i18next and gettext data files count 0' "$(split_gate_file_count "$(printf 'config/locales/en.yml\npublic/locales/en-US/app.json\npo/zh_TW.po\nlocale/fr.pot\n')")" 0
+is  'l10n: dedicated translation extensions count 0 anywhere' "$(split_gate_file_count "$(printf 'a.xlf\nb/c.xliff\nd.arb\ne.resx\nf.strings\ng.stringsdict\n')")" 0
+is  'l10n: source files in a localization directory still count' "$(split_gate_file_count "$(printf 'src/lang/parser.go\nsrc/messages/handler.ts\ni18n/Foo.java\nlocales/gen.py\n')")" 4
+is  'l10n: a root file named like the directory counts' "$(split_gate_file_count 'app/i18n.ts')" 1
+is  'l10n: similarly named directories count' "$(split_gate_file_count "$(printf 'mylocales/en.json\nlocales-old/en.json\ni18n-tools/en.yml\nlanguage/en.yml\nmessages2/a.json\nxlocale/a.json\n')")" 6
+is  'l10n: config and data outside a localization directory count' "$(split_gate_file_count "$(printf 'package.json\n.github/workflows/ci.yml\nconfig/app.yaml\nsrc/test/resources/a.properties\nCargo.toml\n')")" 5
+is  'l10n: a data-like name that is not an allowed extension counts' "$(split_gate_file_count "$(printf 'locales/en.json.bak\nlocales/en.js\nlocales/index.ts\nlocales/README.md\n')")" 4
+is  'l10n: the directory name must be a whole segment, nested is fine' "$(split_gate_file_count "$(printf 'web/src/i18n/en/common.json\nweb/lang/de.toml\ntranslations/a/b/c.yaml\ntranslation/x.yml\nl10n/x.json\nlocale/x.yml\n')")" 0
+is  'l10n: the skipped count is the rest of the list' "$(split_l10n_file_count "$(printf 'config/locales/en.yml\nsrc/a.py\npo/de.po\n')")" 2
+is  'l10n: an empty list counts 0 and 0' "$(split_gate_file_count ''):$(split_l10n_file_count '')" '0:0'
+. lib/merge.sh
+P40="$(seq 1 40 | sed 's|^|src/f|; s|$|.py|')"; L10="$(seq 1 10 | sed 's|^|config/locales/l|; s|$|.yml|')"
+is  'gate: 40 counted files plus 10 localization files stay within the ceiling' "$(rc merge_size_allowed 100 "$(split_gate_file_count "$(printf '%s\n%s\n' "$P40" "$L10")")" 2000 40)" 0
+is  'gate: 41 counted files plus 10 localization files ask for a split' "$(rc merge_size_allowed 100 "$(split_gate_file_count "$(printf '%s\nsrc/extra.py\n%s\n' "$P40" "$L10")")" 2000 40)" 1
+is  'gate: the raw count of 50 would have asked for a split' "$(rc merge_size_allowed 100 "$(printf '%s\n%s\n' "$P40" "$L10" | grep -c '')" 2000 40)" 1
+is  'l10n: the localization files stay in the list the slices are built from' "$(printf '%s\n%s\n' "$P40" "$L10" | grep -c 'locales')" 10
+has 'request: names the files that do not count' '10 are localization data files: they do not count toward the file limit and are still reviewed' "$(split_request_text 2543 52 2000 40 "$FILES" 10)"
+is  'request: no localization sentence when none were skipped' "$(case "$(split_request_text 2543 12 2000 40 "$FILES")" in *localization*) echo yes;; *) echo no;; esac)" no
+is  'request: a zero skipped count adds no sentence' "$(case "$(split_request_text 2543 12 2000 40 "$FILES" 0)" in *localization*) echo yes;; *) echo no;; esac)" no
+
 # ── the claim section for the prompt ──────────────────────────────────────
 SEC="$(split_claim_section claim "$(split_exempt_claim "$BODY_CLAIM")" N0NCE)"
 has 'claim section: fenced with the nonce'             '=== SPLIT-EXEMPT BEGIN N0NCE ===' "$SEC"

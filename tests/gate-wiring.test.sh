@@ -84,6 +84,8 @@ if [ "$SYM_GUARD" = 'if [ "$GATE_SYMBOLS" = 1 ]; then' ]; then ok 'the symbol ta
 # every model call, and the old size hold survives only under its knob.
 before 'the split request is decided before the replay seam' 'SPLIT_TEXT="$(split_request_text' '# ── REPLAY-SEAM-BEGIN' pr-autoreview.sh
 before 'the split request is decided before the main review is planned' 'SPLIT_TEXT="$(split_request_text' 'ROUND_SAMPLES="$(chunk_samples_for_round' pr-autoreview.sh
+pin    'the file ceiling compares the count without localization data files' 'if ! merge_size_allowed "$SIZE" "$GATE_FILE_COUNT" \' pr-autoreview.sh
+pin    'the split request is told how many localization files were left out' '"$GATE_MAX_REVIEW_FILES" "$PR_FILES" "$L10N_FILE_COUNT")"' pr-autoreview.sh
 pin    'the split-exemption claim section is in the prompt' '$SPLIT_SECTION' pr-autoreview.sh
 pin    'an exempt oversize PR doubles its first-round samples' 'SAMPLES_ROUND1 * ${SPLIT_X:-1}' pr-autoreview.sh
 # A review that ran but left nothing usable is held, or the next round pays

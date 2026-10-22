@@ -152,6 +152,12 @@ All notable changes to this project are recorded here. The format follows
 
 ### Fixed
 
+- Localization data files no longer count toward the 40-file limit that
+  triggers a split request. They are `.json`, `.yml`, `.yaml`, `.properties`
+  and `.toml` files under a directory such as `locales`, `i18n` or `messages`,
+  and files with a translation extension such as `.po` or `.xlf`. The
+  reviewer still reads them in full, and the split request tells the author
+  how many files it left out of the count. Source files always count.
 - Every `prreview` command except `set` rejects an argument it does not take.
   It prints `unknown argument: X` and the usage line of that command, exits
   with code 2, and changes nothing. Before, `prreview uninstall --help` removed the
