@@ -100,7 +100,8 @@ run has three pushes and three rounds. Round 3 approves.
   - One review call for each slice. A slice is a part of the diff of about 250
     lines. A round has up to 8 slices.
   - A second review call for each slice. This happens in a first round on a
-    diff of 1000 lines or more, and on a split-exempt PR.
+    diff of 1000 lines or more, and in the first round of a split-exempt PR
+    ([definition](docs/operations.md#how-one-round-works)).
   - One refutation call for each blocking finding, up to 6.
   - One repair call.
 
@@ -108,11 +109,11 @@ run has three pushes and three rounds. Round 3 approves.
   repair call. No test run has covered that case. Its cost is unknown.
 - Round 1 of the demo cost $0.54. The three rounds cost $1.14 (Run A). A second
   test PR cost $0.75. A push that changed nothing then cost $0.73 (Run B). On a
-  small clean PR, the red team added $0.23 to a $0.34 review (Run C). These runs
-  took place in September and October 2026. The figures come from those runs
-  and do not give the cost of the current defaults. The dollar
-  figure is what `claude -p` reports. On a subscription, it counts against your
-  usage limits and not against a bill.
+  small clean PR, the red team added $0.23 to a $0.34 review (Run C). The red
+  team is an optional step that argues against an approval. See
+  [How a review works](#how-a-review-works). These runs took place in
+  September and October 2026. The dollar figure is what `claude -p` reports. On
+  a subscription, it counts against your usage limits and not against a bill.
 
 ## Status and limits
 
@@ -294,7 +295,7 @@ The reviewer does not report these:
 CRITICAL and HIGH findings block. MEDIUM and LOW findings are listed and do not
 block. "Block" only decides the verdict text. You can
 [add, remove or change items](docs/configuration.md#adding-your-own-checks).
-The [checks/](checks/) folder has the full text of each check.
+The [checks/](checks/) folder has the full text of each item.
 
 One round has seven steps. The first four steps make no model call.
 

@@ -89,7 +89,7 @@
 
 - 每次推送到 PR，立即開始新的一輪。編輯 PR 的標題、描述或 base 分支，也會開始新的一輪。
   推送到堆疊式 PR 的父分支也一樣。堆疊式 PR 是建立在另一個 PR 分支上的 PR。若 head 未變，
-  這兩種情況等到審查工具上一則留言滿 10 分鐘才處理。等待時間由
+  編輯 PR 與推送到父分支這兩種情況，等到審查工具上一則留言滿 10 分鐘才處理。等待時間由
   `PRREVIEW_GATE_PR_COOLDOWN_MIN` 設定。
 - 一輪最多可能發出以下呼叫：
   - 每個切片一次審查呼叫。切片是 diff 切出的一小段，約 250 行。一輪最多 8 個切片。
@@ -104,12 +104,12 @@
   - 展示的第 1 輪花費 $0.54。三輪共花費 $1.14，編號 Run A。
   - 第二個測試 PR 花費 $0.75。之後一次未改動內容的推送花費 $0.73，編號 Run B。
   - 在一個小型且無問題的 PR 上，審查花費 $0.34。紅隊另外增加 $0.23，編號 Run C。
-  - 這些執行發生在 2026 年 9 月與 10 月。這些金額來自上述執行，並未給出目前預設值的花費。
-  - 金額取自 `claude -p` 的回報。使用訂閱方案時，這些金額計入用量上限，不計入帳單。
+    紅隊是選用功能，會對核准提出反駁，說明見〈[審查運作方式](#審查運作方式)〉。
+  - 這些執行發生在 2026 年 9 月與 10 月。金額取自 `claude -p` 的回報。使用訂閱方案時，這些金額計入用量上限，不計入帳單。
 
 ## 狀態與限制
 
-- **1.0 之前。** 版本之間任何事都可能改變。升級前請閱讀 [CHANGELOG.md](CHANGELOG.md)。
+- **1.0 之前。** 版本之間任何內容都可能改變。升級前請閱讀 [CHANGELOG.md](CHANGELOG.md)。
 - **偵測能力未知。** 尚無人統計它找出多少 bug。尚無人統計它產生多少誤報。
 - **它只讀程式碼。** 它不執行測試。它不讀取 CI 結果。判定是一則留言，不是 GitHub 的
   review 狀態。核准橫幅的文字是 `Automated review, not a GitHub approval.`。
@@ -118,7 +118,7 @@
   - CI 在 macOS 上以 bash 3.2 的 `/bin/bash` 執行測試。
   - WSL2 不在 CI 內。只有維護者自己的機器確認過，詳見 [docs/windows.md](docs/windows.md)。
   - Bedrock、Vertex 與 gateway 未經測試。
-- **一項已知缺口。** 合併進預設分支的 PR，其 review key 不含 base commit。
+- **一項已知缺口。** 以預設分支為目標的 PR，其 review key 不含 base commit。
   詳見[已知限制](SECURITY.md#known-limits)。
 - **三種情況不適合：**
   - 多人共用一個 Claude 登入。
@@ -194,8 +194,8 @@ head 已有判定。結束碼 `75` 表示無判定且無步驟失敗，例如草
 ### 4. 啟動服務
 
 > [!WARNING]
-> 注意：在信任本工具之前，只列出自己擁有的 repo。第一輪會審查所列 repo 中，由受信任作者
-> 開啟的每個非草稿 PR。審查工具以 `gh` 帳號在每個 PR 上留言。每次審查都消耗模型用量。
+> 注意：在信任本工具之前，只列出自己擁有的 repo。第一輪會審查所列 repo 中，作者受信任
+> 且狀態為開啟的每個非草稿 PR。審查工具以 `gh` 帳號在每個 PR 上留言。每次審查都消耗模型用量。
 
 ```bash
 prreview start
@@ -207,11 +207,9 @@ prreview logs -f
 使用者服務無 ssh-agent，詳見[說明](docs/operations.md#where-to-run-it)。若無待審 PR，
 迴圈每檢查 15 次才開始一輪。
 
-在 Linux 上，登出時 systemd 會停止使用者服務。若要持續
-運作，執行一次 `sudo loginctl enable-linger "$USER"`。
+在 Linux 上，登出時 systemd 會停止使用者服務。若要持續運作，執行一次 `sudo loginctl enable-linger "$USER"`。
 
-在 WSL2 上，服務需要
-`systemd=true`。WSL 關閉時服務停止。詳見 [docs/windows.md](docs/windows.md)。
+在 WSL2 上，服務需要 `systemd=true`。WSL 關閉時服務停止。詳見 [docs/windows.md](docs/windows.md)。
 
 ## 常用指令
 
@@ -242,9 +240,7 @@ prreview setup
 
 setup 重新啟動服務，因為迴圈在重新啟動前仍執行舊的程式碼。
 
-若
-`claude --version` 或 `gh --version` 低於最低版本，setup 會停止。請更新該工具。然後再次
-執行 setup。
+若 `claude --version` 或 `gh --version` 低於最低版本，setup 會停止。請更新 `claude` 或 `gh`，然後再次執行 setup。
 
 在 0.2.0 之後的版本，審查工具略過 fork PR。作者列在
 `PRREVIEW_GATE_TRUSTED_AUTHORS` 中的 PR 除外。`prreview status` 顯示略過的數量。設定
@@ -355,8 +351,7 @@ bash tests/run-all.sh
 網路、`gh` 或模型。未安裝 `shellcheck` 時該指令失敗。請在 `git clone` 的目錄內執行。
 檢查使用 `git ls-files` 列出腳本。ZIP 下載的內容在這一步失敗。
 
-CI 在 Ubuntu 與 macOS 上
-執行相同的指令。請見 [CONTRIBUTING.md](CONTRIBUTING.md)。本專案把可預測的審查行為，置於
+CI 在 Ubuntu 與 macOS 上執行相同的指令。請見 [CONTRIBUTING.md](CONTRIBUTING.md)。本專案把可預測的審查行為，置於
 審查範圍的廣度之前。
 
 ## 授權
