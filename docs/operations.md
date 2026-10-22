@@ -225,7 +225,7 @@ verdict and do not block. Two kinds of HIGH finding are listed and do not block:
   next to it.
 
 When two or more findings that do not block are about tests, conventions,
-wording, process or a doc for maintainers, the comment lists them as one item,
+wording, process or a doc for maintainers or team members, the comment lists them as one item,
 `Tests, docs and process (N)`. A HIGH finding is never in this item.
 
 "Block" here only decides the verdict. The reviewer itself never stops a merge.

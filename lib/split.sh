@@ -26,15 +26,21 @@ SPLIT_EXEMPT_RE_DEFAULT='(^|/)(package-lock\.json|yarn\.lock|pnpm-lock\.yaml|poe
 # only changes the number compared with the ceiling, never the diff, the
 # slices or the file list. A translated string can carry HTML, so these files
 # are a way in for XSS and are not skipped.
-# Two rules, both exact:
+# Three rules, all exact:
 #   1. A data extension (json, yml, yaml, properties, toml) under a directory
-#      named as a WHOLE path segment: locale(s), i18n, l10n, translation(s),
-#      messages or lang. `mylocales/`, `locales-old/` and `language/` do not match.
-#   2. An extension used only for translations, in any directory.
+#      named as a WHOLE path segment: locale(s), i18n, l10n, translation(s).
+#      `mylocales/`, `locales-old/` and `language/` do not match.
+#   2. The same extensions under `messages` or `lang`, only when the base name
+#      carries a locale code: it is a code (`en.json`, `pt-BR.json`) or ends in
+#      _<code> or .<code> (`messages_de.properties`, `messages.fr.yaml`). These
+#      two names also hold plain data such as `api/messages/user-created.json`.
+#      A code is 2 or 3 lowercase letters, then optionally [-_] and 2 to 4
+#      letters or a 3-digit region.
+#   3. An extension used only for translations, in any directory.
 # Source files always count, even in these directories (`i18n/Foo.java`).
 # Any other layout is the author's to explain with `split-exempt:`.
 # shellcheck disable=SC2034  # read by split_l10n_file_count
-SPLIT_L10N_RE='(^|/)(locales?|i18n|l10n|translations?|messages|lang)/(.*/)?[^/]+\.(json|ya?ml|properties|toml)$|\.(po|pot|xlf|xliff|arb|resx|strings|stringsdict)$'
+SPLIT_L10N_RE='(^|/)(locales?|i18n|l10n|translations?)/(.*/)?[^/]+\.(json|ya?ml|properties|toml)$|(^|/)(messages|lang)/(.*/)?([^/]*[._])?[a-z]{2,3}([-_]([A-Za-z]{2,4}|[0-9]{3}))?\.(json|ya?ml|properties|toml)$|\.(po|pot|xlf|xliff|arb|resx|strings|stringsdict)$'
 
 # $1 newline-separated file list. Prints how many files match SPLIT_L10N_RE.
 split_l10n_file_count() {

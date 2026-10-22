@@ -65,7 +65,7 @@ has 'request: an empty file list still renders'        '(the file list could not
 
 # ── localization data files do not count toward the file limit ───────────
 # The count only: the files stay in PR_FILES, the diff and the slices.
-KC_THEME="$(seq 1 39 | sed 's|^|themes/base/login/messages/messages_x|; s|$|.properties|')"
+KC_THEME="$(seq 1 39 | awk '{printf "themes/base/login/messages/messages_%c%c.properties\n", 97+int($1/26), 97+$1%26}')"
 KC="$(printf '%s\n' pom.xml services/src/main/java/org/example/A.java services/src/main/java/org/example/B.java \
   src/test/resources/a.properties src/test/resources/b.properties src/test/resources/c.properties \
   src/test/resources/d.properties src/test/resources/e.properties src/test/resources/f.properties "$KC_THEME")"
@@ -78,6 +78,10 @@ is  'l10n: similarly named directories count' "$(split_gate_file_count "$(printf
 is  'l10n: config and data outside a localization directory count' "$(split_gate_file_count "$(printf 'package.json\n.github/workflows/ci.yml\nconfig/app.yaml\nsrc/test/resources/a.properties\nCargo.toml\n')")" 5
 is  'l10n: a data-like name that is not an allowed extension counts' "$(split_gate_file_count "$(printf 'locales/en.json.bak\nlocales/en.js\nlocales/index.ts\nlocales/README.md\n')")" 4
 is  'l10n: the directory name must be a whole segment, nested is fine' "$(split_gate_file_count "$(printf 'web/src/i18n/en/common.json\nweb/lang/de.toml\ntranslations/a/b/c.yaml\ntranslation/x.yml\nl10n/x.json\nlocale/x.yml\n')")" 0
+is  'l10n: a data file under messages or lang without a locale code counts' "$(split_gate_file_count "$(printf 'api/messages/user-created.json\nlang/grammar.toml\n')")" 2
+is  'l10n: a locale-coded file under messages or lang does not count' "$(split_gate_file_count "$(printf 'messages/en.json\nmessages/messages_de.properties\nlang/pt-BR.json\nmessages/messages.fr.yaml\nmessages/messages_pt_BR.properties\nlang/zh_TW.yml\nlang/fil.toml\napi/lang/es-419.json\n')")" 0
+is  'l10n: a keycloak theme messages file does not count' "$(split_gate_file_count 'themes/src/main/resources-community/theme/base/login/messages/messages_de.properties')" 0
+is  'l10n: the locale code rule leaves the unambiguous directories alone' "$(split_gate_file_count "$(printf 'locales/schema.json\ni18n/app-strings.yml\n')")" 0
 is  'l10n: the skipped count is the rest of the list' "$(split_l10n_file_count "$(printf 'config/locales/en.yml\nsrc/a.py\npo/de.po\n')")" 2
 is  'l10n: an empty list counts 0 and 0' "$(split_gate_file_count ''):$(split_l10n_file_count '')" '0:0'
 . lib/merge.sh
