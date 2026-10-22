@@ -334,11 +334,117 @@ prreview set checks "$T/team" >/dev/null
 printf '\n\n\n\nn\n' | prreview setup >/dev/null 2>&1
 is 'setup keeps a checklist chosen with prreview set checks' "$(prreview get checks)" "$T/team"
 prreview set checks "$MYCHECKS" >/dev/null
-# gh set to clone over ssh: setup explains the service's missing ssh-agent
-# and, on yes, switches gh to https.
-OUT="$(printf 'y\n\n\n\n\nn\n' | FAKE_GH_PROTOCOL=ssh FAKE_GH_SET_LOG="$T/ghset.log" prreview setup 2>&1)"
-has 'setup warns when gh clones over ssh' "$OUT" 'no ssh-agent'
-is '...and switches it to https on yes' "$(cat "$T/ghset.log" 2>/dev/null)" 'config set git_protocol https -h github.com'
+# ── the service question and the gh https question ───────────────────────
+# The service question defaults to n while no service is installed and to y
+# while one is. The https question belongs to the service: it is asked only
+# where the service is installed or started. The unit file in $H decides
+# "installed"; this systemctl logs its calls and succeeds, so a started
+# service reads as running.
+D2="$T/d2"; mkdir -p "$D2"
+# With FAKE_SYSTEMCTL_STOPPED set, is-active fails, so an installed service
+# reads as stopped.
+printf '#!/bin/sh\necho "$*" >> "%s"\ncase "$*" in *is-active*) [ -z "$FAKE_SYSTEMCTL_STOPPED" ] || exit 3 ;; esac\n' "$D2/systemctl.log" > "$D2/systemctl"; chmod +x "$D2/systemctl"
+UNIT_FILE="$H/.config/systemd/user/$PRREVIEW_SERVICE_NAME.service"
+# d2_via <runner> <gh git_protocol> <prreview arguments>: on Linux; gh records
+# config set. The runner (a command name, or empty) starts the command.
+d2_via() {
+  local run="$1" proto="$2"; shift 2
+  $run "${PRREVIEW_ENV[@]}" PRREVIEW_PLATFORM=linux PATH="$D2:$FAKE:$PATH" FAKE_GH_PROTOCOL="$proto" FAKE_GH_SET_LOG="$D2/ghset.log" bash "$ROOT/prreview" "$@"
+}
+d2() { d2_via "" "$@"; }
+# pty_run <command...>: runs the command with a terminal on stdin and stdout.
+# This script's stdin gives the typed answers. script(1) from util-linux takes
+# the command as a string. The BSD one on macOS takes it as arguments. A
+# deadline stops a terminal that waits for input for good.
+pty_run() {
+  if script --version >/dev/null 2>&1; then
+    "$TIMEOUT_BIN" 30 script -qec "$(printf '%q ' "$@")" /dev/null
+  else
+    "$TIMEOUT_BIN" 30 script -q /dev/null "$@"
+  fi
+}
+d2_tty() { d2_via pty_run "$@"; }
+d2_reset() { rm -f "$UNIT_FILE" "$D2/ghset.log"; : > "$D2/systemctl.log"; }
+# Five answers for the steps before the service question: Enter for the
+# repositories, who posts, parallel and model; n for the patterns file.
+D2_STEPS='\n\n\n\nn\n'
+
+d2_reset
+OUT="$(printf "${D2_STEPS}\n" | d2 ssh setup 2>&1)"
+has 'the service question defaults to n while no service is installed' "$OUT" 'starts at login)? (y/n) [n]: '
+is '...so Enter installs nothing' "$([ -e "$UNIT_FILE" ] && echo installed || echo none)" none
+is '...asks nothing about gh, though it clones over ssh' "$(grep -c 'no ssh-agent' <<<"$OUT")" 0
+is '...and does not call gh config set' "$(cat "$D2/ghset.log" 2>/dev/null)" ''
+
+d2_reset
+OUT="$(printf "${D2_STEPS}n\n" | d2 ssh setup 2>&1)"
+is 'n to the service question does not call gh config set' "$(cat "$D2/ghset.log" 2>/dev/null)" ''
+
+d2_reset; mkdir -p "$(dirname "$UNIT_FILE")"; : > "$UNIT_FILE"
+OUT="$(printf "${D2_STEPS}\n" | d2 https setup 2>&1)"
+has 'the service question defaults to y while a service is installed' "$OUT" 'starts at login)? (y/n) [y]: '
+has '...so Enter reinstalls it and restarts it' "$(cat "$D2/systemctl.log")" "--user restart $PRREVIEW_SERVICE_NAME"
+
+d2_reset
+OUT="$(printf "${D2_STEPS}y\ny\n" | d2 ssh setup 2>&1)"
+has 'y to the service question: setup warns when gh clones over ssh' "$OUT" 'no ssh-agent'
+is '...and switches gh to https on yes' "$(cat "$D2/ghset.log" 2>/dev/null)" 'config set git_protocol https -h github.com'
+is '...before it installs the service' "$([ -e "$UNIT_FILE" ] && echo installed || echo none)" installed
+
+d2_reset
+printf "${D2_STEPS}y\nn\n" | d2 ssh setup >/dev/null 2>&1
+is 'n to the https question leaves gh alone' "$(cat "$D2/ghset.log" 2>/dev/null)" ''
+is '...and the service is installed anyway' "$([ -e "$UNIT_FILE" ] && echo installed || echo none)" installed
+
+# prreview start. A service that is not installed is installed here, and the
+# https question belongs to that step. With no terminal on stdin, start prints
+# the advice and the command and asks nothing: it must not stop at the end of
+# the input. A service that is installed starts or runs with no question.
+d2_reset
+OUT="$(d2 ssh start </dev/null 2>&1)"; RC=$?
+is 'start with no terminal installs the service while gh clones over ssh' "$RC" 0
+is '...and does install it' "$([ -e "$UNIT_FILE" ] && echo installed || echo none)" installed
+has '...says why ssh can fail' "$OUT" 'no ssh-agent'
+has '...prints the command that switches gh' "$OUT" "gh config set git_protocol https -h github.com"
+is '...asks nothing, so it does not stop at the end of the input' "$(grep -c 'no more input' <<<"$OUT")" 0
+is '...and leaves gh alone' "$(cat "$D2/ghset.log" 2>/dev/null)" ''
+d2_reset
+OUT="$(d2 https start </dev/null 2>&1)"
+is 'start with no terminal prints no https advice when gh already uses https' "$(grep -c 'no ssh-agent' <<<"$OUT")" 0
+OUT="$(d2 ssh start </dev/null 2>&1)"
+has 'start asks nothing when the service already runs' "$OUT" 'Already running'
+is '...and gives no advice' "$(grep -c 'no ssh-agent' <<<"$OUT")" 0
+
+# A stopped service that is installed: start starts it and asks nothing, with
+# or without a terminal.
+d2_reset; mkdir -p "$(dirname "$UNIT_FILE")"; : > "$UNIT_FILE"
+OUT="$(FAKE_SYSTEMCTL_STOPPED=1 d2 ssh start </dev/null 2>&1)"; RC=$?
+is 'start of a stopped service starts it' "$RC" 0
+has '...with enable --now' "$(cat "$D2/systemctl.log")" "--user enable --now $PRREVIEW_SERVICE_NAME"
+has '...and says Started' "$OUT" 'Started.'
+is '...asks nothing, so it does not stop at the end of the input' "$(grep -c 'no more input' <<<"$OUT")" 0
+is '...gives no https advice' "$(grep -c 'no ssh-agent' <<<"$OUT")" 0
+is '...and leaves gh alone' "$(cat "$D2/ghset.log" 2>/dev/null)" ''
+
+# With a terminal, answers typed to the https question reach gh. A pty needs
+# script(1). Trade-off: a system whose script cannot give a terminal skips
+# these cases, and the Linux runs of the suite check them.
+if [ "$(printf '' | pty_run bash -c 'test -t 0 && echo tty' 2>/dev/null | tr -d '\r')" = tty ]; then
+  d2_reset
+  printf 'y\n' | d2_tty ssh start >/dev/null 2>&1
+  is 'start at a terminal asks about https where it installs the service, and switches on yes' "$(cat "$D2/ghset.log" 2>/dev/null)" 'config set git_protocol https -h github.com'
+  is '...and installs it' "$([ -e "$UNIT_FILE" ] && echo installed || echo none)" installed
+  d2_reset
+  printf 'n\n' | d2_tty ssh start >/dev/null 2>&1
+  is 'start at a terminal with n to the https question leaves gh alone' "$(cat "$D2/ghset.log" 2>/dev/null)" ''
+  is '...and still installs the service' "$([ -e "$UNIT_FILE" ] && echo installed || echo none)" installed
+  d2_reset; mkdir -p "$(dirname "$UNIT_FILE")"; : > "$UNIT_FILE"
+  printf 'y\n' | FAKE_SYSTEMCTL_STOPPED=1 d2_tty ssh start >/dev/null 2>&1
+  is 'start at a terminal does not ask when it starts a stopped service' "$(cat "$D2/ghset.log" 2>/dev/null)" ''
+else
+  echo '  skip start at a terminal: script(1) gives no terminal here'
+fi
+rm -f "$UNIT_FILE"
 
 # ── setup with a GitHub App ───────────────────────────────────────────────
 # curl answers for an App that can see me/api but not acme/web; the key is

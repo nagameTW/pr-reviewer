@@ -11,6 +11,12 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 
 FAILED=0
 
+# Set the trap before any temp path exists. It then covers BASH_DIR from the
+# moment mktemp makes it. Both paths are empty until then, and rm -f ignores
+# an empty operand (POSIX).
+BASH_DIR=""; LISTF=""
+trap 'rm -rf "$LISTF" "$BASH_DIR"' EXIT
+
 # Tests and scripts start `bash` by name or by `#!/usr/bin/env bash`. Put the
 # bash that runs this file first on PATH, so that bash is the one under test
 # everywhere. On macOS a Homebrew bash can come before /bin/bash on PATH, and
@@ -56,7 +62,7 @@ run() {
 # is invisible to `set -e` and to pipefail, so a git that dies part way through
 # leaves a non-empty but TRUNCATED list — this runner then lints a subset and
 # prints ALL PASS. Same class as the mapfile bug above, same lesson.
-LISTF="$(mktemp)"; trap 'rm -rf "$LISTF" "$BASH_DIR"' EXIT
+LISTF="$(mktemp)" || exit 1
 git ls-files --cached --others --exclude-standard '*.sh' prreview > "$LISTF" || { echo "git ls-files failed — refusing to report a pass"; exit 1; }
 SH=()
 while IFS= read -r f; do SH+=("$f"); done < "$LISTF"

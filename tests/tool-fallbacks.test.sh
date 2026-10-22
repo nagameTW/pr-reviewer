@@ -175,6 +175,26 @@ lacks '...and macOS gets no gnubin PATH step' 'gnubin' "$OUT"
 lacks '...and no gtimeout advice' 'gtimeout' "$OUT"
 lacks '...and no PATH export' 'export PATH' "$OUT"
 
+# setup_claude asks `claude auth status` through TIMEOUT_BIN too. With
+# gtimeout alone, a plain `timeout` there would leave the answer empty, and
+# setup would print "Could not ask" in place of "not logged in".
+eval "$(awk '/^setup_claude\(\) \{/ { f = 1 } f { print } f && /^\}/ { f = 0 }' prreview)"
+declare -F setup_claude >/dev/null \
+  && ok 'prreview defines setup_claude' || bad 'prreview defines setup_claude' 'one function' 'absent'
+cat > "$TMP/auth-claude" <<'STUB'
+#!/bin/bash
+case "${1-}" in
+  --version) echo "2.1.305 (Claude Code)" ;;
+  auth) echo '{"loggedIn":false}' ;;
+esac
+STUB
+chmod +x "$TMP/auth-claude"
+claude_setup() { tools_resolve >/dev/null 2>&1; CLAUDE_BIN="$TMP/auth-claude" setup_claude; }
+OUT="$(under "$TMP/gtimeout:$TMP/setup-base" claude_setup 2>&1)"; RC=$?
+is  'gtimeout alone: setup_claude reads the login state, not logged in: status 1' "$RC" 1
+has '...and says Claude Code is not logged in' 'Claude Code is not logged in' "$OUT"
+lacks '...and does not say it could not ask' 'Could not ask' "$OUT"
+
 # ── the docs ───────────────────────────────────────────────────────────────
 lacks 'README.md has no gnubin PATH step' 'gnubin' "$(cat README.md)"
 has   'README.md names the timeout alternative' 'gtimeout' "$(cat README.md)"
