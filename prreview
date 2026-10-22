@@ -573,8 +573,11 @@ cmd_once() {
 # Trade-off: the count is as old as that log. With the service stopped, it
 # stays at the last round that ran.
 skipped_prs_line() {
-  local last n=0
-  if [ "$(setting PRREVIEW_GATE_FORK_PRS)" = 1 ]; then
+  local last n=0 fork
+  # An exported value wins over the settings file, as in a round
+  # (prreview_config_export). An exported empty value wins too.
+  fork="${PRREVIEW_GATE_FORK_PRS-$(setting PRREVIEW_GATE_FORK_PRS)}"
+  if [ "$fork" = 1 ]; then
     echo "none, PRREVIEW_GATE_FORK_PRS=1 reviews fork PRs"
     return 0
   fi

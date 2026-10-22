@@ -517,7 +517,7 @@ is 'prreview run starts the loop with no PR named' "$(head -1 "$LOOP_PROBE")" 'o
 
 # ── prreview status ───────────────────────────────────────────────────────
 mkdir -p "$H/.cache/pr-reviewer/gate-logs"
-status() { env -i HOME="$H" PATH="$T/bin:$PATH" GH_BIN="$T/bin/gh" PRREVIEW_PLATFORM=unsupported bash "$ROOT/prreview" status 2>&1; }
+status() { env -i HOME="$H" PATH="$T/bin:$PATH" GH_BIN="$T/bin/gh" PRREVIEW_PLATFORM=unsupported "$@" bash "$ROOT/prreview" status 2>&1; }
 has 'status shows no skipped PRs before any round' "$(status)" 'Skipped PRs:  0'
 printf 'WARNING: 5 PR(s) from forks were not reviewed. old\n' > "$H/.cache/pr-reviewer/gate-logs/round-a-1.log"
 touch -t 202601010000 "$H/.cache/pr-reviewer/gate-logs/round-a-1.log"
@@ -527,6 +527,10 @@ has 'status shows the count of the newest round log' "$OUT" 'Skipped PRs:  3'
 has '...and how to review one'                       "$OUT" 'prreview once --pr owner/repo#N'
 printf 'PRREVIEW_GATE_REPOS=owner/repo\nPRREVIEW_GATE_FORK_PRS=1\n' > "$H/.config/pr-reviewer/config"
 has 'status says when fork PRs are reviewed' "$(status)" 'Skipped PRs:  none, PRREVIEW_GATE_FORK_PRS=1 reviews fork PRs'
+# The round lets an exported value win over the settings file, so status does too.
+has 'status: an exported 0 wins over a 1 in the file' "$(status PRREVIEW_GATE_FORK_PRS=0)" 'Skipped PRs:  3'
+printf 'PRREVIEW_GATE_REPOS=owner/repo\n' > "$H/.config/pr-reviewer/config"
+has 'status: an exported 1 counts when the file has none' "$(status PRREVIEW_GATE_FORK_PRS=1)" 'Skipped PRs:  none, PRREVIEW_GATE_FORK_PRS=1 reviews fork PRs'
 
 # ── prreview set ──────────────────────────────────────────────────────────
 rm -f "$H/.config/pr-reviewer/config"
