@@ -26,8 +26,8 @@ All notable changes to this project are recorded here. The format follows
   reviewed. `PRREVIEW_GATE_FORK_PRS=1` reviews every PR, as before.
 - `prreview status` shows how many PRs the last round skipped. A round that
   skips PRs prints one `WARNING:` line with the count.
-- `README.zh-TW.md` is a Traditional Chinese README. It states the same facts
-  as `README.md`.
+- `README.zh-TW.md` is a translation of `README.md`. It states the same
+  facts.
 
 ### Changed
 
