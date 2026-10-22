@@ -36,7 +36,7 @@ All notable changes to this project are recorded here. The format follows
   lines of each cited file now writes the pattern with a leading `(`. The check
   is off by default.
 
-## [0.2.2] - 2026-10-21
+## [0.2.2] - 2026-10-22
 
 ### Security
 
