@@ -5,6 +5,10 @@
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 . lib/clone.sh || { echo "FAIL: cannot source lib/clone.sh"; exit 1; }
+. lib/tools.sh || { echo "FAIL: cannot source lib/tools.sh"; exit 1; }
+# macOS without the coreutils gnubin directory has gtimeout and no timeout.
+# Find the commands the way the scripts do.
+tools_resolve || { echo "FAIL: no timeout command or no SHA-256 command on PATH"; exit 1; }
 
 FAILED=0
 ok()  { printf '  ok   %s\n' "$1"; }

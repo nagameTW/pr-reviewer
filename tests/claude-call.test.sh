@@ -19,6 +19,10 @@ lacks() { case "$3" in *"$2"*) bad "$1" "must not contain '$2', got: $3";; *) ok
 for h in ok bad is has lacks; do command -v "$h" >/dev/null 2>&1 || { echo "  FAIL helper $h is not defined"; FAILED=1; }; done
 
 . lib/claude-call.sh || { echo "  FAIL lib/claude-call.sh missing or broken"; echo "FAIL: claude call"; exit 1; }
+. lib/tools.sh || { echo "FAIL: cannot source lib/tools.sh"; exit 1; }
+# macOS without the coreutils gnubin directory has gtimeout and no timeout.
+# Find the commands the way the scripts do.
+tools_resolve || { echo "FAIL: no timeout command or no SHA-256 command on PATH"; exit 1; }
 
 STUB="$(mktemp -d)"
 trap 'rm -rf "$STUB"' EXIT
@@ -45,7 +49,7 @@ PROMPT_MARK="prompt-marker-4f1c review this diff"
 run_call() {
   : > "$STUB/argv"; : > "$STUB/env"; : > "$STUB/stdin"
   printf '%s\n' "$PROMPT_MARK" \
-    | env CLAUDE_BIN="$STUB/claude" STUB_DIR="$STUB" \
+    | env CLAUDE_BIN="$STUB/claude" STUB_DIR="$STUB" TIMEOUT_BIN="$TIMEOUT_BIN" \
         GH_TOKEN=gh-test-value GITHUB_TOKEN=gh-test-value \
         GH_ENTERPRISE_TOKEN=gh-test-value GITHUB_ENTERPRISE_TOKEN=gh-test-value \
         ANTHROPIC_API_KEY=api-test-value HTTPS_PROXY=http://192.0.2.10:3128 \

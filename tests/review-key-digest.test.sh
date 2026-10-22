@@ -33,6 +33,9 @@ for h in ok bad is has; do command -v "$h" >/dev/null 2>&1 || { echo "  FAIL hel
 . lib/prompt.sh || { echo "FAIL: could not source lib/prompt.sh"; exit 1; }
 . lib/merge.sh  || { echo "FAIL: could not source lib/merge.sh"; exit 1; }
 . lib/tools.sh  || { echo "FAIL: could not source lib/tools.sh"; exit 1; }
+# macOS without the coreutils gnubin directory has gsha256sum and no sha256sum.
+# Find the command the way the scripts do.
+tools_resolve || { echo "FAIL: no timeout command or no SHA-256 command on PATH"; exit 1; }
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -42,8 +45,10 @@ REAL_JQ="$(command -v jq)"
 # runs, so a case whose stub never ran cannot pass by doing nothing.
 STUBS="$TMP/stubs"
 mkdir -p "$STUBS/sha-exit1" "$STUBS/sha-silent" "$STUBS/jq-digest" "$STUBS/jq-head-exit1" "$STUBS/jq-head-silent"
-printf '#!/bin/bash\n: > "$STUB_FIRED"\ncat >/dev/null\nexit 1\n' > "$STUBS/sha-exit1/sha256sum"
-printf '#!/bin/bash\n: > "$STUB_FIRED"\ncat >/dev/null\nexit 0\n' > "$STUBS/sha-silent/sha256sum"
+# The stubs take the name of the hash command the scripts resolved: sha256sum
+# on Linux, gsha256sum on a Mac with coreutils but no gnubin on PATH.
+printf '#!/bin/bash\n: > "$STUB_FIRED"\ncat >/dev/null\nexit 1\n' > "$STUBS/sha-exit1/${SHA256_BIN%% *}"
+printf '#!/bin/bash\n: > "$STUB_FIRED"\ncat >/dev/null\nexit 0\n' > "$STUBS/sha-silent/${SHA256_BIN%% *}"
 # Fails only the digest call, the one that takes `--arg extra`.
 printf '#!/bin/bash\ncase "$*" in *"--arg extra"*) : > "$STUB_FIRED"; exit 5 ;; esac\nexec %q "$@"\n' "$REAL_JQ" > "$STUBS/jq-digest/jq"
 # Fails only the read of the head, `jq -r .headRefOid`: with a status, and

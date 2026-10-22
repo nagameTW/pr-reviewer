@@ -13,6 +13,10 @@ ROOT="$PWD"
 for v in $(compgen -e | grep '^PRREVIEW_'); do unset "$v"; done
 . lib/prreview-config.sh || { echo "lib/prreview-config.sh missing"; exit 1; }
 . lib/prreview-service.sh || { echo "lib/prreview-service.sh missing"; exit 1; }
+. lib/tools.sh || { echo "FAIL: cannot source lib/tools.sh"; exit 1; }
+# macOS without the coreutils gnubin directory has gtimeout and no timeout.
+# Find the commands the way the scripts do.
+tools_resolve || { echo "FAIL: no timeout command or no SHA-256 command on PATH"; exit 1; }
 FAILED=0
 ok()  { printf '  ok   %s\n' "$1"; }
 bad() { printf '  FAIL %s\n    expected: %s\n    actual:   %s\n' "$1" "$2" "$3"; FAILED=1; }
@@ -164,7 +168,9 @@ printf '{"loggedIn":%s}\n' "${FAKE_CLAUDE_LOGGED:-true}"
 EOF
 chmod +x "$FAKE/claude"
 # Tools this machine lacks get a stub: setup only checks they exist.
-for t in git jq flock timeout sha256sum curl openssl; do
+# timeout and sha256sum are not in the list. Setup also accepts gtimeout,
+# gsha256sum and shasum, and a stub named timeout would win over them.
+for t in git jq flock curl openssl; do
   command -v "$t" >/dev/null 2>&1 || { printf '#!/bin/sh\nexit 0\n' > "$FAKE/$t"; chmod +x "$FAKE/$t"; }
 done
 H="$T/home"; mkdir -p "$H"
@@ -183,7 +189,7 @@ CFG="$H/.config/pr-reviewer/config"
 has 'start refuses before any repository is set' "$(prreview start 2>&1)" 'run prreview setup first'
 has '...and so does once' "$(prreview once 2>&1)" 'run prreview setup first'
 # Under a deadline: the bug this guards against is a setup that never ends.
-OUT="$(timeout 30 "${PRREVIEW_ENV[@]}" EDITOR=true bash "$ROOT/prreview" setup </dev/null 2>&1)"; RC=$?
+OUT="$("$TIMEOUT_BIN" 30 "${PRREVIEW_ENV[@]}" EDITOR=true bash "$ROOT/prreview" setup </dev/null 2>&1)"; RC=$?
 has 'setup with no input stops, instead of answering the default forever' "$OUT" 'no more input; stopped'
 is '...with a failure status' "$RC" 1
 

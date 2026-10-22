@@ -16,6 +16,10 @@
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 . lib/loop.sh || { echo "FAIL: cannot source lib/loop.sh"; exit 1; }
+. lib/tools.sh || { echo "FAIL: cannot source lib/tools.sh"; exit 1; }
+# macOS without the coreutils gnubin directory has gtimeout and no timeout.
+# Find the commands the way the scripts do.
+tools_resolve || { echo "FAIL: no timeout command or no SHA-256 command on PATH"; exit 1; }
 
 FAILED=0
 ok()  { printf '  ok   %s\n' "$1"; }
@@ -339,7 +343,7 @@ rm -rf "$READY_TMP"
 # A child with `trap "" TERM` is the shape that needs it: TERM arrives and
 # is discarded, and only the follow-up KILL ends it.
 KILL_START="$(date +%s)"
-timeout -k 1 1 bash -c 'trap "" TERM; sleep 60' >/dev/null 2>&1
+"$TIMEOUT_BIN" -k 1 1 bash -c 'trap "" TERM; sleep 60' >/dev/null 2>&1
 KILL_RC=$?
 KILL_ELAPSED=$(( $(date +%s) - KILL_START ))
 # 30s, not 4s: what is being caught is "waits out the full 60", and a loaded
