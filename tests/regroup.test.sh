@@ -7,8 +7,9 @@
 # PROMPT. The model sees the findings as DATA and returns only ids.
 #
 # MERGE. Code merges, not the model. The merged finding is the one with the
-# highest severity, with every other location named in its issue text. An id
-# that is unknown or in two groups makes that group invalid.
+# highest severity, with every other member named in its issue text by location
+# and by its own full text. An id that is unknown or in two groups makes that
+# group invalid.
 #
 # FAIL-OPEN. Any failure or invalid output keeps the findings as they were and
 # logs one line. The call is counted in the usage record.
@@ -85,7 +86,7 @@ M1="$(mg '[[0,1]]')"
 is 'merge: two findings become one'                      "$(nf "$M1")" 6
 is 'merge: the highest severity stays'                   "$(jq -r '.findings[0].severity' <<<"$M1")" CRITICAL
 is 'merge: the merged finding sits where the first member sat' "$(jq -r '.findings[0].file' <<<"$M1")" app/db.py
-is 'merge: the other location is listed'                 "$(jq -r '.findings[0].issue' <<<"$M1")" 'the name reaches the query as text Also at: app/api.py:20.'
+is 'merge: the other location is listed'                 "$(jq -r '.findings[0].issue' <<<"$M1")" 'the name reaches the query as text Also at app/api.py:20: the same name is joined into SQL'
 is 'merge: the other fields of the first finding stay'   "$(jq -r '.findings[0] | "\(.area) \(.confidence)"' <<<"$M1")" 'security 0.9'
 is 'merge: the next finding is the one after the group'  "$(jq -r '.findings[1].file' <<<"$M1")" app/util.py
 is 'merge: the group order does not matter'              "$(mg '[[1,0]]')" "$M1"
@@ -94,7 +95,7 @@ is 'merge: the merged finding still blocks, the member that went does not count'
 # area test on a large PR (coach false), so it does not block. Finding 4 does.
 M2="$(mg '[[4,5]]')"
 is 'merge: on a tie the finding that blocks stays'       "$(jq -r '.findings[4].file' <<<"$M2")" app/a.py
-is 'merge: ...and the other location is listed'          "$(jq -r '.findings[4].issue' <<<"$M2")" 'the limit is not checked Also at: app/b.py:2.'
+is 'merge: ...and the other location is listed'          "$(jq -r '.findings[4].issue' <<<"$M2")" 'the limit is not checked Also at app/b.py:2: this limit is not checked either'
 M2B="$(mg '[[5,4]]')"
 is 'merge: the same on a reversed group'                 "$(jq -r '.findings[4].file' <<<"$M2B")" app/a.py
 # Same severity, both blocking: higher confidence stays, then the lower position.
@@ -107,15 +108,30 @@ ODD='{"findings":[{"severity":"CRITICAL","file":"a","line":1,"issue":"x"},{"seve
 is 'merge: an unrecognised severity stays over a CRITICAL' "$(regroup_merge "$ODD" '[[0,1]]' | jq -r '.findings[0].severity')" BLOCKER
 # Locations.
 is 'merge: a group of three lists two other locations' \
-   "$(mg '[[0,1,2]]' | jq -r '.findings[0].issue')" 'the name reaches the query as text Also at: app/api.py:20, app/util.py:5.'
+   "$(mg '[[0,1,2]]' | jq -r '.findings[0].issue')" 'the name reaches the query as text Also at app/api.py:20: the same name is joined into SQL Also at app/util.py:5: a helper name is unclear'
 is 'merge: a line of 0 lists the file alone' \
-   "$(mg '[[0,6]]' | jq -r '.findings[0].issue')" 'the name reaches the query as text Also at: app/c.py.'
+   "$(mg '[[0,6]]' | jq -r '.findings[0].issue')" 'the name reaches the query as text Also at app/c.py: a comment is stale'
 SAME='{"findings":[{"severity":"HIGH","file":"a","line":1,"issue":"x"},{"severity":"MEDIUM","file":"a","line":1,"issue":"y"}]}'
-is 'merge: the same location is not listed twice' "$(regroup_merge "$SAME" '[[0,1]]' | jq -r '.findings[0].issue')" x
+is 'merge: a second defect at the same location keeps its text' "$(regroup_merge "$SAME" '[[0,1]]' | jq -r '.findings[0].issue')" 'x Also at a:1: y'
+SAME2='{"findings":[{"severity":"HIGH","file":"a","line":1,"issue":"x"},{"severity":"MEDIUM","file":"a","line":1,"issue":"x"}]}'
+is 'merge: an exact repeat is not listed twice' "$(regroup_merge "$SAME2" '[[0,1]]' | jq -r '.findings[0].issue')" x
+NOLOC='{"findings":[{"severity":"HIGH","file":"a","line":1,"issue":"x"},{"severity":"MEDIUM","issue":"y"}]}'
+is 'merge: a member with no file keeps its text' "$(regroup_merge "$NOLOC" '[[0,1]]' | jq -r '.findings[0].issue')" 'x Also: y'
+NOISSUE='{"findings":[{"severity":"HIGH","file":"a","line":1,"issue":"x"},{"severity":"MEDIUM","file":"b","line":2}]}'
+is 'merge: a member with no text still names its location' "$(regroup_merge "$NOISSUE" '[[0,1]]' | jq -r '.findings[0].issue')" 'x Also at b:2.'
+# Two different defects whose issue texts share a long prefix. The model sees
+# only the start of each text, so it can group them by mistake. Both
+# explanations must survive the merge.
+PFX="$(printf 'The request handler reads the field from the body and passes it on without a check, %.0s' 1 2 3 4 5)"
+LP="{\"findings\":[{\"severity\":\"HIGH\",\"confidence\":0.9,\"file\":\"app/h.py\",\"line\":4,\"issue\":\"${PFX}so the parser loops forever on a cyclic value\"},{\"severity\":\"HIGH\",\"confidence\":0.8,\"file\":\"app/w.py\",\"line\":9,\"issue\":\"${PFX}so the writer truncates the file when the disk is full\"}]}"
+LPM="$(regroup_merge "$LP" '[[0,1]]' | jq -r '.findings[0].issue')"
+is 'merge: a long shared prefix does not hide the first defect' "$(grep -c 'the parser loops forever on a cyclic value' <<<"$LPM")" 1
+is 'merge: ...nor the second defect' "$(grep -c 'the writer truncates the file when the disk is full' <<<"$LPM")" 1
+is 'merge: ...and the second defect is tied to its own location' "$(grep -c 'Also at app/w.py:9: ' <<<"$LPM")" 1
 # Two groups are independent.
 M3="$(mg '[[0,1],[4,5]]')"
 is 'merge: two groups leave five findings' "$(nf "$M3")" 5
-is 'merge: the second group is merged too' "$(jq -r '.findings[3].issue' <<<"$M3")" 'the limit is not checked Also at: app/b.py:2.'
+is 'merge: the second group is merged too' "$(jq -r '.findings[3].issue' <<<"$M3")" 'the limit is not checked Also at app/b.py:2: this limit is not checked either'
 is 'merge: no group changes nothing' "$(mg '[]' | jq -c .)" "$(jq -c . <<<"$REVIEW")"
 is 'merge: the verdict and the summary stay' "$(jq -r '"\(.verdict) \(.summary)"' <<<"$M1")" 'request_changes s'
 # Every location survives.

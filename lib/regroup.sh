@@ -10,8 +10,9 @@
 # (CHEAP_MODEL) gets the list of findings and returns ids only. It cannot
 # rewrite, rate or drop a finding, so a wrong answer can only merge too much.
 # The merge is plain jq (REGROUP_MERGE_JQ): it keeps the finding with the
-# highest severity, keeps its text, and names the other locations at the end of
-# that text.
+# highest severity, keeps its text, and adds the location and the full text of
+# every other member at the end of that text. No member's explanation is lost
+# when the model groups two defects that only look alike.
 #
 # FAIL-OPEN. Any failure or invalid answer keeps the findings as they were and
 # logs one line. The step runs after the findings are final and only removes
@@ -91,12 +92,18 @@ regroup_valid_groups() {
 #     to the finding that blocks, then to the higher confidence, then to the
 #     lower position. An unrecognised severity blocks, so it ranks first.
 #   - that finding keeps every field, its text and its blocking state.
-#   - each other location is named at the end of the text: "Also at: a.py:3".
+#   - each other member is added at the end of the text with its location and
+#     its own full text: "Also at a.py:3: <issue>". A member with no file is
+#     "Also: <issue>", and one with no text is "Also at a.py:3.". A member with
+#     the same location and the same text as one already named is not added.
 #   - the merged finding sits where the first member of the group sat.
-# The other findings of the group go. Their text goes too.
+# The other findings of the group go. Their text stays in the merged one.
 # Trade-off: a later round reads the merged finding from the posted comment,
-# so a location named only in "Also at:" is not a finding of its own there. The
-# repeat mark and the carried-over duty read the main location only.
+# so a location named only after "Also at" is not a finding of its own there.
+# The repeat mark and the carried-over duty read the main location only.
+# Trade-off: the merged text is as long as its members together. The model
+# decides the group from the first REGROUP_ISSUE_CHARS characters of each text,
+# so a wrong group costs a longer finding and never a lost explanation.
 # shellcheck disable=SC2034  # read by the scripts that source this lib
 REGROUP_MERGE_JQ='
   def rank: ('"$FINDINGS_SEVERITY_JQ"')
@@ -112,12 +119,19 @@ REGROUP_MERGE_JQ='
     | ($m | sort_by([(.f | rank), (if (.f | blocks) then 0 else 1 end),
                      -((.f.confidence // 0) | if type == "number" then . else 0 end),
                      .i]) | .[0]) as $p
-    | ($p.f | loc) as $ploc
-    | ([$m[] | select(.i != $p.i) | .f | loc | select(. != $ploc)]
-       | reduce .[] as $l ([]; if index($l) == null then . + [$l] else . end)) as $others
+    | ($p.f | (loc // "")) as $ploc
+    | ($p.f | (.issue // "" | tostring)) as $ptext
+    | ([$m[] | select(.i != $p.i) | .f
+        | {l: (loc // ""), t: ((.issue // "") | tostring)}
+        | select(.l != "" or .t != "")
+        | select((.l == $ploc and .t == $ptext) | not)]
+       | reduce .[] as $o ([]; if index([$o]) == null then . + [$o] else . end)) as $others
     | $p.f
     | if ($others | length) > 0
-      then .issue = ((.issue // "" | tostring) + " Also at: " + ($others | join(", ")) + ".")
+      then .issue = ($ptext + ($others | map(
+             " Also" + (if .l != "" then " at " + .l else "" end)
+             + (if .t != "" then ": " + .t elif .l != "" then "." else "" end))
+           | join("")))
       else . end;
   (.findings // []) as $f
   | ($groups | map(sort)) as $gs
