@@ -15,9 +15,9 @@
 # when the model groups two defects that only look alike.
 #
 # FAIL-OPEN. Any failure or invalid answer keeps the findings as they were and
-# logs one line. The step runs after the findings are final and only removes
-# repeats, so a round that skips it is a longer comment and never a wrong
-# verdict.
+# logs one line. One invalid group rejects the whole answer. The step runs
+# after the findings are final and only removes repeats, so a round that skips
+# it is a longer comment and never a wrong verdict.
 #
 # Needs lib/findings.sh sourced first: the severity and blocking rules are
 # spelled out there once, and the jq programs below read them.
@@ -62,7 +62,8 @@ EOF
 }
 
 # The groups that can be merged. Input: the review object. Caller passes
-# --argjson groups '[[0,1],[4,5]]'. A group is valid when it has two or more
+# --argjson groups '[[0,1],[4,5]]'. regroup_findings uses the result only when
+# every group of the answer is valid. A group is valid when it has two or more
 # ids, every id is a whole number that names a finding, and no id appears in
 # any other place in the answer. An id that is unknown, or in two groups, makes
 # the group invalid. Both groups are invalid in the second case, because the
@@ -198,6 +199,11 @@ regroup_findings() {
     echo "PR #$PR: no group of $n_groups was usable — findings unchanged"
     return 0
   fi
+  # One invalid group makes the whole answer doubtful, so none of it is used.
+  if [ "$n_valid" -lt "$n_groups" ]; then
+    echo "PR #$PR: grouping duplicate findings rejected ($(( n_groups - n_valid )) of $n_groups groups invalid) — findings unchanged"
+    return 0
+  fi
   if ! merged="$(regroup_merge "$CLEANED" "$valid" 2>/dev/null)" || [ -z "$merged" ]; then
     echo "PR #$PR: grouping duplicate findings failed (the merge did not run) — findings unchanged"
     return 0
@@ -208,6 +214,6 @@ regroup_findings() {
     return 0 ;;
   esac
   CLEANED="$merged"
-  echo "PR #$PR: grouped $n findings into $n_after$( [ "$n_valid" -lt "$n_groups" ] && printf ' (skipped %s invalid group(s))' "$(( n_groups - n_valid ))")"
+  echo "PR #$PR: grouped $n findings into $n_after"
   return 0
 }

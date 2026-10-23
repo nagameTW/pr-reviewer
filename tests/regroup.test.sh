@@ -12,7 +12,8 @@
 # group invalid.
 #
 # FAIL-OPEN. Any failure or invalid output keeps the findings as they were and
-# logs one line. The call is counted in the usage record.
+# logs one line. One invalid group rejects the whole answer. The call is
+# counted in the usage record.
 #
 # Run: bash tests/regroup.test.sh
 set -uo pipefail
@@ -204,10 +205,10 @@ fails 'groups not a list'     "$REVIEW" '{"groups":"0,1"}'
 fails 'only invalid groups'   "$REVIEW" '{"groups":[[0,99],[1,1]]}'
 fails 'an empty group list'   "$REVIEW" '{"groups":[]}'
 fails 'an id in two groups'   "$REVIEW" '{"groups":[[0,1],[1,2]]}'
-# A group list with one valid and one invalid group merges the valid one.
-run_regroup "$REVIEW" '{"groups":[[0,1],[4,99]]}'
-is 'partial: the valid group is merged'                 "$(nf "$RES")" 6
-has 'partial: the log counts the skipped group'         'skipped 1 invalid' "$OUT"
+# One invalid group rejects the whole answer, even when another group is valid.
+fails 'one valid and one invalid group' "$REVIEW" '{"groups":[[0,1],[4,99]]}'
+has 'partial: the log counts the invalid group'         '1 of 2 groups' "$OUT"
+fails 'a valid group and a group of one' "$REVIEW" '{"groups":[[0,1],[4]]}'
 
 # The model sees untrusted text. An answer that tries to act on it changes nothing.
 run_regroup "$REVIEW" '{"groups":[[0,1]],"findings":[]}'
