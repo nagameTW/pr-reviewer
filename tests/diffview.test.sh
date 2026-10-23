@@ -450,6 +450,33 @@ printf '%s\n' "$AD_IN" > "$TMP/ad.diff"
 is 'added lines: the rows of a modified file, a deleted file and a name with a space' \
    "$(diffview_added_lines "$TMP/ad.diff" | paste -sd, -)" \
    "a.sh${TAB}-,a.sh${TAB}2,a.sh${TAB}3,a.sh${TAB}11,sp ace.txt${TAB}-,sp ace.txt${TAB}2"
+# A name that git quotes ("a\tb" with an escape) must not collide with the
+# literal name a\tb (a backslash and a t). The quoted file is left out of the
+# map, and the literal file keeps only its own lines.
+QU_IN='diff --git "a/a\tb" "b/a\tb"
+--- "a/a\tb"
++++ "b/a\tb"
+@@ -1 +1,2 @@
+ ctx
++quoted added
+diff --git a/a\tb b/a\tb
+--- a/a\tb
++++ b/a\tb
+@@ -4 +4,2 @@
+ ctx2
++literal added
+diff --git a/z.txt b/z.txt
+--- a/z.txt
++++ b/z.txt
+@@ -1 +1,2 @@
+ z
++z2'
+printf '%s\n' "$QU_IN" > "$TMP/qu.diff"
+QU_ROWS="$(diffview_added_lines "$TMP/qu.diff" | paste -sd, -)"
+is 'added lines: a quoted name and its literal twin: only the literal one is listed' \
+   "$QU_ROWS" "a\\tb${TAB}-,a\\tb${TAB}5,z.txt${TAB}-,z.txt${TAB}2"
+is 'added lines: the lines of a quoted file are given to no other file' \
+   "$(diffview_added_lines "$TMP/qu.diff" | grep -c "${TAB}2\$")" 1
 is 'added lines: a diff that cannot be labelled gives rc 1 and no rows' \
    "$(diffview_added_lines "$TMP/bad.diff" 2>/dev/null; echo "rc=$?")" 'rc=1'
 is 'added lines: a missing file gives rc 1' "$(diffview_added_lines "$TMP/none.diff" 2>/dev/null; echo "rc=$?")" 'rc=1'

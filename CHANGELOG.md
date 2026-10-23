@@ -59,7 +59,8 @@ All notable changes to this project are recorded here. The format follows
   issue text starts with `Pre-existing:`. A MEDIUM finding does not block. The
   reviewer also checks the claim in code: a finding with that start becomes
   MEDIUM after the refutation pass only when its area is `security` and the
-  cited line is not a line that the diff adds. Any other case keeps the
+  cited line is not a line that the diff adds. Any other case, including a file
+  whose name git quotes, keeps the
   severity, with the original noted when it is lowered. Moved or reformatted
   code shows as added lines, so a finding on it keeps its severity. The shared
   severity rules and the security checklist state the exception. Other old

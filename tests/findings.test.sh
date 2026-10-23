@@ -11,6 +11,7 @@
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 . lib/findings.sh || { echo "FAIL: cannot source lib/findings.sh"; exit 1; }
+. lib/diffview.sh || { echo "FAIL: cannot source lib/diffview.sh"; exit 1; }
 . lib/tree.sh || { echo "FAIL: cannot source lib/tree.sh"; exit 1; }
 
 FAILED=0
@@ -1142,6 +1143,15 @@ is 'pre-existing: the findings that still block' \
    "$(pre "$PE" | jq -r '.findings |= map(select(type == "object"))' | jq -r "$FINDINGS_BLOCKING_COUNT_JQ")" '10'
 is 'pre-existing: an empty map lowers nothing' \
    "$(pre "$PE" '{}' | jq -r "$FINDINGS_CAPPED_PREEXISTING_COUNT_JQ")" '0'
+# A finding on the literal name a\tb, when the diff holds only the git-quoted
+# file "a\tb": the literal file is not in the diff, so the severity stays.
+QD="$(mktemp -d)"
+printf '%s\n' 'diff --git "a/a\tb" "b/a\tb"' '--- "a/a\tb"' '+++ "b/a\tb"' '@@ -1,2 +1,3 @@' ' ctx' ' ctx2' '+quoted added' > "$QD/q.diff"
+QMAP="$(GATE_SCRATCH="$QD" diffview_added_lines "$QD/q.diff" | jq -Rnc '[inputs | split("\t") | select(length == 2)] | reduce .[] as $r ({}; .[$r[0]] += (if $r[1] == "-" then [] else [($r[1] | tonumber)] end))')"
+is 'pre-existing: the map has no entry for a git-quoted name' "$QMAP" '{}'
+is 'pre-existing: a finding on the literal twin of a quoted name keeps its severity' \
+   "$(pre '{"findings":[{"severity":"CRITICAL","area":"security","file":"a\\tb","line":1,"issue":"Pre-existing: x"}]}' "$QMAP" | jq -r '.findings[0].severity')" 'CRITICAL'
+rm -rf "$QD"
 is 'pre-existing: the comment says why it was lowered' \
    "$(pre '{"findings":[{"severity":"CRITICAL","area":"security","file":"a.py","line":1,"issue":"Pre-existing: x"}]}' | jq -r "$FINDINGS_RENDER_JQ" \
       | grep -c 'originally CRITICAL; demoted because the defect was already in the code')" '1'

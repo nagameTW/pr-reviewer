@@ -106,9 +106,12 @@ diffview_make() {
 # It reads the labels of diffview_render, so it has no diff parser of its own.
 # The copy goes to a temp file under GATE_SCRATCH (or TMPDIR) that is removed
 # before return. Returns 1 and prints nothing when the diff cannot be labelled.
-# A file name that git quotes is read without its quotes and without escapes
-# decoded, so a name with escapes is not found in the map. A caller that looks
-# a name up and finds nothing keeps its default.
+# Trade-off: a file whose "+++" path git quotes (it starts with a double quote,
+# as for a name with a tab, a newline, a backslash or a non-ASCII byte) is left
+# out of the map. The escapes are not decoded here, and a quoted "a\tb" would
+# otherwise collide with a different file named a\tb. A caller that looks a
+# name up and finds nothing keeps its default, so a finding on such a file
+# keeps its severity.
 diffview_added_lines() {
   local in="${1-}" view rows
   view="$(mktemp "${GATE_SCRATCH:-${TMPDIR:-/tmp}}/prreview-added-XXXXXX")" || return 1
@@ -121,7 +124,7 @@ diffview_added_lines() {
       f = substr($2, 5)
       sub(/\t.*$/, "", f)
       if (f == "/dev/null") { f = ""; next }
-      if (substr(f, 1, 1) == "\"") { f = substr(f, 2); sub(/"$/, "", f) }
+      if (substr(f, 1, 1) == "\"") { f = ""; next }
       if (substr(f, 1, 2) == "b/") f = substr(f, 3)
       else { f = ""; next }
       printf "%s\t-\n", f
