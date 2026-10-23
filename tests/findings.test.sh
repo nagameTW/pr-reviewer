@@ -1029,6 +1029,12 @@ is 'merits_block false asks for a demotion' \
    "$(unw '{"refuted":false,"confidence":0.7,"merits_block":false,"reason":"minor"}')" 'demote'
 is 'refuted true below the bar with merits_block false keeps the severity' \
    "$(unw '{"refuted":true,"confidence":0.7,"merits_block":false,"reason":"likely wrong"}')" 'keep'
+is 'an empty reason keeps the severity' "$(unw '{"refuted":false,"confidence":0.7,"merits_block":false,"reason":""}')" 'keep'
+is 'a whitespace-only reason keeps the severity' "$(unw '{"refuted":false,"confidence":0.7,"merits_block":false,"reason":"  \t\n "}')" 'keep'
+is 'a confidence below 0 keeps the severity' "$(unw '{"refuted":false,"confidence":-0.1,"merits_block":false,"reason":"minor"}')" 'keep'
+is 'a confidence above 1 keeps the severity' "$(unw '{"refuted":false,"confidence":1.5,"merits_block":false,"reason":"minor"}')" 'keep'
+is 'a confidence of 0 is allowed' "$(unw '{"refuted":false,"confidence":0,"merits_block":false,"reason":"minor"}')" 'demote'
+is 'a confidence of 1 is allowed' "$(unw '{"refuted":false,"confidence":1,"merits_block":false,"reason":"minor"}')" 'demote'
 is 'a missing refuted keeps the severity' "$(unw '{"confidence":0.7,"merits_block":false,"reason":"minor"}')" 'keep'
 is 'the string "false" for refuted keeps the severity' \
    "$(unw '{"refuted":"false","confidence":0.7,"merits_block":false,"reason":"minor"}')" 'keep'

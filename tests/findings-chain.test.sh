@@ -122,6 +122,8 @@ claude_refutes() { cat >/dev/null; printf '%s\n' '{"type":"result","is_error":fa
 claude_unworthy() { cat >/dev/null; printf '%s\n' '{"type":"result","is_error":false,"result":"{\"refuted\":false,\"confidence\":0.7,\"merits_block\":false,\"reason\":\"real, but small\"}"}'; }
 # A model whose answer contradicts itself: refuted below the bar, merits_block false.
 claude_contradicts() { cat >/dev/null; printf '%s\n' '{"type":"result","is_error":false,"result":"{\"refuted\":true,\"confidence\":0.7,\"merits_block\":false,\"reason\":\"likely wrong\"}"}'; }
+# A model that upholds the finding, says merits_block false, and gives an empty reason.
+claude_noreason() { cat >/dev/null; printf '%s\n' '{"type":"result","is_error":false,"result":"{\"refuted\":false,\"confidence\":0.7,\"merits_block\":false,\"reason\":\"\"}"}'; }
 # A model that refutes the first fixture finding and calls any other one not worth a block.
 claude_mixed() {
   if grep -qF 'the check can be skipped'; then claude_refutes; else claude_unworthy; fi
@@ -191,6 +193,7 @@ run_case() {
       (raises)  claude_call() { claude_raises; } ;;
       (unworthy) claude_call() { claude_unworthy; } ;;
       (contradicts) claude_call() { claude_contradicts; } ;;
+      (noreason) claude_call() { claude_noreason; } ;;
       (mixed)   claude_call() { claude_mixed; } ;;
       (groups)  claude_call() { claude_groups; } ;;
     esac
@@ -231,6 +234,11 @@ has   '...and the verdict becomes approve'                    "resolved=approve"
 # answer lowers nothing. The HIGH keeps blocking and the verdict stays.
 run_case chain "$REVIEW_BLOCK" MODEL=contradicts
 has   'a contradictory verifier answer: the HIGH still blocks'  "reached tally=1 n=1 ok=y" "$OUT"
+has   '...and the verdict stays request_changes'                "resolved=request_changes" "$OUT"
+lacks '...and the log names no demotion'                        "demoted 1" "$OUT"
+# An empty reason is not an answer. The sole HIGH keeps blocking.
+run_case chain "$REVIEW_BLOCK" MODEL=noreason
+has   'an empty reason: the HIGH still blocks'                  "reached tally=1 n=1 ok=y" "$OUT"
 has   '...and the verdict stays request_changes'                "resolved=request_changes" "$OUT"
 lacks '...and the log names no demotion'                        "demoted 1" "$OUT"
 run_case chain "$REVIEW_SEC" MODEL=unworthy

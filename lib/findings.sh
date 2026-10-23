@@ -1083,10 +1083,11 @@ findings_verify_refuted() {
 
 # Did the verifier clearly uphold a finding and call it not worth a block?
 # Returns 0 only for an object with refuted exactly false, merits_block
-# exactly false, a string reason and a numeric confidence. Any other shape
-# keeps the severity: a missing field, a string, null, prose or no output, and
-# also a self-contradicting answer such as refuted:true at a confidence below
-# the bar. A verifier that did not answer the question well must not lower a
+# exactly false, a reason that is not empty after trimming whitespace, and a
+# confidence from 0 to 1 inclusive. Any other shape keeps the severity: a
+# missing field, a string, null, prose or no output, an empty reason, a
+# confidence out of range, and also a self-contradicting answer such as
+# refuted:true at a confidence below the bar. A verifier that did not answer the question well must not lower a
 # blocker.
 findings_verify_unworthy() {
   local json="${1-}"
@@ -1095,7 +1096,9 @@ findings_verify_unworthy() {
     and (.refuted == false)
     and (.merits_block == false)
     and ((.reason | type) == "string")
-    and ((.confidence | type) == "number")' <<<"$json" >/dev/null 2>&1
+    and ((.reason | gsub("\\s+"; "")) != "")
+    and ((.confidence | type) == "number")
+    and (.confidence >= 0 and .confidence <= 1)' <<<"$json" >/dev/null 2>&1
 }
 
 # Lower HIGH findings the verifier called not worth a block. Caller passes
