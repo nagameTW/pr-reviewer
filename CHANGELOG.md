@@ -56,11 +56,14 @@ All notable changes to this project are recorded here. The format follows
   change, and the comment counts the lowered findings.
 - A security defect in moved, reformatted or adjacent unchanged code that a PR
   touches is now reported. It is one MEDIUM finding with area security, and its
-  issue text starts with `Pre-existing:`. It does not block, and the reviewer
-  enforces that in code: any finding with that start becomes MEDIUM after the
-  refutation pass, with its original severity noted. The shared severity rules
-  and the security checklist state the exception. Other old defects that a
-  move carries over stay out of scope.
+  issue text starts with `Pre-existing:`. A MEDIUM finding does not block. The
+  reviewer also checks the claim in code: a finding with that start becomes
+  MEDIUM after the refutation pass only when its area is `security` and the
+  cited line is not a line that the diff adds. Any other case keeps the
+  severity, with the original noted when it is lowered. Moved or reformatted
+  code shows as added lines, so a finding on it keeps its severity. The shared
+  severity rules and the security checklist state the exception. Other old
+  defects that a move carries over stay out of scope.
 - The comment lists the findings that do not block and are about tests,
   conventions, wording, process, or a doc for maintainers or team members as
   one item, `Tests, docs and process (N)`, when there are two or more. The

@@ -1125,28 +1125,44 @@ FINDINGS_DEMOTE_WORTH_JQ='.findings = ((.findings // []) | to_entries | map(
 # shellcheck disable=SC2034  # read by the scripts that source this lib
 FINDINGS_CAPPED_WORTH_COUNT_JQ='[.findings[]? | select(type == "object" and .capped == "worth")] | length'
 
-# A pre-existing security defect never blocks. The prompt asks the model to
+# A pre-existing security defect does not block. The prompt asks the model to
 # rate such a finding MEDIUM and to start its issue text with "Pre-existing:".
-# This rule makes the text the contract: any finding that starts that way and
-# is not already MEDIUM or LOW becomes MEDIUM, whatever the model rated it and
-# whatever the verifier said. The record is the one the other demotions write
-# (orig_severity, capped), with the value preexisting. Run it AFTER the
-# verification pass, so the pass still judges the finding on its own text, and
-# after the last FINDINGS_CONVERGE_JQ, which deletes capped and orig_severity.
-# The prefix match ignores case and leading space. An issue that is not text
-# is left alone.
-# Trade-off: the area is not read. A finding that starts with "Pre-existing:"
-# is lowered in any area, so the prefix is the only thing the model has to get
-# right, and an old defect outside security is still not a blocker.
+# The text is the model's claim, so code checks it. A finding is lowered to
+# MEDIUM only when BOTH hold:
+#   - its area is exactly security, and
+#   - the line it cites is not an added line of this PR's diff.
+# Caller passes --argjson added '{"a.py":[10,11]}', the map from
+# diffview_added_lines: each file of the diff with its added lines. Every other
+# case keeps the severity and the blocking state: another area, a line that is
+# missing, not a whole number or below 1, a file that is not in the map, and a
+# line the map lists. An unreadable diff gives no map, so nothing is lowered.
+# The record is the one the other demotions write (orig_severity, capped), with
+# the value preexisting. Run it AFTER the verification pass, so the pass still
+# judges the finding on its own text, and after the last FINDINGS_CONVERGE_JQ,
+# which deletes capped and orig_severity. The prefix match ignores case and
+# leading space. A leading ./ on the file is stripped for the lookup.
+# Trade-off: moved or reformatted code shows in the diff as added lines, so a
+# Pre-existing: finding on it keeps the severity the model gave. That is the
+# intended result. The code cannot tell moved code from new code, and a wrong
+# lowering hides a defect that the PR adds. The model is told to rate such a
+# finding MEDIUM, and a MEDIUM finding does not block in any case.
 # shellcheck disable=SC2034  # read by the scripts that source this lib
 FINDINGS_PREEXISTING_JQ='.findings = ((.findings // []) | map(
   if type != "object" then .
   elif ((.issue // "") | type) != "string" then .
   elif ((.issue | test("^\\s*pre-existing:"; "i")) | not) then .
+  elif .area != "security" then .
+  elif ((.line | type) != "number") or (.line != (.line | floor)) or (.line < 1) then .
+  elif ((.file // "") | type) != "string" then .
   else
-    ('"$FINDINGS_SEVERITY_JQ"') as $sev
-    | if $sev == "MEDIUM" or $sev == "LOW" then .
-      else . + {orig_severity: $sev, severity: "MEDIUM", capped: "preexisting"} end
+    (.file | sub("^\\./"; "")) as $file | .line as $ln
+    | if (($added[$file] // null) | type) != "array" then .
+      elif ($added[$file] | index($ln)) != null then .
+      else
+        ('"$FINDINGS_SEVERITY_JQ"') as $sev
+        | if $sev == "MEDIUM" or $sev == "LOW" then .
+          else . + {orig_severity: $sev, severity: "MEDIUM", capped: "preexisting"} end
+      end
   end))'
 # shellcheck disable=SC2034  # read by the scripts that source this lib
 FINDINGS_CAPPED_PREEXISTING_COUNT_JQ='[.findings[]? | select(type == "object" and .capped == "preexisting")] | length'

@@ -418,4 +418,40 @@ is 'diffview_make fails on a diff it cannot label' "$([ "$RC" -ne 0 ] && echo fa
 is '...prints no path' "$P" ''
 is '...and leaves no directory behind' "$([ -e "$ROOT/slice-2" ] && echo left || echo none)" none
 
+# ── diffview_added_lines: which new-side lines a diff adds ────────────────
+# One "file<TAB>n" row for each added line, and "file<TAB>-" for each file that
+# has a new side, so a file with only removed lines is still in the map.
+AD_IN='diff --git a/a.sh b/a.sh
+--- a/a.sh
++++ b/a.sh
+@@ -1,3 +1,4 @@
+ one
+-two
++TWO
++two and a half
+ three
+@@ -10 +11 @@
+-x
++y
+diff --git a/d.txt b/d.txt
+deleted file mode 100644
+--- a/d.txt
++++ /dev/null
+@@ -1 +0,0 @@
+-gone
+diff --git a/sp ace.txt b/sp ace.txt
+--- a/sp ace.txt
++++ b/sp ace.txt	
+@@ -1 +1,2 @@
+ keep
++new'
+GATE_SCRATCH="$TMP"
+printf '%s\n' "$AD_IN" > "$TMP/ad.diff"
+is 'added lines: the rows of a modified file, a deleted file and a name with a space' \
+   "$(diffview_added_lines "$TMP/ad.diff" | paste -sd, -)" \
+   "a.sh${TAB}-,a.sh${TAB}2,a.sh${TAB}3,a.sh${TAB}11,sp ace.txt${TAB}-,sp ace.txt${TAB}2"
+is 'added lines: a diff that cannot be labelled gives rc 1 and no rows' \
+   "$(diffview_added_lines "$TMP/bad.diff" 2>/dev/null; echo "rc=$?")" 'rc=1'
+is 'added lines: a missing file gives rc 1' "$(diffview_added_lines "$TMP/none.diff" 2>/dev/null; echo "rc=$?")" 'rc=1'
+
 if [ "$FAILED" -eq 0 ]; then echo "PASS: diffview"; else echo "FAIL: diffview"; exit 1; fi

@@ -1991,7 +1991,7 @@ $REVIEW_CHECKS
 
 Do NOT report (discarded as noise): $REVIEW_NOISE_LIST
 
-Scope: a finding must be about something THIS diff introduces, changes, or leaves broken. In scope, and not an exception to search for reasons to skip: the added and modified lines; an existing caller, test, doc, or config the change breaks or leaves describing the old behaviour; unchanged code cited because the exploit path or the regression runs through it. Out of scope: a pre-existing problem this PR neither touches nor affects — at most one line in the summary, never a finding. Added lines that were moved or only reformatted stay in scope only for defects the move causes, such as changed visibility, imports, initialization order, callers or a lost guard. One exception covers security. A security defect in moved, reformatted or adjacent unchanged code that this PR touches is in scope. Report it as a MEDIUM finding, area security, with an issue text that starts with 'Pre-existing:'. Such a finding never blocks. One such finding per PR is enough. Any other old defect that the move carries over unchanged is out of scope, like other pre-existing code.
+Scope: a finding must be about something THIS diff introduces, changes, or leaves broken. In scope, and not an exception to search for reasons to skip: the added and modified lines; an existing caller, test, doc, or config the change breaks or leaves describing the old behaviour; unchanged code cited because the exploit path or the regression runs through it. Out of scope: a pre-existing problem this PR neither touches nor affects — at most one line in the summary, never a finding. Added lines that were moved or only reformatted stay in scope only for defects the move causes, such as changed visibility, imports, initialization order, callers or a lost guard. One exception covers security. A security defect in moved, reformatted or adjacent unchanged code that this PR touches is in scope. Report it as a MEDIUM finding, area security, with an issue text that starts with 'Pre-existing:'. Cite the unchanged line. A MEDIUM finding never blocks. The reviewer keeps a higher severity when the cited line is an added line. One such finding per PR is enough. Any other old defect that the move carries over unchanged is out of scope, like other pre-existing code.
 
 Report every finding you have, at every severity, whatever your confidence — do NOT hold one back to keep the list short or clean. Put your honest number in the confidence field: nothing is filtered by it, and the number is shown to the human who reads the result, so it is how you say \"I am not certain\" without withholding. What the severity does decide: $REVIEW_CRITICAL_RULE; HIGH blocks unless the finding's kind is wording or judgment (the harness caps those to MEDIUM); MEDIUM and LOW never block. Every finding is listed on the PR whatever its severity$REVIEW_TICKET_CLAUSE. A finding you are unsure of costs a line in the review; one you withhold is lost for good. $REVIEW_HALF_SURE
 
@@ -2834,18 +2834,28 @@ $SLICE_CLEAN"
     [ "$N_WORTH" -gt 0 ] \
       && echo "PR #$PR: verifier demoted $N_WORTH HIGH finding(s) to MEDIUM (real, but not worth blocking)"
   fi
-  # A pre-existing security defect never blocks (FINDINGS_PREEXISTING_JQ). It
-  # runs after the verification pass, which has judged the finding on its own
-  # text, and whether or not that pass ran. It fails toward blocking:
-  # a jq that fails leaves the severity the model gave.
-  if PRE_CLEANED="$(jq -c "$FINDINGS_PREEXISTING_JQ" <<<"$CLEANED" 2>/dev/null)" && [ -n "$PRE_CLEANED" ]; then
-    CLEANED="$PRE_CLEANED"
-    N_PREEXIST="$(jq -r "$FINDINGS_CAPPED_PREEXISTING_COUNT_JQ" <<<"$CLEANED" 2>/dev/null)" || N_PREEXIST=0
-    case "$N_PREEXIST" in '' | *[!0-9]*) N_PREEXIST=0 ;; esac
-    [ "$N_PREEXIST" -gt 0 ] \
-      && echo "PR #$PR: lowered $N_PREEXIST pre-existing finding(s) to MEDIUM (a defect that was already in the code never blocks)"
-  else
-    echo "PR #$PR: WARNING — the pre-existing rule did not run (jq failed); the findings keep their severity"
+  # A pre-existing security defect in unchanged code does not block
+  # (FINDINGS_PREEXISTING_JQ). The rule runs after the verification pass, which
+  # has judged the finding on its own text, and whether or not that pass ran.
+  # It lowers a finding only when the area is security and the cited line is
+  # not an added line of the diff. Any other case, and any error, keeps the
+  # severity the model gave, so the check fails toward blocking.
+  # The text check is plain grep, so a round with no such finding never reads
+  # the diff.
+  if grep -qi 'pre-existing:' <<<"$CLEANED"; then
+    if ADDED_MAP="$(diffview_added_lines "$DIFF" 2>/dev/null \
+         | jq -Rn '[inputs | split("\t") | select(length == 2)] | reduce .[] as $r ({}; .[$r[0]] += (if $r[1] == "-" then [] else [($r[1] | tonumber)] end))' 2>/dev/null)" \
+       && [ -n "$ADDED_MAP" ] \
+       && PRE_CLEANED="$(jq -c --argjson added "$ADDED_MAP" "$FINDINGS_PREEXISTING_JQ" <<<"$CLEANED" 2>/dev/null)" \
+       && [ -n "$PRE_CLEANED" ]; then
+      CLEANED="$PRE_CLEANED"
+      N_PREEXIST="$(jq -r "$FINDINGS_CAPPED_PREEXISTING_COUNT_JQ" <<<"$CLEANED" 2>/dev/null)" || N_PREEXIST=0
+      case "$N_PREEXIST" in '' | *[!0-9]*) N_PREEXIST=0 ;; esac
+      [ "$N_PREEXIST" -gt 0 ] \
+        && echo "PR #$PR: lowered $N_PREEXIST pre-existing finding(s) to MEDIUM (a security defect on an unchanged line)"
+    else
+      echo "PR #$PR: WARNING — the pre-existing rule did not run (the diff or jq failed); the findings keep their severity"
+    fi
   fi
   rm -f "$DIFF"
 

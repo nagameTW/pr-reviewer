@@ -38,6 +38,7 @@ for h in ok bad is has lacks; do command -v "$h" >/dev/null 2>&1 || { echo "  FA
 . lib/findings.sh || { echo "FAIL: could not source lib/findings.sh"; exit 1; }
 . lib/redteam.sh  || { echo "FAIL: could not source lib/redteam.sh"; exit 1; }
 . lib/regroup.sh  || { echo "FAIL: could not source lib/regroup.sh"; exit 1; }
+. lib/diffview.sh || { echo "FAIL: could not source lib/diffview.sh"; exit 1; }
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -172,7 +173,8 @@ run_case() {
   mkdir -p "$d/tree" "$d/scratch" "$d/quota"
   git -C "$d/tree" init -q
   printf 'echo one\necho two\necho three\n' > "$d/tree/a.sh"
-  printf 'diff --git a/a.sh b/a.sh\n' > "$d/diff"
+  # DIFF_BODY is set by a caller that needs a diff with hunks.
+  printf '%s\n' "${DIFF_BODY:-diff --git a/a.sh b/a.sh}" > "$d/diff"
   # shellcheck disable=SC2034  # read by the lifted block
   OUT="$( (
     PATH="$STUBS:$PATH"
@@ -248,17 +250,47 @@ run_case chain "$REVIEW_PAIR" MODEL=mixed
 has   'one refuted and one not worth blocking: the right one is lowered' "reached tally=0 n=1 ok=y" "$OUT"
 has   '...and the round approves'                             "resolved=approve" "$OUT"
 
-# A pre-existing security defect never blocks, whatever severity the model gave
-# it and whatever the verifier says. The verifier upholds the CRITICAL here, and
-# the rule then lowers it to MEDIUM. The finding stays in the list, the posted
-# verdict is approve, and the comment counts the lowered finding.
-PRE='{"severity":"CRITICAL","confidence":0.9,"file":"a.sh","line":1,"issue":"Pre-existing: the value reaches a shell command","area":"security"}'
-REVIEW_PRE="{\"verdict\":\"request_changes\",\"summary\":\"s\",\"findings\":[$PRE]}"
-run_case chain "$REVIEW_PRE" MODEL=upholds
-has   'pre-existing: the verifier upholds it and the rule still lowers it' "sev0=MEDIUM" "$OUT"
+# A pre-existing security defect is lowered to MEDIUM only when it is in the
+# area security and it cites a line that the diff does not add. The diff adds
+# line 2 of a.sh. Lines 1 and 3 are context. The verifier upholds every finding
+# here, so the lowering is the rule's own.
+DIFF_BODY='diff --git a/a.sh b/a.sh
+--- a/a.sh
++++ b/a.sh
+@@ -1,2 +1,3 @@
+ echo one
++echo two
+ echo three'
+mkpre() { # $1 severity, $2 area, $3 line field (a number, or empty for none)
+  local ln=""; [ -n "$3" ] && ln="\"line\":$3,"
+  printf '{"verdict":"request_changes","summary":"s","findings":[{"severity":"%s","confidence":0.9,"file":"a.sh",%s"issue":"Pre-existing: the value reaches a shell command","area":"%s"}]}' "$1" "$ln" "$2"
+}
+run_case chain "$(mkpre CRITICAL security 1)" MODEL=upholds
+has   'pre-existing: a CRITICAL security finding on an unchanged line is lowered' "sev0=MEDIUM" "$OUT"
 has   '...it no longer blocks and stays in the list'          "reached tally=0 n=1 ok=y" "$OUT"
 has   '...the posted verdict is approve'                      "resolved=approve" "$OUT"
 has   '...the log names the lowering'                         "lowered 1 pre-existing" "$OUT"
+run_case chain "$(mkpre CRITICAL security 2)" MODEL=upholds
+has   'pre-existing: a CRITICAL security finding on an added line still blocks' "reached tally=1 n=1 ok=y" "$OUT"
+has   '...and the severity is still CRITICAL'              "sev0=CRITICAL" "$OUT"
+has   '...and the verdict stays request_changes'              "resolved=request_changes" "$OUT"
+lacks '...and the log names no lowering'                      "lowered 1 pre-existing" "$OUT"
+run_case chain "$(mkpre HIGH correctness 1)" MODEL=upholds
+has   'pre-existing: a HIGH correctness finding on an unchanged line still blocks' "reached tally=1 n=1" "$OUT"
+has   '...and keeps HIGH'                                     "sev0=HIGH" "$OUT"
+run_case chain "$(mkpre CRITICAL security '')" MODEL=upholds
+has   'pre-existing: a security finding with no line keeps its severity' "reached tally=1 n=1 ok=y" "$OUT"
+has   '...and the severity is still CRITICAL'              "sev0=CRITICAL" "$OUT"
+run_case chain "$(mkpre CRITICAL security 1)" MODEL=upholds JQ_FAIL_NEEDLE=pre-existing JQ_FAIL_MODE=rc
+has   'pre-existing: a failed rule keeps the severity'        "reached tally=1 n=1" "$OUT"
+has   '...and logs one WARNING'                               "the pre-existing rule did not run" "$OUT"
+DIFF_BODY='@@ not a hunk header
+junk'
+run_case chain "$(mkpre CRITICAL security 1)" MODEL=upholds
+has   'pre-existing: a diff that cannot be read keeps the severity' "reached tally=1 n=1 ok=y" "$OUT"
+has   '...and the severity is still CRITICAL'              "sev0=CRITICAL" "$OUT"
+has   '...and logs one WARNING'                               "the pre-existing rule did not run" "$OUT"
+DIFF_BODY=""
 run_case chain "$REVIEW_SEC" MODEL=upholds
 has   'a security HIGH with no Pre-existing: prefix still blocks' "reached tally=1 n=1 ok=y" "$OUT"
 lacks '...and the log names no pre-existing lowering'        "lowered 1 pre-existing" "$OUT"

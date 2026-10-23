@@ -74,8 +74,10 @@ needs 'scope: a security defect in moved, reformatted or adjacent code is report
   'security defect in moved, reformatted or adjacent unchanged code that (this|the) PR touches'
 needs 'scope: that finding is MEDIUM, security, and starts with Pre-existing:' pr-autoreview.sh \
   'MEDIUM finding, area security, with an issue text that starts? with .Pre-existing:'
-needs 'scope: that finding never blocks and one per PR is enough' pr-autoreview.sh \
-  'never blocks\. One such finding per PR'
+needs 'scope: that finding is MEDIUM, never blocks, and one per PR is enough' pr-autoreview.sh \
+  'MEDIUM finding never blocks.*One such finding per PR'
+needs 'scope: the reviewer lowers a higher rating only for an unchanged line' pr-autoreview.sh \
+  'keeps a higher severity when the cited line is an added line'
 needs 'scope: the noise list leaves room for a pre-existing path through code the PR touches' lib/review-spec.sh \
   'concrete exploit path in (this diff or )?the code (this PR|the diff) touches'
 needs 'trace: a pre-existing security finding runs the same trace and stays MEDIUM' $SEC \
