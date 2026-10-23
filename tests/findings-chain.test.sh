@@ -117,12 +117,24 @@ redteam_prompt() { printf 'red team prompt'; }
 claude_call()    { cat >/dev/null; echo "MODEL CALL"; return 99; }
 # A model that refutes whatever it is asked about.
 claude_refutes() { cat >/dev/null; printf '%s\n' '{"type":"result","is_error":false,"result":"{\"refuted\":true,\"confidence\":0.95,\"reason\":\"the caller checks it\"}"}'; }
+# A model that finds the finding real but not worth a block.
+claude_unworthy() { cat >/dev/null; printf '%s\n' '{"type":"result","is_error":false,"result":"{\"refuted\":false,\"confidence\":0.7,\"merits_block\":false,\"reason\":\"real, but small\"}"}'; }
+# A model that refutes the first fixture finding and calls any other one not worth a block.
+claude_mixed() {
+  if grep -qF 'the check can be skipped'; then claude_refutes; else claude_unworthy; fi
+}
 # A model whose red team raises one candidate.
 claude_raises()  { cat >/dev/null; printf '%s\n' '{"type":"result","is_error":false,"result":"{\"candidates\":[{\"severity\":\"HIGH\",\"confidence\":0.7,\"file\":\"a.sh\",\"line\":2,\"issue\":\"a missed defect\"}]}"}'; }
 
 HIGH='{"severity":"HIGH","confidence":0.9,"file":"a.sh","line":1,"issue":"the check can be skipped","area":"correctness"}'
 MED='{"severity":"MEDIUM","confidence":0.6,"file":"a.sh","line":3,"issue":"a name is unclear"}'
 REVIEW_BLOCK="{\"verdict\":\"request_changes\",\"summary\":\"s\",\"findings\":[$HIGH]}"
+HIGH_SEC='{"severity":"HIGH","confidence":0.9,"file":"a.sh","line":1,"issue":"the check can be skipped","area":"security"}'
+CRIT='{"severity":"CRITICAL","confidence":0.9,"file":"a.sh","line":1,"issue":"the check can be skipped","area":"correctness"}'
+HIGH2='{"severity":"HIGH","confidence":0.9,"file":"a.sh","line":2,"issue":"the second step is missing","area":"correctness"}'
+REVIEW_SEC="{\"verdict\":\"request_changes\",\"summary\":\"s\",\"findings\":[$HIGH_SEC]}"
+REVIEW_CRIT="{\"verdict\":\"request_changes\",\"summary\":\"s\",\"findings\":[$CRIT]}"
+REVIEW_PAIR="{\"verdict\":\"request_changes\",\"summary\":\"s\",\"findings\":[$HIGH,$HIGH2]}"
 REVIEW_PASS="{\"verdict\":\"approve\",\"summary\":\"s\",\"findings\":[$MED]}"
 # The model asked for changes on a blocker that the citation check will drop
 # (the file does not exist), and listed one finding that does not block.
@@ -162,6 +174,8 @@ run_case() {
     case "${MODEL-}" in
       (refutes) claude_call() { claude_refutes; } ;;
       (raises)  claude_call() { claude_raises; } ;;
+      (unworthy) claude_call() { claude_unworthy; } ;;
+      (mixed)   claude_call() { claude_mixed; } ;;
     esac
     "$fn" 2>&1 ) )"
 }
@@ -188,6 +202,27 @@ has '...and logs the original line' "a.sh:99 is past the end of the file, set to
 run_case chain "$REVIEW_FAR"
 has 'the line backstop does nothing when the diff was not applied' "reached tally=1 n=2 ok=y" "$OUT"
 lacks '...and logs nothing' "set to 0" "$OUT"
+
+# The verifier calls a real blocker not worth blocking: a HIGH becomes MEDIUM,
+# the finding stays, and a request_changes with nothing left that blocks is an
+# approve. CRITICAL and security stay.
+run_case chain "$REVIEW_BLOCK" MODEL=unworthy
+has   'not worth blocking: the log names the demotion'        "demoted 1 HIGH finding(s) to MEDIUM" "$OUT"
+has   '...the finding is kept'                                "reached tally=0 n=1 ok=y" "$OUT"
+has   '...and the verdict becomes approve'                    "resolved=approve" "$OUT"
+run_case chain "$REVIEW_SEC" MODEL=unworthy
+has   'not worth blocking: a security HIGH still blocks'      "reached tally=1 n=1 ok=y" "$OUT"
+lacks '...and the log names no demotion'                      "demoted 1" "$OUT"
+run_case chain "$REVIEW_CRIT" MODEL=unworthy
+has   'not worth blocking: a CRITICAL still blocks'           "reached tally=1 n=1 ok=y" "$OUT"
+run_case chain "$REVIEW_BLOCK" MODEL=refutes
+lacks 'a refuted blocker is dropped, not demoted'             "demoted 1" "$OUT"
+# The demotion uses the indexes of the list before the drop. The first finding
+# is refuted and dropped, the second is demoted. A demotion after the drop would
+# aim at an index that is gone.
+run_case chain "$REVIEW_PAIR" MODEL=mixed
+has   'one refuted and one not worth blocking: the right one is lowered' "reached tally=0 n=1 ok=y" "$OUT"
+has   '...and the round approves'                             "resolved=approve" "$OUT"
 
 # bash 3.2 finds the end of "$( )" by counting parentheses and quotes. It counts
 # comments too, and a case pattern ends in a parenthesis. The run above passes
@@ -230,6 +265,10 @@ for mode in rc empty cut; do
   run_case chain "$REVIEW_BLOCK" "JQ_FAIL_NEEDLE=$FINDINGS_CONVERGE_JQ"
   has   "convergence caps fail ($mode): the log says so" "convergence cap did not run" "$OUT"
   kept  "convergence caps fail ($mode)" "reached tally=1 n=1 ok=y"
+  # The demotion fails open: the blocker keeps its severity and the log says so.
+  run_case chain "$REVIEW_BLOCK" "JQ_FAIL_NEEDLE=$FINDINGS_DEMOTE_WORTH_JQ" MODEL=unworthy
+  has   "demotion fails ($mode): the log says so" "demotion did not run" "$OUT"
+  kept  "demotion fails ($mode)" "reached tally=1 n=1 ok=y"
   run_case chain "$REVIEW_BLOCK" "JQ_FAIL_NEEDLE=$FINDINGS_REPEAT_MARK_JQ"
   kept  "repeat mark fails ($mode)" "reached tally=1 n=1 ok=y"
   # The line check is off by default. Its result is read without the exit
@@ -312,5 +351,9 @@ either 'control, shape filter fails, no check: the round goes on past it' "reach
 run_case chain_no_check "$REVIEW_BLOCK" "JQ_FAIL_NEEDLE=$FINDINGS_FILE_CAP_JQ" JQ_FAIL_MODE=empty
 lacks  'control, per-file cap fails: the check is cut out'     "a findings step (jq) failed" "$OUT"
 either 'control, per-file cap fails, no check: the round goes on past it' "reached tally= n= ok=n" "the blocking tally (jq) failed" "$OUT"
+
+# The comment counts the lowered findings where it counts the capped ones.
+is 'the comment has a note for the findings the verifier lowered' \
+   "$(grep -c 'because the second-round check found each one real but not worth blocking the merge' pr-autoreview.sh)" 1
 
 if [ "$FAILED" -eq 0 ]; then echo "PASS: CLEANED chain"; else echo "FAIL: CLEANED chain"; exit 1; fi

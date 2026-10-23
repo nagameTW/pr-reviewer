@@ -2668,7 +2668,7 @@ $SLICE_CLEAN"
   # the summary preamble (which would tell the author round 1 meant to block
   # when it did not) and findings_resolve_verdict's `refuted` argument (which
   # exists to let a request_changes with nothing left in it become an approve).
-  VERIFIED_OUT=""; N_REFUTED=0; N_REFUTED_RT=0
+  VERIFIED_OUT=""; N_REFUTED=0; N_REFUTED_RT=0; N_WORTH=0
   if [ "$(jq -r "$FINDINGS_BLOCKING_COUNT_JQ" <<<"$CLEANED")" -gt 0 ] && [ -s "$DIFF" ]; then
     BLOCKERS="$(jq -c "$FINDINGS_BLOCKERS_JQ" <<<"$CLEANED")"
     N_BLOCK="$(jq -r 'length' <<<"$BLOCKERS")"
@@ -2704,7 +2704,7 @@ $SLICE_CLEAN"
     done
     for p in ${VERIFY_PIDS[@]+"${VERIFY_PIDS[@]}"}; do wait "$p" || true; done
 
-    V_DROP="[]"
+    V_DROP="[]"; V_DEMOTE="[]"
     for i in ${VERIFY_FILES[@]+"${!VERIFY_FILES[@]}"}; do
       # Same status-line handling as the other three calls. A verifier whose
       # call failed leaves V_ANS unparseable, the finding stands, and the
@@ -2771,6 +2771,13 @@ $SLICE_CLEAN"
         # are the two ends of this branch and they used to print identically.
         one_line "PR #$PR: refutation upheld $V_LABEL (refuted=$(jq -r '.refuted' <<<"$V_ANS"), confidence $(jq -r '.confidence // "?"' <<<"$V_ANS"))"
         print_withheld "reason: $(jq -r '.reason // "(no reason given)"' <<<"$V_ANS")"
+        # A real finding the verifier does not think is worth a block. Only
+        # the index is kept here. FINDINGS_DEMOTE_WORTH_JQ decides below what
+        # may be lowered.
+        if findings_verify_unworthy "$V_ANS"; then
+          V_DEMOTE="$(jq -c ". + [${VERIFY_IDX[$i]}]" <<<"$V_DEMOTE")"
+          echo "PR #$PR: verifier says ${V_LABEL} is real but does not merit blocking"
+        fi
       else
         # Unparseable or empty is NOT a refutation. Say so out loud, with the
         # call's stderr: a silent "upheld" is indistinguishable from a stage
@@ -2793,12 +2800,29 @@ $SLICE_CLEAN"
       # backstop, which is what it is for.
       rm -f "${VERIFY_FILES[$i]}" "${VERIFY_ERRS[$i]}"
     done
+    # Lower first, drop second. Both use the indexes of the list as it is now,
+    # and a drop shifts them. Fail-open like the convergence caps: a jq that
+    # fails leaves the blockers at the severity the model gave them.
+    if [ "$V_DEMOTE" != "[]" ]; then
+      if DEM="$(jq -c --argjson demote "$V_DEMOTE" "$FINDINGS_DEMOTE_WORTH_JQ" <<<"$CLEANED" 2>/dev/null)" \
+         && [ -n "$DEM" ]; then
+        CLEANED="$DEM"
+      else
+        echo "PR #$PR: WARNING — demotion did not run (jq failed); the blockers keep their severity"
+      fi
+    fi
     N_REFUTED="$(jq -r 'length' <<<"$V_DROP")"
     if [ "${N_REFUTED:-0}" -gt 0 ]; then
       CLEANED="$(jq -c --argjson drop "$V_DROP" "$FINDINGS_DROP_JQ" <<<"$CLEANED")"
       # $FINDINGS is rendered from $CLEANED a few lines below; recomputing it
       # here as well would only be a dead assignment.
     fi
+    # Counted from the mark, after the drop: a finding both asked for a lower
+    # and refuted is gone and is not counted.
+    N_WORTH="$(jq -r "$FINDINGS_CAPPED_WORTH_COUNT_JQ" <<<"$CLEANED" 2>/dev/null)" || N_WORTH=0
+    case "$N_WORTH" in '' | *[!0-9]*) N_WORTH=0 ;; esac
+    [ "$N_WORTH" -gt 0 ] \
+      && echo "PR #$PR: verifier demoted $N_WORTH HIGH finding(s) to MEDIUM (real, but not worth blocking)"
   fi
   rm -f "$DIFF"
 
@@ -3057,6 +3081,14 @@ $SOFT_FINDINGS"
     NOTES="${NOTES:+$NOTES
 
 }$(( N_CAP_KIND + N_CAP_LATE )) finding(s) were demoted to MEDIUM by the cross-round rules: ${N_CAP_KIND} for wording, judgment or ${CAP_KIND_WHY}, and ${N_CAP_LATE} raised late on a file no earlier round cited and the changes since the last reviewed round do not touch. Each one's details give its original severity. They do not change the verdict$( [ "$GATE_TICKETS" = 1 ] && printf '%s' ', but every one that lands in a follow-up ticket needs a disposition there')."
+  fi
+
+  # The second round's lowering is counted apart from the caps above. A rule
+  # of the cross-round kind and a verifier's judgment are different events.
+  if [ "${N_WORTH:-0}" -gt 0 ]; then
+    NOTES="${NOTES:+$NOTES
+
+}${N_WORTH} HIGH finding(s) were lowered to MEDIUM because the second-round check found each one real but not worth blocking the merge. They do not block. Each one's details give its original severity."
   fi
 
   # A repaired review says so ON THE PR, not only in the local log. The

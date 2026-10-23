@@ -206,7 +206,8 @@ reads the settings named `PRREVIEW_LOOP_*`. It starts the rounds.
    It drops findings that cite a file that does not exist. Each blocking finding
    then gets its own call that tries to refute it. The limit is
    `PRREVIEW_GATE_VERIFY_MAX` (6) in a round. The reviewer drops a refuted
-   finding. Any finding beyond the cap stands.
+   finding. The same call says whether a real HIGH is worth a block. If it is
+   not, the finding becomes MEDIUM and stays. Any finding beyond the cap stands.
 7. **Post.** Render one comment. Escape the model text (see
    [SECURITY.md](../SECURITY.md)). Scan the comment against your patterns. Post
    it. The end of the round prints the model usage and the cost of the round.
@@ -232,7 +233,7 @@ wording, process or a doc for maintainers or team members, the comment lists the
 
 ### Optional: a red team before an approval
 
-The refutation calls in step 6 can only remove findings. The red team is the
+The refutation calls in step 6 can only remove or lower findings. The red team is the
 one step that looks for a defect that the review missed. It runs only on a
 round that is about to post ✅ Approved.
 
