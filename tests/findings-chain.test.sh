@@ -120,6 +120,8 @@ claude_call()    { cat >/dev/null; echo "MODEL CALL"; return 99; }
 claude_refutes() { cat >/dev/null; printf '%s\n' '{"type":"result","is_error":false,"result":"{\"refuted\":true,\"confidence\":0.95,\"reason\":\"the caller checks it\"}"}'; }
 # A model that finds the finding real but not worth a block.
 claude_unworthy() { cat >/dev/null; printf '%s\n' '{"type":"result","is_error":false,"result":"{\"refuted\":false,\"confidence\":0.7,\"merits_block\":false,\"reason\":\"real, but small\"}"}'; }
+# A model whose answer contradicts itself: refuted below the bar, merits_block false.
+claude_contradicts() { cat >/dev/null; printf '%s\n' '{"type":"result","is_error":false,"result":"{\"refuted\":true,\"confidence\":0.7,\"merits_block\":false,\"reason\":\"likely wrong\"}"}'; }
 # A model that refutes the first fixture finding and calls any other one not worth a block.
 claude_mixed() {
   if grep -qF 'the check can be skipped'; then claude_refutes; else claude_unworthy; fi
@@ -188,6 +190,7 @@ run_case() {
       (refutes) claude_call() { claude_refutes; } ;;
       (raises)  claude_call() { claude_raises; } ;;
       (unworthy) claude_call() { claude_unworthy; } ;;
+      (contradicts) claude_call() { claude_contradicts; } ;;
       (mixed)   claude_call() { claude_mixed; } ;;
       (groups)  claude_call() { claude_groups; } ;;
     esac
@@ -224,6 +227,12 @@ run_case chain "$REVIEW_BLOCK" MODEL=unworthy
 has   'not worth blocking: the log names the demotion'        "demoted 1 HIGH finding(s) to MEDIUM" "$OUT"
 has   '...the finding is kept'                                "reached tally=0 n=1 ok=y" "$OUT"
 has   '...and the verdict becomes approve'                    "resolved=approve" "$OUT"
+# A verifier that says refuted:true at 0.7 does not uphold the finding, so the
+# answer lowers nothing. The HIGH keeps blocking and the verdict stays.
+run_case chain "$REVIEW_BLOCK" MODEL=contradicts
+has   'a contradictory verifier answer: the HIGH still blocks'  "reached tally=1 n=1 ok=y" "$OUT"
+has   '...and the verdict stays request_changes'                "resolved=request_changes" "$OUT"
+lacks '...and the log names no demotion'                        "demoted 1" "$OUT"
 run_case chain "$REVIEW_SEC" MODEL=unworthy
 has   'not worth blocking: a security HIGH still blocks'      "reached tally=1 n=1 ok=y" "$OUT"
 lacks '...and the log names no demotion'                      "demoted 1" "$OUT"

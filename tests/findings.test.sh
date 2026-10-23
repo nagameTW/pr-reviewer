@@ -1027,6 +1027,16 @@ has '...and the answer never deletes the finding' 'This answer never deletes the
 unw() { if findings_verify_unworthy "$1"; then echo demote; else echo keep; fi; }
 is 'merits_block false asks for a demotion' \
    "$(unw '{"refuted":false,"confidence":0.7,"merits_block":false,"reason":"minor"}')" 'demote'
+is 'refuted true below the bar with merits_block false keeps the severity' \
+   "$(unw '{"refuted":true,"confidence":0.7,"merits_block":false,"reason":"likely wrong"}')" 'keep'
+is 'a missing refuted keeps the severity' "$(unw '{"confidence":0.7,"merits_block":false,"reason":"minor"}')" 'keep'
+is 'the string "false" for refuted keeps the severity' \
+   "$(unw '{"refuted":"false","confidence":0.7,"merits_block":false,"reason":"minor"}')" 'keep'
+is 'a missing reason keeps the severity' "$(unw '{"refuted":false,"confidence":0.7,"merits_block":false}')" 'keep'
+is 'a reason that is not a string keeps the severity' "$(unw '{"refuted":false,"confidence":0.7,"merits_block":false,"reason":5}')" 'keep'
+is 'a missing confidence keeps the severity' "$(unw '{"refuted":false,"merits_block":false,"reason":"minor"}')" 'keep'
+is 'a confidence that is not a number keeps the severity' \
+   "$(unw '{"refuted":false,"confidence":"high","merits_block":false,"reason":"minor"}')" 'keep'
 is 'merits_block true keeps the severity' \
    "$(unw '{"refuted":false,"confidence":0.7,"merits_block":true,"reason":"real"}')" 'keep'
 is 'a missing merits_block keeps the severity' "$(unw '{"refuted":false,"confidence":0.7,"reason":"real"}')" 'keep'

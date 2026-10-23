@@ -1081,14 +1081,21 @@ findings_verify_refuted() {
     and (((.reason // "") | length) > 0)' <<<"$json" >/dev/null 2>&1
 }
 
-# Did the verifier call a finding real but not worth a block?
-# Returns 0 only for an object whose merits_block is the boolean false. A
-# missing field, a string, null, prose or no output keeps the severity: a
-# verifier that did not answer the question must not lower a blocker.
+# Did the verifier clearly uphold a finding and call it not worth a block?
+# Returns 0 only for an object with refuted exactly false, merits_block
+# exactly false, a string reason and a numeric confidence. Any other shape
+# keeps the severity: a missing field, a string, null, prose or no output, and
+# also a self-contradicting answer such as refuted:true at a confidence below
+# the bar. A verifier that did not answer the question well must not lower a
+# blocker.
 findings_verify_unworthy() {
   local json="${1-}"
   [ -n "$json" ] || return 1
-  jq -e '(type == "object") and (.merits_block == false)' <<<"$json" >/dev/null 2>&1
+  jq -e '(type == "object")
+    and (.refuted == false)
+    and (.merits_block == false)
+    and ((.reason | type) == "string")
+    and ((.confidence | type) == "number")' <<<"$json" >/dev/null 2>&1
 }
 
 # Lower HIGH findings the verifier called not worth a block. Caller passes

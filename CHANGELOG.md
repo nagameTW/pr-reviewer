@@ -47,8 +47,10 @@ All notable changes to this project are recorded here. The format follows
 ### Changed
 
 - The refutation call also asks whether a real HIGH finding is worth blocking
-  the merge (`merits_block`). If the answer is `false`, the HIGH becomes MEDIUM
-  and stays in the comment, with its original severity noted. A CRITICAL and a
+  the merge (`merits_block`). If the verifier upholds the finding (`refuted` is
+  `false`) and `merits_block` is `false`, the HIGH becomes MEDIUM and stays in
+  the comment, with its original severity noted. An answer of any other shape
+  lowers nothing. A CRITICAL and a
   HIGH in the area security or data are never lowered. The call count does not
   change, and the comment counts the lowered findings.
 - A security defect in moved, reformatted or adjacent unchanged code that a PR
