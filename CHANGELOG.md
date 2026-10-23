@@ -8,6 +8,13 @@ All notable changes to this project are recorded here. The format follows
 
 ### Added
 
+- A review with 6 findings or more makes one more call, to the cheaper model
+  (`PRREVIEW_GATE_CHEAP_MODEL`). The model returns only groups of finding ids
+  that share one root cause and one fix. Code merges each group into the
+  finding with the highest severity. The merged finding adds the location and
+  the full text of every other member after `Also at`, so no explanation is
+  lost. A failed call, or an answer with one invalid group, keeps the findings
+  as they were. The call is counted in the usage of the round.
 - CI runs the test suite on macOS with `/bin/bash`, which is bash 3.2. The
   job installs jq, gh, flock, shellcheck and coreutils with Homebrew and does
   not put the coreutils `gnubin` directory on `PATH`.
@@ -40,6 +47,13 @@ All notable changes to this project are recorded here. The format follows
 
 ### Changed
 
+- The refutation call also asks whether a real HIGH finding is worth blocking
+  the merge (`merits_block`). If the verifier upholds the finding (`refuted` is
+  `false`) and `merits_block` is `false`, the HIGH becomes MEDIUM and stays in
+  the comment, with its original severity noted. An answer of any other shape
+  lowers nothing. A CRITICAL and a
+  HIGH in the area security or data are never lowered. The call count does not
+  change, and the comment counts the lowered findings.
 - The comment lists the findings that do not block and are about tests,
   conventions, wording, process, or a doc for maintainers or team members as
   one item, `Tests, docs and process (N)`, when there are two or more. The

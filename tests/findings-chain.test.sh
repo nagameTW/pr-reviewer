@@ -37,6 +37,7 @@ for h in ok bad is has lacks; do command -v "$h" >/dev/null 2>&1 || { echo "  FA
 
 . lib/findings.sh || { echo "FAIL: could not source lib/findings.sh"; exit 1; }
 . lib/redteam.sh  || { echo "FAIL: could not source lib/redteam.sh"; exit 1; }
+. lib/regroup.sh  || { echo "FAIL: could not source lib/regroup.sh"; exit 1; }
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -117,12 +118,40 @@ redteam_prompt() { printf 'red team prompt'; }
 claude_call()    { cat >/dev/null; echo "MODEL CALL"; return 99; }
 # A model that refutes whatever it is asked about.
 claude_refutes() { cat >/dev/null; printf '%s\n' '{"type":"result","is_error":false,"result":"{\"refuted\":true,\"confidence\":0.95,\"reason\":\"the caller checks it\"}"}'; }
+# A model that finds the finding real but not worth a block.
+claude_unworthy() { cat >/dev/null; printf '%s\n' '{"type":"result","is_error":false,"result":"{\"refuted\":false,\"confidence\":0.7,\"merits_block\":false,\"reason\":\"real, but small\"}"}'; }
+# A model whose answer contradicts itself: refuted below the bar, merits_block false.
+claude_contradicts() { cat >/dev/null; printf '%s\n' '{"type":"result","is_error":false,"result":"{\"refuted\":true,\"confidence\":0.7,\"merits_block\":false,\"reason\":\"likely wrong\"}"}'; }
+# A model that upholds the finding, says merits_block false, and gives an empty reason.
+claude_noreason() { cat >/dev/null; printf '%s\n' '{"type":"result","is_error":false,"result":"{\"refuted\":false,\"confidence\":0.7,\"merits_block\":false,\"reason\":\"\"}"}'; }
+# A model that refutes the first fixture finding and calls any other one not worth a block.
+claude_mixed() {
+  if grep -qF 'the check can be skipped'; then claude_refutes; else claude_unworthy; fi
+}
+# A model that groups the first two findings and upholds any blocker it is asked about.
+claude_groups() {
+  if grep -qF 'FINDINGS BEGIN'; then
+    printf '%s\n' '{"type":"result","is_error":false,"result":"{\"groups\":[[0,1]]}"}'
+  else
+    claude_unworthy_not
+  fi
+}
+claude_unworthy_not() { printf '%s\n' '{"type":"result","is_error":false,"result":"{\"refuted\":false,\"confidence\":0.7,\"merits_block\":true,\"reason\":\"real\"}"}'; }
 # A model whose red team raises one candidate.
 claude_raises()  { cat >/dev/null; printf '%s\n' '{"type":"result","is_error":false,"result":"{\"candidates\":[{\"severity\":\"HIGH\",\"confidence\":0.7,\"file\":\"a.sh\",\"line\":2,\"issue\":\"a missed defect\"}]}"}'; }
 
 HIGH='{"severity":"HIGH","confidence":0.9,"file":"a.sh","line":1,"issue":"the check can be skipped","area":"correctness"}'
 MED='{"severity":"MEDIUM","confidence":0.6,"file":"a.sh","line":3,"issue":"a name is unclear"}'
 REVIEW_BLOCK="{\"verdict\":\"request_changes\",\"summary\":\"s\",\"findings\":[$HIGH]}"
+HIGH_SEC='{"severity":"HIGH","confidence":0.9,"file":"a.sh","line":1,"issue":"the check can be skipped","area":"security"}'
+CRIT='{"severity":"CRITICAL","confidence":0.9,"file":"a.sh","line":1,"issue":"the check can be skipped","area":"correctness"}'
+HIGH2='{"severity":"HIGH","confidence":0.9,"file":"a.sh","line":2,"issue":"the second step is missing","area":"correctness"}'
+REVIEW_SEC="{\"verdict\":\"request_changes\",\"summary\":\"s\",\"findings\":[$HIGH_SEC]}"
+REVIEW_CRIT="{\"verdict\":\"request_changes\",\"summary\":\"s\",\"findings\":[$CRIT]}"
+REVIEW_PAIR="{\"verdict\":\"request_changes\",\"summary\":\"s\",\"findings\":[$HIGH,$HIGH2]}"
+# Seven findings: one HIGH that blocks and six MEDIUM. A review with six or more
+# findings makes the grouping call.
+SEVEN="$(jq -nc --argjson h "$HIGH" '{verdict:"request_changes",summary:"s",findings:([$h] + [range(1;7) | {severity:"MEDIUM",confidence:0.6,file:"a.sh",line:(. % 3 + 1),issue:("a small issue number \(.)")}])}')"
 REVIEW_PASS="{\"verdict\":\"approve\",\"summary\":\"s\",\"findings\":[$MED]}"
 # The model asked for changes on a blocker that the citation check will drop
 # (the file does not exist), and listed one finding that does not block.
@@ -155,13 +184,18 @@ run_case() {
     VERDICT=""; REPAIRED=0; SLICE_INCOMPLETE=0; PRIOR_CITED=""; DELTA_FILES=""; ROUND=1
     MAIN_PRIOR=""; INFO='{}'; MARKER=m; PRIOR_AUTHORS=""; VERIFY_MAX=3; VERIFY_TIMEOUT=60; REVIEW_MODEL=m
     CLAUDE_READ_TOOLS=""; TREE_CLAUSE=""; STACKED_CLAUSE=""; REVIEW_LANGUAGE_SPEC=""; SEVERITY_SPEC=""
-    REVIEW_LINE_SPEC=""; REDTEAM_MAX=3
+    REVIEW_LINE_SPEC=""; REDTEAM_MAX=3; CHEAP_MODEL=cheap-model; REPAIR_TIMEOUT=60
     unset ROUND_CAP_ON DELTA_KNOWN PRREVIEW_GATE_VERIFY_LINES PRREVIEW_GATE_REDTEAM DIFF_APPLIED
     MODEL=""
     for w in "$@"; do export "${w?}"; done
     case "${MODEL-}" in
       (refutes) claude_call() { claude_refutes; } ;;
       (raises)  claude_call() { claude_raises; } ;;
+      (unworthy) claude_call() { claude_unworthy; } ;;
+      (contradicts) claude_call() { claude_contradicts; } ;;
+      (noreason) claude_call() { claude_noreason; } ;;
+      (mixed)   claude_call() { claude_mixed; } ;;
+      (groups)  claude_call() { claude_groups; } ;;
     esac
     "$fn" 2>&1 ) )"
 }
@@ -188,6 +222,52 @@ has '...and logs the original line' "a.sh:99 is past the end of the file, set to
 run_case chain "$REVIEW_FAR"
 has 'the line backstop does nothing when the diff was not applied' "reached tally=1 n=2 ok=y" "$OUT"
 lacks '...and logs nothing' "set to 0" "$OUT"
+
+# The verifier calls a real blocker not worth blocking: a HIGH becomes MEDIUM,
+# the finding stays, and a request_changes with nothing left that blocks is an
+# approve. CRITICAL and security stay.
+run_case chain "$REVIEW_BLOCK" MODEL=unworthy
+has   'not worth blocking: the log names the demotion'        "demoted 1 HIGH finding(s) to MEDIUM" "$OUT"
+has   '...the finding is kept'                                "reached tally=0 n=1 ok=y" "$OUT"
+has   '...and the verdict becomes approve'                    "resolved=approve" "$OUT"
+# A verifier that says refuted:true at 0.7 does not uphold the finding, so the
+# answer lowers nothing. The HIGH keeps blocking and the verdict stays.
+run_case chain "$REVIEW_BLOCK" MODEL=contradicts
+has   'a contradictory verifier answer: the HIGH still blocks'  "reached tally=1 n=1 ok=y" "$OUT"
+has   '...and the verdict stays request_changes'                "resolved=request_changes" "$OUT"
+lacks '...and the log names no demotion'                        "demoted 1" "$OUT"
+# An empty reason is not an answer. The sole HIGH keeps blocking.
+run_case chain "$REVIEW_BLOCK" MODEL=noreason
+has   'an empty reason: the HIGH still blocks'                  "reached tally=1 n=1 ok=y" "$OUT"
+has   '...and the verdict stays request_changes'                "resolved=request_changes" "$OUT"
+lacks '...and the log names no demotion'                        "demoted 1" "$OUT"
+run_case chain "$REVIEW_SEC" MODEL=unworthy
+has   'not worth blocking: a security HIGH still blocks'      "reached tally=1 n=1 ok=y" "$OUT"
+lacks '...and the log names no demotion'                      "demoted 1" "$OUT"
+run_case chain "$REVIEW_CRIT" MODEL=unworthy
+has   'not worth blocking: a CRITICAL still blocks'           "reached tally=1 n=1 ok=y" "$OUT"
+run_case chain "$REVIEW_BLOCK" MODEL=refutes
+lacks 'a refuted blocker is dropped, not demoted'             "demoted 1" "$OUT"
+# The demotion uses the indexes of the list before the drop. The first finding
+# is refuted and dropped, the second is demoted. A demotion after the drop would
+# aim at an index that is gone.
+run_case chain "$REVIEW_PAIR" MODEL=mixed
+has   'one refuted and one not worth blocking: the right one is lowered' "reached tally=0 n=1 ok=y" "$OUT"
+has   '...and the round approves'                             "resolved=approve" "$OUT"
+
+# Seven findings make the grouping call. The model groups the first two, and the
+# merge leaves six. The blocker stays.
+run_case chain "$SEVEN" MODEL=groups
+has   'grouping: seven findings are grouped into six'         "grouped 7 findings into 6" "$OUT"
+has   '...the round reaches the tally with six findings'      "reached tally=1 n=6 ok=y" "$OUT"
+run_case chain "$REVIEW_TWO" MODEL=groups
+lacks 'grouping: two findings make no grouping call'          "grouped" "$OUT"
+# A failed call keeps all seven and logs one line about the grouping.
+run_case chain "$SEVEN"
+has   'grouping fails: the log says so'                       "grouping duplicate findings failed" "$OUT"
+has   '...the findings are kept'                              "reached tally=1 n=7 ok=y" "$OUT"
+lacks '...the PR is not skipped'                              "skip 7:" "$OUT"
+is    '...and there is one such line' "$(grep -c 'grouping duplicate findings' <<<"$OUT")" 1
 
 # bash 3.2 finds the end of "$( )" by counting parentheses and quotes. It counts
 # comments too, and a case pattern ends in a parenthesis. The run above passes
@@ -230,6 +310,17 @@ for mode in rc empty cut; do
   run_case chain "$REVIEW_BLOCK" "JQ_FAIL_NEEDLE=$FINDINGS_CONVERGE_JQ"
   has   "convergence caps fail ($mode): the log says so" "convergence cap did not run" "$OUT"
   kept  "convergence caps fail ($mode)" "reached tally=1 n=1 ok=y"
+  # The grouping fails open: all seven findings stay.
+  run_case chain "$SEVEN" "JQ_FAIL_NEEDLE=$REGROUP_MERGE_JQ" MODEL=groups
+  has   "grouping merge fails ($mode): the log says so" "the merge did not run" "$OUT"
+  kept  "grouping merge fails ($mode)" "reached tally=1 n=7 ok=y"
+  run_case chain "$SEVEN" "JQ_FAIL_NEEDLE=$REGROUP_VALID_JQ" MODEL=groups
+  has   "grouping check fails ($mode): the log says so" "grouping duplicate findings failed" "$OUT"
+  kept  "grouping check fails ($mode)" "reached tally=1 n=7 ok=y"
+  # The demotion fails open: the blocker keeps its severity and the log says so.
+  run_case chain "$REVIEW_BLOCK" "JQ_FAIL_NEEDLE=$FINDINGS_DEMOTE_WORTH_JQ" MODEL=unworthy
+  has   "demotion fails ($mode): the log says so" "demotion did not run" "$OUT"
+  kept  "demotion fails ($mode)" "reached tally=1 n=1 ok=y"
   run_case chain "$REVIEW_BLOCK" "JQ_FAIL_NEEDLE=$FINDINGS_REPEAT_MARK_JQ"
   kept  "repeat mark fails ($mode)" "reached tally=1 n=1 ok=y"
   # The line check is off by default. Its result is read without the exit
@@ -312,5 +403,20 @@ either 'control, shape filter fails, no check: the round goes on past it' "reach
 run_case chain_no_check "$REVIEW_BLOCK" "JQ_FAIL_NEEDLE=$FINDINGS_FILE_CAP_JQ" JQ_FAIL_MODE=empty
 lacks  'control, per-file cap fails: the check is cut out'     "a findings step (jq) failed" "$OUT"
 either 'control, per-file cap fails, no check: the round goes on past it' "reached tally= n= ok=n" "the blocking tally (jq) failed" "$OUT"
+
+# Where the grouping sits in pr-autoreview.sh: after the refutation pass, so it
+# sees the findings that stay, and before the per-file cap, so the cap counts
+# merged findings.
+G_AT="$(grep -n '^  regroup_findings$' pr-autoreview.sh | cut -d: -f1)"
+V_AT="$(grep -n 'FINDINGS_DROP_JQ" <<<"\$CLEANED"' pr-autoreview.sh | cut -d: -f1)"
+C_AT="$(grep -n 'FINDINGS_FILE_CAP_JQ" <<<"\$CLEANED"' pr-autoreview.sh | cut -d: -f1)"
+if [ -n "$G_AT" ] && [ -n "$V_AT" ] && [ -n "$C_AT" ] && [ "$V_AT" -lt "$G_AT" ] && [ "$G_AT" -lt "$C_AT" ]; then
+  ok 'the grouping runs after the refutation pass and before the per-file cap'
+else
+  bad 'the grouping runs after the refutation pass and before the per-file cap' "drop=$V_AT group=$G_AT cap=$C_AT"
+fi
+# The comment counts the lowered findings where it counts the capped ones.
+is 'the comment has a note for the findings the verifier lowered' \
+   "$(grep -c 'because the second-round check found each one real but not worth blocking the merge' pr-autoreview.sh)" 1
 
 if [ "$FAILED" -eq 0 ]; then echo "PASS: CLEANED chain"; else echo "FAIL: CLEANED chain"; exit 1; fi

@@ -46,8 +46,9 @@ One round can make these model calls:
 - A second review call for each slice. This happens in a first round on a diff of 1000 lines or more, and in the first round of a split-exempt PR ([definition](operations.md#how-one-round-works)).
 - One refutation call for each blocking finding, up to 6.
 - One repair call.
+- One grouping call, only when the review has 6 findings or more. It uses the cheaper model.
 
-The largest first round makes 16 review calls, 6 refutation calls and 1 repair call. No test run has covered that case. Its cost is unknown.
+The largest first round makes 16 review calls, 6 refutation calls, 1 repair call and 1 grouping call. No test run has covered that case. Its cost is unknown.
 
 ### Cost of test runs
 

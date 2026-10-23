@@ -1018,6 +1018,88 @@ else
   bad 'the verify fence nonce is unpredictable' 'two different nonces' "$VSEP_A vs $VSEP_B"
 fi
 
+# ── the second question of the verifier: does the finding merit blocking? ──
+has 'verify: the prompt asks whether the finding merits blocking' 'does this finding merit blocking the merge' "$VP"
+has '...and the JSON shape carries the field' '"merits_block":true|false' "$VP"
+has '...and an unsure verifier answers true' 'Answer merits_block=true when you are unsure.' "$VP"
+has '...and the answer never deletes the finding' 'This answer never deletes the finding.' "$VP"
+
+unw() { if findings_verify_unworthy "$1"; then echo demote; else echo keep; fi; }
+is 'merits_block false asks for a demotion' \
+   "$(unw '{"refuted":false,"confidence":0.7,"merits_block":false,"reason":"minor"}')" 'demote'
+is 'refuted true below the bar with merits_block false keeps the severity' \
+   "$(unw '{"refuted":true,"confidence":0.7,"merits_block":false,"reason":"likely wrong"}')" 'keep'
+is 'an empty reason keeps the severity' "$(unw '{"refuted":false,"confidence":0.7,"merits_block":false,"reason":""}')" 'keep'
+is 'a whitespace-only reason keeps the severity' "$(unw '{"refuted":false,"confidence":0.7,"merits_block":false,"reason":"  \t\n "}')" 'keep'
+is 'a confidence below 0 keeps the severity' "$(unw '{"refuted":false,"confidence":-0.1,"merits_block":false,"reason":"minor"}')" 'keep'
+is 'a confidence above 1 keeps the severity' "$(unw '{"refuted":false,"confidence":1.5,"merits_block":false,"reason":"minor"}')" 'keep'
+is 'a confidence of 0 is allowed' "$(unw '{"refuted":false,"confidence":0,"merits_block":false,"reason":"minor"}')" 'demote'
+is 'a confidence of 1 is allowed' "$(unw '{"refuted":false,"confidence":1,"merits_block":false,"reason":"minor"}')" 'demote'
+is 'a missing refuted keeps the severity' "$(unw '{"confidence":0.7,"merits_block":false,"reason":"minor"}')" 'keep'
+is 'the string "false" for refuted keeps the severity' \
+   "$(unw '{"refuted":"false","confidence":0.7,"merits_block":false,"reason":"minor"}')" 'keep'
+is 'a missing reason keeps the severity' "$(unw '{"refuted":false,"confidence":0.7,"merits_block":false}')" 'keep'
+is 'a reason that is not a string keeps the severity' "$(unw '{"refuted":false,"confidence":0.7,"merits_block":false,"reason":5}')" 'keep'
+is 'a missing confidence keeps the severity' "$(unw '{"refuted":false,"merits_block":false,"reason":"minor"}')" 'keep'
+is 'a confidence that is not a number keeps the severity' \
+   "$(unw '{"refuted":false,"confidence":"high","merits_block":false,"reason":"minor"}')" 'keep'
+is 'merits_block true keeps the severity' \
+   "$(unw '{"refuted":false,"confidence":0.7,"merits_block":true,"reason":"real"}')" 'keep'
+is 'a missing merits_block keeps the severity' "$(unw '{"refuted":false,"confidence":0.7,"reason":"real"}')" 'keep'
+is 'the string "false" is not false' "$(unw '{"refuted":false,"merits_block":"false","reason":"x"}')" 'keep'
+is 'a null merits_block keeps the severity' "$(unw '{"refuted":false,"merits_block":null,"reason":"x"}')" 'keep'
+is 'prose instead of JSON keeps the severity' "$(unw 'it does not merit blocking')" 'keep'
+is 'an empty answer keeps the severity' "$(unw '')" 'keep'
+is 'a JSON array keeps the severity' "$(unw '[{"merits_block":false}]')" 'keep'
+
+# FINDINGS_DEMOTE_WORTH_JQ lowers a HIGH to MEDIUM by index and keeps the finding.
+dem() { jq -c --argjson demote "$2" "$FINDINGS_DEMOTE_WORTH_JQ" <<<"$1"; }
+DW='{"findings":[
+ {"severity":"HIGH","area":"correctness","file":"a.py","line":1,"issue":"i0"},
+ {"severity":"CRITICAL","area":"correctness","file":"a.py","line":2,"issue":"i1"},
+ {"severity":"HIGH","area":"security","file":"a.py","line":3,"issue":"i2"},
+ {"severity":"HIGH","area":"data","file":"a.py","line":4,"issue":"i3"},
+ {"severity":" high ","file":"a.py","line":5,"issue":"i4"},
+ {"severity":"BLOCKER","area":"correctness","file":"a.py","line":6,"issue":"i5"},
+ {"severity":"MEDIUM","area":"correctness","file":"a.py","line":7,"issue":"i6"},
+ {"severity":"HIGH","area":"test","file":"a.py","line":8,"issue":"i7"},
+ "not an object"]}'
+DWALL='[0,1,2,3,4,5,6,7,8]'
+dw() { dem "$DW" "$DWALL" | jq -r ".findings[$1] | $2"; }
+is 'worth: a HIGH becomes MEDIUM' "$(dw 0 .severity)" 'MEDIUM'
+is 'worth: the original severity is recorded' "$(dw 0 .orig_severity)" 'HIGH'
+is 'worth: the cap reason is recorded' "$(dw 0 .capped)" 'worth'
+is 'worth: the finding keeps its text' "$(dw 0 .issue)" 'i0'
+is 'worth: a CRITICAL is not lowered' "$(dw 1 .severity)" 'CRITICAL'
+is 'worth: a CRITICAL gets no cap mark' "$(dw 1 '(.capped // "none")')" 'none'
+is 'worth: a HIGH in area security is not lowered' "$(dw 2 .severity)" 'HIGH'
+is 'worth: a HIGH in area data is not lowered' "$(dw 3 .severity)" 'HIGH'
+is 'worth: a HIGH with no area counts as correctness and is lowered' "$(dw 4 .severity)" 'MEDIUM'
+is 'worth: an invented severity is not lowered' "$(dw 5 .severity)" 'BLOCKER'
+is 'worth: a MEDIUM gets no cap mark' "$(dw 6 '(.capped // "none")')" 'none'
+is 'worth: a HIGH in area test is lowered' "$(dw 7 .severity)" 'MEDIUM'
+is 'worth: a non-object entry passes through' "$(dem "$DW" "$DWALL" | jq -r '.findings[8]')" 'not an object'
+is 'worth: the list keeps its length' "$(dem "$DW" "$DWALL" | jq -r '.findings | length')" '9'
+is 'worth: an index that is not listed stays HIGH' "$(dem "$DW" '[2]' | jq -r '.findings[0].severity')" 'HIGH'
+is 'worth: an empty list changes nothing' "$(dem "$DW" '[]' | jq -c .)" "$(jq -c . <<<"$DW")"
+is 'worth: the count reads the cap mark' \
+   "$(dem "$DW" "$DWALL" | jq -r "$FINDINGS_CAPPED_WORTH_COUNT_JQ")" '3'
+is 'worth: a lowered finding no longer blocks' \
+   "$(dem '{"findings":[{"severity":"HIGH","file":"a.py","issue":"x"}]}' '[0]' | jq -r "$FINDINGS_BLOCKING_COUNT_JQ")" '0'
+is 'worth: the comment says the verifier lowered it' \
+   "$(dem '{"findings":[{"severity":"HIGH","file":"a.py","line":1,"issue":"x"}]}' '[0]' | jq -r "$FINDINGS_RENDER_JQ" \
+      | grep -c 'originally HIGH; demoted because the second-round check judged it not worth blocking')" '1'
+is 'worth: the follow-up ticket renders the same reason' \
+   "$(dem '{"findings":[{"severity":"HIGH","file":"a.py","line":1,"issue":"x"}]}' '[0]' | jq -r "$FINDINGS_MEDIUM_ARR_JQ" \
+      | jq -r "$FINDINGS_RENDER_MEDIUM_JQ" | grep -c 'not worth blocking')" '1'
+is 'worth: a lowered finding does not file a ticket at the default threshold' \
+   "$(dem '{"findings":[{"severity":"HIGH","file":"a.py","issue":"x"}]}' '[0]' | jq -c '[.findings[]]' | findings_ticket_filter 3 | jq -r 'length')" '0'
+# The convergence caps run first and delete a forged mark. The mark below comes
+# from the model, so it must not survive to the demotion.
+is 'worth: a cap mark that the model wrote is deleted by the convergence caps' \
+   "$(jq -c --argjson round 1 --argjson delta null --argjson prior '[]' "$FINDINGS_CONVERGE_JQ" \
+      <<<'{"findings":[{"severity":"HIGH","capped":"worth","orig_severity":"HIGH","file":"a.py"}]}' | jq -r '(.findings[0].capped // "none")')" 'none'
+
 # ── FINDINGS_CONVERGE_JQ: the convergence caps ──────────────────────
 conv() { jq -c --argjson round "$2" --argjson delta "$3" --argjson prior "$4" "$FINDINGS_CONVERGE_JQ" <<<"$1"; }
 CJ='{"findings":[{"severity":"HIGH","kind":"wording","file":"a.md","line":1,"issue":"wording"}]}'
