@@ -68,26 +68,8 @@ needs 'noise: a new control that does not stop its attack is reported' lib/revie
 # ── scope rule ────────────────────────────────────────────────────────────
 needs 'scope: moved or reformatted lines are in scope for defects the move causes' pr-autoreview.sh \
   '(moved|reformatted).*(stay in scope|in scope).*(defects|defect) the move causes'
-needs 'scope: moved lines keep the pre-existing exclusion for other old defects' pr-autoreview.sh \
-  'other old defect.*(move|moved).*carries over.*(out of scope|not in scope)'
-needs 'scope: a security defect in moved, reformatted or adjacent code is reported' pr-autoreview.sh \
-  'security defect in moved, reformatted or adjacent unchanged code that (this|the) PR touches'
-needs 'scope: that finding is MEDIUM, security, and starts with Pre-existing:' pr-autoreview.sh \
-  'MEDIUM finding, area security, with an issue text that starts? with .Pre-existing:'
-needs 'scope: that finding is MEDIUM, never blocks, and one per PR is enough' pr-autoreview.sh \
-  'MEDIUM finding never blocks.*One such finding per PR'
-needs 'scope: the reviewer lowers a higher rating only for an unchanged line' pr-autoreview.sh \
-  'keeps a higher severity when the cited line is an added line'
-needs 'scope: the noise list leaves room for a pre-existing path through code the PR touches' lib/review-spec.sh \
-  'concrete exploit path in (this diff or )?the code (this PR|the diff) touches'
-needs 'trace: a pre-existing security finding runs the same trace and stays MEDIUM' $SEC \
-  'pre-existing defect.*same trace.*MEDIUM'
-needs 'severity: the shared ladder states the pre-existing security exception' lib/review-spec.sh \
-  'exception.*pre-existing security defect.*MEDIUM.*never blocks'
-needs 'severity: the exception names the Pre-existing: prefix' lib/review-spec.sh \
-  'exception.*starts with .Pre-existing:'
-needs 'trace: the CRITICAL rule for interpolation names the pre-existing exception' $SEC \
-  'name the source in the issue text\. Rule \(5\) is the exception'
+needs 'scope: moved lines keep the pre-existing exclusion' pr-autoreview.sh \
+  'old defect.*(move|moved).*carries over.*(out of scope|not in scope)'
 lacks 'scope: moved lines are not reported as defects of the PR whatever their origin' pr-autoreview.sh \
   'moved from elsewhere[^.]*still belong to this PR'
 

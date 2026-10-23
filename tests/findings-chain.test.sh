@@ -38,7 +38,6 @@ for h in ok bad is has lacks; do command -v "$h" >/dev/null 2>&1 || { echo "  FA
 . lib/findings.sh || { echo "FAIL: could not source lib/findings.sh"; exit 1; }
 . lib/redteam.sh  || { echo "FAIL: could not source lib/redteam.sh"; exit 1; }
 . lib/regroup.sh  || { echo "FAIL: could not source lib/regroup.sh"; exit 1; }
-. lib/diffview.sh || { echo "FAIL: could not source lib/diffview.sh"; exit 1; }
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -95,7 +94,7 @@ CHAIN_NO_CHECK="$(awk -v g="$GUARD" '$0 ~ g { skip = 1 } !skip { print } skip &&
 [ "$(grep -c 'findings_cleaned_ok' <<<"$CHAIN_NO_CHECK")" = 0 ] || { echo "FAIL: could not cut the check out of the chain"; exit 1; }
 
 # What the round holds when it reaches the line after the verdict rule.
-REACHED="echo \"reached tally=\${N_BLOCKING-} n=\${N_FINDINGS-} ok=\$(findings_cleaned_ok \"\$CLEANED\" && echo y || echo n) ndc=\${N_DROPPED_CITE-} resolved=\$VERDICT sev0=\$(jq -r '.findings[0].severity' <<<\"\$CLEANED\" 2>/dev/null)\""
+REACHED="echo \"reached tally=\${N_BLOCKING-} n=\${N_FINDINGS-} ok=\$(findings_cleaned_ok \"\$CLEANED\" && echo y || echo n) ndc=\${N_DROPPED_CITE-} resolved=\$VERDICT\""
 eval "chain() { $CHAIN
 $TAIL
 $REACHED; }"
@@ -173,8 +172,7 @@ run_case() {
   mkdir -p "$d/tree" "$d/scratch" "$d/quota"
   git -C "$d/tree" init -q
   printf 'echo one\necho two\necho three\n' > "$d/tree/a.sh"
-  # DIFF_BODY is set by a caller that needs a diff with hunks.
-  printf '%s\n' "${DIFF_BODY:-diff --git a/a.sh b/a.sh}" > "$d/diff"
+  printf 'diff --git a/a.sh b/a.sh\n' > "$d/diff"
   # shellcheck disable=SC2034  # read by the lifted block
   OUT="$( (
     PATH="$STUBS:$PATH"
@@ -193,7 +191,6 @@ run_case() {
       (raises)  claude_call() { claude_raises; } ;;
       (unworthy) claude_call() { claude_unworthy; } ;;
       (contradicts) claude_call() { claude_contradicts; } ;;
-      (upholds) claude_call() { claude_unworthy_not; cat >/dev/null; } ;;
       (mixed)   claude_call() { claude_mixed; } ;;
       (groups)  claude_call() { claude_groups; } ;;
     esac
@@ -249,51 +246,6 @@ lacks 'a refuted blocker is dropped, not demoted'             "demoted 1" "$OUT"
 run_case chain "$REVIEW_PAIR" MODEL=mixed
 has   'one refuted and one not worth blocking: the right one is lowered' "reached tally=0 n=1 ok=y" "$OUT"
 has   '...and the round approves'                             "resolved=approve" "$OUT"
-
-# A pre-existing security defect is lowered to MEDIUM only when it is in the
-# area security and it cites a line that the diff does not add. The diff adds
-# line 2 of a.sh. Lines 1 and 3 are context. The verifier upholds every finding
-# here, so the lowering is the rule's own.
-DIFF_BODY='diff --git a/a.sh b/a.sh
---- a/a.sh
-+++ b/a.sh
-@@ -1,2 +1,3 @@
- echo one
-+echo two
- echo three'
-mkpre() { # $1 severity, $2 area, $3 line field (a number, or empty for none)
-  local ln=""; [ -n "$3" ] && ln="\"line\":$3,"
-  printf '{"verdict":"request_changes","summary":"s","findings":[{"severity":"%s","confidence":0.9,"file":"a.sh",%s"issue":"Pre-existing: the value reaches a shell command","area":"%s"}]}' "$1" "$ln" "$2"
-}
-run_case chain "$(mkpre CRITICAL security 1)" MODEL=upholds
-has   'pre-existing: a CRITICAL security finding on an unchanged line is lowered' "sev0=MEDIUM" "$OUT"
-has   '...it no longer blocks and stays in the list'          "reached tally=0 n=1 ok=y" "$OUT"
-has   '...the posted verdict is approve'                      "resolved=approve" "$OUT"
-has   '...the log names the lowering'                         "lowered 1 pre-existing" "$OUT"
-run_case chain "$(mkpre CRITICAL security 2)" MODEL=upholds
-has   'pre-existing: a CRITICAL security finding on an added line still blocks' "reached tally=1 n=1 ok=y" "$OUT"
-has   '...and the severity is still CRITICAL'              "sev0=CRITICAL" "$OUT"
-has   '...and the verdict stays request_changes'              "resolved=request_changes" "$OUT"
-lacks '...and the log names no lowering'                      "lowered 1 pre-existing" "$OUT"
-run_case chain "$(mkpre HIGH correctness 1)" MODEL=upholds
-has   'pre-existing: a HIGH correctness finding on an unchanged line still blocks' "reached tally=1 n=1" "$OUT"
-has   '...and keeps HIGH'                                     "sev0=HIGH" "$OUT"
-run_case chain "$(mkpre CRITICAL security '')" MODEL=upholds
-has   'pre-existing: a security finding with no line keeps its severity' "reached tally=1 n=1 ok=y" "$OUT"
-has   '...and the severity is still CRITICAL'              "sev0=CRITICAL" "$OUT"
-run_case chain "$(mkpre CRITICAL security 1)" MODEL=upholds JQ_FAIL_NEEDLE=pre-existing JQ_FAIL_MODE=rc
-has   'pre-existing: a failed rule keeps the severity'        "reached tally=1 n=1" "$OUT"
-has   '...and logs one WARNING'                               "the pre-existing rule did not run" "$OUT"
-DIFF_BODY='@@ not a hunk header
-junk'
-run_case chain "$(mkpre CRITICAL security 1)" MODEL=upholds
-has   'pre-existing: a diff that cannot be read keeps the severity' "reached tally=1 n=1 ok=y" "$OUT"
-has   '...and the severity is still CRITICAL'              "sev0=CRITICAL" "$OUT"
-has   '...and logs one WARNING'                               "the pre-existing rule did not run" "$OUT"
-DIFF_BODY=""
-run_case chain "$REVIEW_SEC" MODEL=upholds
-has   'a security HIGH with no Pre-existing: prefix still blocks' "reached tally=1 n=1 ok=y" "$OUT"
-lacks '...and the log names no pre-existing lowering'        "lowered 1 pre-existing" "$OUT"
 
 # Seven findings make the grouping call. The model groups the first two, and the
 # merge leaves six. The blocker stays.
@@ -456,8 +408,6 @@ else
   bad 'the grouping runs after the refutation pass and before the per-file cap' "drop=$V_AT group=$G_AT cap=$C_AT"
 fi
 # The comment counts the lowered findings where it counts the capped ones.
-is 'the comment has a note for the pre-existing findings that a rule lowered' \
-   "$(grep -c 'because the defect was already in the code and the PR only touches it' pr-autoreview.sh)" 1
 is 'the comment has a note for the findings the verifier lowered' \
    "$(grep -c 'because the second-round check found each one real but not worth blocking the merge' pr-autoreview.sh)" 1
 

@@ -11,7 +11,6 @@
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 . lib/findings.sh || { echo "FAIL: cannot source lib/findings.sh"; exit 1; }
-. lib/diffview.sh || { echo "FAIL: cannot source lib/diffview.sh"; exit 1; }
 . lib/tree.sh || { echo "FAIL: cannot source lib/tree.sh"; exit 1; }
 
 FAILED=0
@@ -1089,73 +1088,6 @@ is 'worth: the follow-up ticket renders the same reason' \
       | jq -r "$FINDINGS_RENDER_MEDIUM_JQ" | grep -c 'not worth blocking')" '1'
 is 'worth: a lowered finding does not file a ticket at the default threshold' \
    "$(dem '{"findings":[{"severity":"HIGH","file":"a.py","issue":"x"}]}' '[0]' | jq -c '[.findings[]]' | findings_ticket_filter 3 | jq -r 'length')" '0'
-# FINDINGS_PREEXISTING_JQ lowers a finding whose issue starts with Pre-existing:
-# to MEDIUM, and only when BOTH hold: the area is exactly security, and the
-# cited line is not an added line of the diff. $added maps each file of the
-# diff to its added lines. Every other case keeps the severity. The lowering
-# records the original severity and the reason, like the other demotions.
-ADDED='{"a.py":[10,11],"c.py":[]}'
-pre() { jq -c --argjson added "${2:-$ADDED}" "$FINDINGS_PREEXISTING_JQ" <<<"$1"; }
-PE='{"findings":[
- {"severity":"CRITICAL","area":"security","file":"a.py","line":1,"issue":"Pre-existing: the name reaches a query"},
- {"severity":"HIGH","area":"security","file":"a.py","line":2,"issue":"  pre-existing: spaces and case"},
- {"severity":"BLOCKER","area":"security","file":"a.py","line":3,"issue":"Pre-existing: an invented label"},
- {"severity":"MEDIUM","area":"security","file":"a.py","line":4,"issue":"Pre-existing: already MEDIUM"},
- {"severity":"CRITICAL","area":"security","file":"a.py","line":5,"issue":"The Pre-existing: prefix is not at the start"},
- {"severity":"HIGH","area":"security","file":"a.py","line":6,"issue":5},
- "not an object",
- {"severity":"CRITICAL","area":"security","file":"a.py","line":10,"issue":"Pre-existing: this line is added"},
- {"severity":"HIGH","area":"correctness","file":"a.py","line":1,"issue":"Pre-existing: not a security finding"},
- {"severity":"CRITICAL","area":"security","file":"b.py","line":1,"issue":"Pre-existing: the file is not in the diff"},
- {"severity":"CRITICAL","area":"security","file":"a.py","issue":"Pre-existing: no line"},
- {"severity":"CRITICAL","area":"security","file":"a.py","line":0,"issue":"Pre-existing: line 0"},
- {"severity":"CRITICAL","area":"security","file":"a.py","line":"3","issue":"Pre-existing: the line is text"},
- {"severity":"CRITICAL","area":"Security","file":"a.py","line":1,"issue":"Pre-existing: the area is not exactly security"},
- {"severity":"CRITICAL","area":"security","file":"./a.py","line":1,"issue":"Pre-existing: a ./ prefix on the file"},
- {"severity":"CRITICAL","area":"security","file":"c.py","line":1,"issue":"Pre-existing: a file with no added line"},
- {"severity":"CRITICAL","area":"security","file":"a.py","line":1.5,"issue":"Pre-existing: a fraction"}]}'
-pe() { pre "$PE" | jq -r ".findings[$1] | $2"; }
-is 'pre-existing: a CRITICAL on an unchanged line becomes MEDIUM' "$(pe 0 .severity)" 'MEDIUM'
-is 'pre-existing: the original severity is recorded' "$(pe 0 .orig_severity)" 'CRITICAL'
-is 'pre-existing: the cap reason is recorded' "$(pe 0 .capped)" 'preexisting'
-is 'pre-existing: the finding keeps its text' "$(pe 0 .issue)" 'Pre-existing: the name reaches a query'
-is 'pre-existing: a HIGH with spaces and lower case becomes MEDIUM' "$(pe 1 .severity)" 'MEDIUM'
-is 'pre-existing: an invented label becomes MEDIUM' "$(pe 2 .severity)" 'MEDIUM'
-is 'pre-existing: ...and its label is recorded' "$(pe 2 .orig_severity)" 'BLOCKER'
-is 'pre-existing: a MEDIUM stays and gets no mark' "$(pe 3 '(.capped // "none")')" 'none'
-is 'pre-existing: the prefix must start the text' "$(pe 4 .severity)" 'CRITICAL'
-is 'pre-existing: an issue that is not text is left alone' "$(pe 5 .severity)" 'HIGH'
-is 'pre-existing: a non-object entry passes through' "$(pe 6 .)" 'not an object'
-is 'pre-existing: a finding on an added line keeps its severity' "$(pe 7 .severity)" 'CRITICAL'
-is 'pre-existing: ...and gets no mark' "$(pe 7 '(.capped // "none")')" 'none'
-is 'pre-existing: a finding outside the area security keeps its severity' "$(pe 8 .severity)" 'HIGH'
-is 'pre-existing: a file that is not in the diff keeps its severity' "$(pe 9 .severity)" 'CRITICAL'
-is 'pre-existing: a finding with no line keeps its severity' "$(pe 10 .severity)" 'CRITICAL'
-is 'pre-existing: line 0 keeps the severity' "$(pe 11 .severity)" 'CRITICAL'
-is 'pre-existing: a line that is text keeps the severity' "$(pe 12 .severity)" 'CRITICAL'
-is 'pre-existing: the area must be exactly security' "$(pe 13 .severity)" 'CRITICAL'
-is 'pre-existing: a ./ prefix on the file is stripped for the lookup' "$(pe 14 .severity)" 'MEDIUM'
-is 'pre-existing: a file in the diff with no added line is looked up' "$(pe 15 .severity)" 'MEDIUM'
-is 'pre-existing: a fractional line keeps the severity' "$(pe 16 .severity)" 'CRITICAL'
-is 'pre-existing: the list keeps its length' "$(pre "$PE" | jq -r '.findings | length')" '17'
-is 'pre-existing: the count reads the mark' "$(pre "$PE" | jq -r "$FINDINGS_CAPPED_PREEXISTING_COUNT_JQ")" '5'
-is 'pre-existing: the findings that still block' \
-   "$(pre "$PE" | jq -r '.findings |= map(select(type == "object"))' | jq -r "$FINDINGS_BLOCKING_COUNT_JQ")" '10'
-is 'pre-existing: an empty map lowers nothing' \
-   "$(pre "$PE" '{}' | jq -r "$FINDINGS_CAPPED_PREEXISTING_COUNT_JQ")" '0'
-# A finding on the literal name a\tb, when the diff holds only the git-quoted
-# file "a\tb": the literal file is not in the diff, so the severity stays.
-QD="$(mktemp -d)"
-printf '%s\n' 'diff --git "a/a\tb" "b/a\tb"' '--- "a/a\tb"' '+++ "b/a\tb"' '@@ -1,2 +1,3 @@' ' ctx' ' ctx2' '+quoted added' > "$QD/q.diff"
-QMAP="$(GATE_SCRATCH="$QD" diffview_added_lines "$QD/q.diff" | jq -Rnc '[inputs | split("\t") | select(length == 2)] | reduce .[] as $r ({}; .[$r[0]] += (if $r[1] == "-" then [] else [($r[1] | tonumber)] end))')"
-is 'pre-existing: the map has no entry for a git-quoted name' "$QMAP" '{}'
-is 'pre-existing: a finding on the literal twin of a quoted name keeps its severity' \
-   "$(pre '{"findings":[{"severity":"CRITICAL","area":"security","file":"a\\tb","line":1,"issue":"Pre-existing: x"}]}' "$QMAP" | jq -r '.findings[0].severity')" 'CRITICAL'
-rm -rf "$QD"
-is 'pre-existing: the comment says why it was lowered' \
-   "$(pre '{"findings":[{"severity":"CRITICAL","area":"security","file":"a.py","line":1,"issue":"Pre-existing: x"}]}' | jq -r "$FINDINGS_RENDER_JQ" \
-      | grep -c 'originally CRITICAL; demoted because the defect was already in the code')" '1'
-
 # The convergence caps run first and delete a forged mark. The mark below comes
 # from the model, so it must not survive to the demotion.
 is 'worth: a cap mark that the model wrote is deleted by the convergence caps' \
