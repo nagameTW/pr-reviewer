@@ -80,6 +80,12 @@ needs 'scope: the noise list leaves room for a pre-existing path through code th
   'concrete exploit path in (this diff or )?the code (this PR|the diff) touches'
 needs 'trace: a pre-existing security finding runs the same trace and stays MEDIUM' $SEC \
   'pre-existing defect.*same trace.*MEDIUM'
+needs 'severity: the shared ladder states the pre-existing security exception' lib/review-spec.sh \
+  'exception.*pre-existing security defect.*MEDIUM.*never blocks'
+needs 'severity: the exception names the Pre-existing: prefix' lib/review-spec.sh \
+  'exception.*starts with .Pre-existing:'
+needs 'trace: the CRITICAL rule for interpolation names the pre-existing exception' $SEC \
+  'name the source in the issue text\. Rule \(5\) is the exception'
 lacks 'scope: moved lines are not reported as defects of the PR whatever their origin' pr-autoreview.sh \
   'moved from elsewhere[^.]*still belong to this PR'
 

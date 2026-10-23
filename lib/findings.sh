@@ -1125,6 +1125,32 @@ FINDINGS_DEMOTE_WORTH_JQ='.findings = ((.findings // []) | to_entries | map(
 # shellcheck disable=SC2034  # read by the scripts that source this lib
 FINDINGS_CAPPED_WORTH_COUNT_JQ='[.findings[]? | select(type == "object" and .capped == "worth")] | length'
 
+# A pre-existing security defect never blocks. The prompt asks the model to
+# rate such a finding MEDIUM and to start its issue text with "Pre-existing:".
+# This rule makes the text the contract: any finding that starts that way and
+# is not already MEDIUM or LOW becomes MEDIUM, whatever the model rated it and
+# whatever the verifier said. The record is the one the other demotions write
+# (orig_severity, capped), with the value preexisting. Run it AFTER the
+# verification pass, so the pass still judges the finding on its own text, and
+# after the last FINDINGS_CONVERGE_JQ, which deletes capped and orig_severity.
+# The prefix match ignores case and leading space. An issue that is not text
+# is left alone.
+# Trade-off: the area is not read. A finding that starts with "Pre-existing:"
+# is lowered in any area, so the prefix is the only thing the model has to get
+# right, and an old defect outside security is still not a blocker.
+# shellcheck disable=SC2034  # read by the scripts that source this lib
+FINDINGS_PREEXISTING_JQ='.findings = ((.findings // []) | map(
+  if type != "object" then .
+  elif ((.issue // "") | type) != "string" then .
+  elif ((.issue | test("^\\s*pre-existing:"; "i")) | not) then .
+  else
+    ('"$FINDINGS_SEVERITY_JQ"') as $sev
+    | if $sev == "MEDIUM" or $sev == "LOW" then .
+      else . + {orig_severity: $sev, severity: "MEDIUM", capped: "preexisting"} end
+  end))'
+# shellcheck disable=SC2034  # read by the scripts that source this lib
+FINDINGS_CAPPED_PREEXISTING_COUNT_JQ='[.findings[]? | select(type == "object" and .capped == "preexisting")] | length'
+
 # What the refutation prompt below says a finding blocks
 # (FINDINGS_BLOCKS_MERGE), and why a wrongly deleted blocker costs more than a
 # wrongly kept one (FINDINGS_MERGE_STAKES).
@@ -1324,7 +1350,7 @@ def prose: esc | split("\n") | . as $ls | ($ls | prose_code_lines) as $code
 # wrong one of those is worse than no note. Add a third cap and this is the
 # only place that has to learn about it.
 # shellcheck disable=SC2034  # read by the scripts that source this lib
-FINDINGS_CAP_NOTE_JQ="\(if (.capped and .capped != \"file-cap\") then \" [originally \((.orig_severity // \"?\") | esc); \(if .capped == \"late\" then \"demoted as late: this round's changes do not touch this file\" elif .capped == \"worth\" then \"demoted because the second-round check judged it not worth blocking\" elif ((.kind // \"\") | tostring | ascii_downcase | contains(\"half_fix\")) then \"demoted because the model marked it a half-finished fix\" else \"demoted as wording or judgment\" end)]\" else \"\" end)"
+FINDINGS_CAP_NOTE_JQ="\(if (.capped and .capped != \"file-cap\") then \" [originally \((.orig_severity // \"?\") | esc); \(if .capped == \"late\" then \"demoted as late: this round's changes do not touch this file\" elif .capped == \"worth\" then \"demoted because the second-round check judged it not worth blocking\" elif .capped == \"preexisting\" then \"demoted because the defect was already in the code and the PR only touches it\" elif ((.kind // \"\") | tostring | ascii_downcase | contains(\"half_fix\")) then \"demoted because the model marked it a half-finished fix\" else \"demoted as wording or judgment\" end)]\" else \"\" end)"
 # shellcheck disable=SC2034  # read by the scripts that source this lib
 # .redteam only ever reaches here as `true` written by REDTEAM_CANDIDATES_JQ
 # (lib/redteam.sh) — FINDINGS_CONVERGE_JQ deletes any copy the round-1 model

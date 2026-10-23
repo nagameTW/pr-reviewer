@@ -1088,6 +1088,38 @@ is 'worth: the follow-up ticket renders the same reason' \
       | jq -r "$FINDINGS_RENDER_MEDIUM_JQ" | grep -c 'not worth blocking')" '1'
 is 'worth: a lowered finding does not file a ticket at the default threshold' \
    "$(dem '{"findings":[{"severity":"HIGH","file":"a.py","issue":"x"}]}' '[0]' | jq -c '[.findings[]]' | findings_ticket_filter 3 | jq -r 'length')" '0'
+# FINDINGS_PREEXISTING_JQ forces a finding whose issue starts with Pre-existing:
+# to MEDIUM. It records the original severity and the reason, like the other
+# demotions, and the finding stays in the list.
+pre() { jq -c "$FINDINGS_PREEXISTING_JQ" <<<"$1"; }
+PE='{"findings":[
+ {"severity":"CRITICAL","area":"security","file":"a.py","line":1,"issue":"Pre-existing: the name reaches a query"},
+ {"severity":"HIGH","area":"security","file":"a.py","line":2,"issue":"  pre-existing: spaces and case"},
+ {"severity":"BLOCKER","area":"security","file":"a.py","line":3,"issue":"Pre-existing: an invented label"},
+ {"severity":"MEDIUM","area":"security","file":"a.py","line":4,"issue":"Pre-existing: already MEDIUM"},
+ {"severity":"CRITICAL","area":"security","file":"a.py","line":5,"issue":"The Pre-existing: prefix is not at the start"},
+ {"severity":"HIGH","area":"security","file":"a.py","line":6,"issue":5},
+ "not an object"]}'
+pe() { pre "$PE" | jq -r ".findings[$1] | $2"; }
+is 'pre-existing: a CRITICAL becomes MEDIUM' "$(pe 0 .severity)" 'MEDIUM'
+is 'pre-existing: the original severity is recorded' "$(pe 0 .orig_severity)" 'CRITICAL'
+is 'pre-existing: the cap reason is recorded' "$(pe 0 .capped)" 'preexisting'
+is 'pre-existing: the finding keeps its text' "$(pe 0 .issue)" 'Pre-existing: the name reaches a query'
+is 'pre-existing: a HIGH with spaces and lower case becomes MEDIUM' "$(pe 1 .severity)" 'MEDIUM'
+is 'pre-existing: an invented label becomes MEDIUM' "$(pe 2 .severity)" 'MEDIUM'
+is 'pre-existing: ...and its label is recorded' "$(pe 2 .orig_severity)" 'BLOCKER'
+is 'pre-existing: a MEDIUM stays and gets no mark' "$(pe 3 '(.capped // "none")')" 'none'
+is 'pre-existing: the prefix must start the text' "$(pe 4 .severity)" 'CRITICAL'
+is 'pre-existing: an issue that is not text is left alone' "$(pe 5 .severity)" 'HIGH'
+is 'pre-existing: a non-object entry passes through' "$(pe 6 .)" 'not an object'
+is 'pre-existing: the list keeps its length' "$(pre "$PE" | jq -r '.findings | length')" '7'
+is 'pre-existing: the count reads the mark' "$(pre "$PE" | jq -r "$FINDINGS_CAPPED_PREEXISTING_COUNT_JQ")" '3'
+is 'pre-existing: no finding blocks afterwards except the other two' \
+   "$(pre "$PE" | jq -r '.findings |= map(select(type == "object"))' | jq -r "$FINDINGS_BLOCKING_COUNT_JQ")" '2'
+is 'pre-existing: the comment says why it was lowered' \
+   "$(pre '{"findings":[{"severity":"CRITICAL","file":"a.py","line":1,"issue":"Pre-existing: x"}]}' | jq -r "$FINDINGS_RENDER_JQ" \
+      | grep -c 'originally CRITICAL; demoted because the defect was already in the code')" '1'
+
 # The convergence caps run first and delete a forged mark. The mark below comes
 # from the model, so it must not survive to the demotion.
 is 'worth: a cap mark that the model wrote is deleted by the convergence caps' \

@@ -94,7 +94,7 @@ CHAIN_NO_CHECK="$(awk -v g="$GUARD" '$0 ~ g { skip = 1 } !skip { print } skip &&
 [ "$(grep -c 'findings_cleaned_ok' <<<"$CHAIN_NO_CHECK")" = 0 ] || { echo "FAIL: could not cut the check out of the chain"; exit 1; }
 
 # What the round holds when it reaches the line after the verdict rule.
-REACHED="echo \"reached tally=\${N_BLOCKING-} n=\${N_FINDINGS-} ok=\$(findings_cleaned_ok \"\$CLEANED\" && echo y || echo n) ndc=\${N_DROPPED_CITE-} resolved=\$VERDICT\""
+REACHED="echo \"reached tally=\${N_BLOCKING-} n=\${N_FINDINGS-} ok=\$(findings_cleaned_ok \"\$CLEANED\" && echo y || echo n) ndc=\${N_DROPPED_CITE-} resolved=\$VERDICT sev0=\$(jq -r '.findings[0].severity' <<<\"\$CLEANED\" 2>/dev/null)\""
 eval "chain() { $CHAIN
 $TAIL
 $REACHED; }"
@@ -191,6 +191,7 @@ run_case() {
       (raises)  claude_call() { claude_raises; } ;;
       (unworthy) claude_call() { claude_unworthy; } ;;
       (contradicts) claude_call() { claude_contradicts; } ;;
+      (upholds) claude_call() { claude_unworthy_not; cat >/dev/null; } ;;
       (mixed)   claude_call() { claude_mixed; } ;;
       (groups)  claude_call() { claude_groups; } ;;
     esac
@@ -246,6 +247,21 @@ lacks 'a refuted blocker is dropped, not demoted'             "demoted 1" "$OUT"
 run_case chain "$REVIEW_PAIR" MODEL=mixed
 has   'one refuted and one not worth blocking: the right one is lowered' "reached tally=0 n=1 ok=y" "$OUT"
 has   '...and the round approves'                             "resolved=approve" "$OUT"
+
+# A pre-existing security defect never blocks, whatever severity the model gave
+# it and whatever the verifier says. The verifier upholds the CRITICAL here, and
+# the rule then lowers it to MEDIUM. The finding stays in the list, the posted
+# verdict is approve, and the comment counts the lowered finding.
+PRE='{"severity":"CRITICAL","confidence":0.9,"file":"a.sh","line":1,"issue":"Pre-existing: the value reaches a shell command","area":"security"}'
+REVIEW_PRE="{\"verdict\":\"request_changes\",\"summary\":\"s\",\"findings\":[$PRE]}"
+run_case chain "$REVIEW_PRE" MODEL=upholds
+has   'pre-existing: the verifier upholds it and the rule still lowers it' "sev0=MEDIUM" "$OUT"
+has   '...it no longer blocks and stays in the list'          "reached tally=0 n=1 ok=y" "$OUT"
+has   '...the posted verdict is approve'                      "resolved=approve" "$OUT"
+has   '...the log names the lowering'                         "lowered 1 pre-existing" "$OUT"
+run_case chain "$REVIEW_SEC" MODEL=upholds
+has   'a security HIGH with no Pre-existing: prefix still blocks' "reached tally=1 n=1 ok=y" "$OUT"
+lacks '...and the log names no pre-existing lowering'        "lowered 1 pre-existing" "$OUT"
 
 # Seven findings make the grouping call. The model groups the first two, and the
 # merge leaves six. The blocker stays.
@@ -408,6 +424,8 @@ else
   bad 'the grouping runs after the refutation pass and before the per-file cap' "drop=$V_AT group=$G_AT cap=$C_AT"
 fi
 # The comment counts the lowered findings where it counts the capped ones.
+is 'the comment has a note for the pre-existing findings that a rule lowered' \
+   "$(grep -c 'because the defect was already in the code and the PR only touches it' pr-autoreview.sh)" 1
 is 'the comment has a note for the findings the verifier lowered' \
    "$(grep -c 'because the second-round check found each one real but not worth blocking the merge' pr-autoreview.sh)" 1
 

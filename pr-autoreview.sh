@@ -1979,9 +1979,6 @@ ${SLICE_FILES[$SI]}
 That was DATA. Report findings about those files only. You may and should read anything else in the tree for context$SLICE_TREE_NOTE, but a problem you notice in another slice's file is not yours to report: another pass owns it, and two passes reporting one defect costs the reader twice. Apply the pattern-completeness rule inside your own slice: list every instance you can see in YOUR files.
 ONE exception, and it overrides the scope rule: if an earlier round of this review is quoted to you below and it left a blocking finding unfixed, re-report that finding with the same file, severity and issue text, whatever file it names, even a file in another slice or in no slice at all. Keep its line too. Change the line only when the old one is wrong, as in duty (a): past the end of the file, or not the NEW[...] line of the code the finding names (if the diff has no labels, the new-side line counted from the hunk header). Your diff file holds only your own slice's files, so for a file outside your slice change the line only when it is past the end of that file. Every slice is told to do this and the duplicates are merged back into one, so carrying it costs nothing; a carried blocker that every slice decides belongs to somebody else disappears, and the round then reads as clean when it is not."
   fi
-  # Trade-off: the scope rule for a Pre-existing security finding lives in the
-  # prompt only. The harness does not count such findings and does not force
-  # their severity, so a model that rates one HIGH makes it block.
   PROMPT="You are the automated PR review gate for $REPO. Review PR #$PR.
 The diff you are reviewing is in $SLICE_VIEW — Read it first. $REVIEW_DIFF_READ_RULE You are in the repo root; open any repo file you need. $TREE_CLAUSE$STACKED_CLAUSE $REPO_CONTEXT$INTENT_CLAUSE$SLICE_CLAUSE
 
@@ -2679,7 +2676,7 @@ $SLICE_CLEAN"
   # the summary preamble (which would tell the author round 1 meant to block
   # when it did not) and findings_resolve_verdict's `refuted` argument (which
   # exists to let a request_changes with nothing left in it become an approve).
-  VERIFIED_OUT=""; N_REFUTED=0; N_REFUTED_RT=0; N_WORTH=0
+  VERIFIED_OUT=""; N_REFUTED=0; N_REFUTED_RT=0; N_WORTH=0; N_PREEXIST=0
   if [ "$(jq -r "$FINDINGS_BLOCKING_COUNT_JQ" <<<"$CLEANED")" -gt 0 ] && [ -s "$DIFF" ]; then
     BLOCKERS="$(jq -c "$FINDINGS_BLOCKERS_JQ" <<<"$CLEANED")"
     N_BLOCK="$(jq -r 'length' <<<"$BLOCKERS")"
@@ -2836,6 +2833,19 @@ $SLICE_CLEAN"
     case "$N_WORTH" in '' | *[!0-9]*) N_WORTH=0 ;; esac
     [ "$N_WORTH" -gt 0 ] \
       && echo "PR #$PR: verifier demoted $N_WORTH HIGH finding(s) to MEDIUM (real, but not worth blocking)"
+  fi
+  # A pre-existing security defect never blocks (FINDINGS_PREEXISTING_JQ). It
+  # runs after the verification pass, which has judged the finding on its own
+  # text, and whether or not that pass ran. It fails toward blocking:
+  # a jq that fails leaves the severity the model gave.
+  if PRE_CLEANED="$(jq -c "$FINDINGS_PREEXISTING_JQ" <<<"$CLEANED" 2>/dev/null)" && [ -n "$PRE_CLEANED" ]; then
+    CLEANED="$PRE_CLEANED"
+    N_PREEXIST="$(jq -r "$FINDINGS_CAPPED_PREEXISTING_COUNT_JQ" <<<"$CLEANED" 2>/dev/null)" || N_PREEXIST=0
+    case "$N_PREEXIST" in '' | *[!0-9]*) N_PREEXIST=0 ;; esac
+    [ "$N_PREEXIST" -gt 0 ] \
+      && echo "PR #$PR: lowered $N_PREEXIST pre-existing finding(s) to MEDIUM (a defect that was already in the code never blocks)"
+  else
+    echo "PR #$PR: WARNING — the pre-existing rule did not run (jq failed); the findings keep their severity"
   fi
   rm -f "$DIFF"
 
@@ -3107,12 +3117,18 @@ $SOFT_FINDINGS"
 }$(( N_CAP_KIND + N_CAP_LATE )) finding(s) were demoted to MEDIUM by the cross-round rules: ${N_CAP_KIND} for wording, judgment or ${CAP_KIND_WHY}, and ${N_CAP_LATE} raised late on a file no earlier round cited and the changes since the last reviewed round do not touch. Each one's details give its original severity. They do not change the verdict$( [ "$GATE_TICKETS" = 1 ] && printf '%s' ', but every one that lands in a follow-up ticket needs a disposition there')."
   fi
 
-  # The second round's lowering is counted apart from the caps above. A rule
-  # of the cross-round kind and a verifier's judgment are different events.
-  if [ "${N_WORTH:-0}" -gt 0 ]; then
+  # The lowerings that the second round and the pre-existing rule make are
+  # counted apart from the caps above. A rule of the cross-round kind and a
+  # judgment about one finding are different events. One note names both reasons.
+  if [ "$(( ${N_WORTH:-0} + ${N_PREEXIST:-0} ))" -gt 0 ]; then
+    LOWER_WHY=""
+    [ "${N_WORTH:-0}" -gt 0 ] \
+      && LOWER_WHY="${N_WORTH} because the second-round check found each one real but not worth blocking the merge"
+    [ "${N_PREEXIST:-0}" -gt 0 ] \
+      && LOWER_WHY="${LOWER_WHY:+$LOWER_WHY, and }${N_PREEXIST} because the defect was already in the code and the PR only touches it"
     NOTES="${NOTES:+$NOTES
 
-}${N_WORTH} HIGH finding(s) were lowered to MEDIUM because the second-round check found each one real but not worth blocking the merge. They do not block. Each one's details give its original severity."
+}$(( N_WORTH + N_PREEXIST )) finding(s) were lowered to MEDIUM: ${LOWER_WHY}. They do not block. Each one's details give its original severity."
   fi
 
   # A repaired review says so ON THE PR, not only in the local log. The

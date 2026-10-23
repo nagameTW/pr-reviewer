@@ -113,16 +113,17 @@ The ladder is `SEVERITY_SPEC` in [`lib/review-spec.sh`](../lib/review-spec.sh).
 
 CRITICAL and HIGH findings block. A severity label that the reviewer does not recognize blocks too. A block decides the text of the verdict only. The reviewer never stops a merge.
 
-The model sets an `area` field on each finding, such as `test`, `convention`, `wording`, `process` or `doc`. On a doc finding it also sets an `audience` field. A round is one review of one PR. Every push starts a new round. Four rules can lower a HIGH finding to a finding that does not block:
+The model sets an `area` field on each finding, such as `test`, `convention`, `wording`, `process` or `doc`. On a doc finding it also sets an `audience` field. A round is one review of one PR. Every push starts a new round. Four rules can lower a HIGH finding to a finding that does not block. A fifth rule covers a pre-existing security defect:
 
 - On a PR of 300 changed lines or more, a HIGH in the area test, convention, wording or process does not block. A HIGH doc finding for maintainers only does not block either. A doc finding is never for maintainers only when its file is one of three kinds. The file name starts with `README` or `CONTRIBUTING` at the repository root. Or the file name ends with `.env.example`. Or the file is under `docs/`. The rule is the jq expression `FINDINGS_IS_BLOCKING_JQ` in [`lib/findings.sh`](../lib/findings.sh). The file pattern is `FINDINGS_FOLLOWED_DOC_RE` in the same file.
 - A HIGH finding gets MEDIUM when the model sets its `kind` field to `wording`, `judgment` or `half_fix`.
 - From round 2, a HIGH on a file that the push did not change, and that no earlier round cited, becomes MEDIUM. This applies when the reviewer knows which files the push changed.
 - A HIGH gets MEDIUM when the refutation call (step 4 below) answers that the finding is real but does not merit a block. The finding stays in the comment. A HIGH in the area security or data keeps its severity.
+- A finding whose issue text starts with `Pre-existing:` becomes MEDIUM, whatever severity the model gave it. This is the security defect in unchanged code that the PR touches (see "What the reviewer does not report" above). It runs after the refutation pass. The finding stays in the comment with its original severity noted. The function is `FINDINGS_PREEXISTING_JQ` in [`lib/findings.sh`](../lib/findings.sh).
 
 The comment lists the findings that do not block behind one fold. When two or more of them are about tests, conventions, wording, process, or a doc for maintainers or team members, the comment lists those as one item. The item is titled `Tests, docs and process (N)` and holds one line for each finding, with its severity, `path:line` and a one-line issue. A HIGH finding never joins this item, and neither does a finding that blocks, a doc finding for operators or users, or a finding that a rule lowered. One such finding stays on its own line. The grouping is part of the display only. The count, the verdict, the refutation pass, the follow-up ticket and the file list that the next round reads all use the separate findings. The function is `findings_render_soft` in [`lib/findings.sh`](../lib/findings.sh).
 
-`FINDINGS_CONVERGE_JQ` applies the second and third rules. `FINDINGS_DEMOTE_WORTH_JQ` applies the fourth. CRITICAL is never lowered. The comment keeps the original severity of a lowered finding. [Operating the reviewer](operations.md#how-one-round-works) describes the same rules from the side of the operator.
+`FINDINGS_CONVERGE_JQ` applies the second and third rules. `FINDINGS_DEMOTE_WORTH_JQ` applies the fourth. `FINDINGS_PREEXISTING_JQ` applies the fifth, and it is the only rule that lowers a CRITICAL. The comment keeps the original severity of a lowered finding. [Operating the reviewer](operations.md#how-one-round-works) describes the same rules from the side of the operator.
 
 ## Security standards the checks cite
 
