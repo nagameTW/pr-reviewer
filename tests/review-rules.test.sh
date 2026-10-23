@@ -68,8 +68,18 @@ needs 'noise: a new control that does not stop its attack is reported' lib/revie
 # ── scope rule ────────────────────────────────────────────────────────────
 needs 'scope: moved or reformatted lines are in scope for defects the move causes' pr-autoreview.sh \
   '(moved|reformatted).*(stay in scope|in scope).*(defects|defect) the move causes'
-needs 'scope: moved lines keep the pre-existing exclusion' pr-autoreview.sh \
-  'old defect.*(move|moved).*carries over.*(out of scope|not in scope)'
+needs 'scope: moved lines keep the pre-existing exclusion for other old defects' pr-autoreview.sh \
+  'other old defect.*(move|moved).*carries over.*(out of scope|not in scope)'
+needs 'scope: a security defect in moved, reformatted or adjacent code is reported' pr-autoreview.sh \
+  'security defect in moved, reformatted or adjacent unchanged code that (this|the) PR touches'
+needs 'scope: that finding is MEDIUM, security, and starts with Pre-existing:' pr-autoreview.sh \
+  'MEDIUM finding, area security, with an issue text that starts? with .Pre-existing:'
+needs 'scope: that finding never blocks and one per PR is enough' pr-autoreview.sh \
+  'never blocks\. One such finding per PR'
+needs 'scope: the noise list leaves room for a pre-existing path through code the PR touches' lib/review-spec.sh \
+  'concrete exploit path in (this diff or )?the code (this PR|the diff) touches'
+needs 'trace: a pre-existing security finding runs the same trace and stays MEDIUM' $SEC \
+  'pre-existing defect.*same trace.*MEDIUM'
 lacks 'scope: moved lines are not reported as defects of the PR whatever their origin' pr-autoreview.sh \
   'moved from elsewhere[^.]*still belong to this PR'
 

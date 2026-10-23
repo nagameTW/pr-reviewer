@@ -40,6 +40,10 @@ All notable changes to this project are recorded here. The format follows
 
 ### Changed
 
+- A security defect in moved, reformatted or adjacent unchanged code that a PR
+  touches is now reported. It is one MEDIUM finding with area security, and its
+  issue text starts with `Pre-existing:`. It does not block. Other old defects
+  that a move carries over stay out of scope.
 - The comment lists the findings that do not block and are about tests,
   conventions, wording, process, or a doc for maintainers or team members as
   one item, `Tests, docs and process (N)`, when there are two or more. The

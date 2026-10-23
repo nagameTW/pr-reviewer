@@ -98,7 +98,7 @@ The prompt gives the model one list of things to leave out. The list is `REVIEW_
 - Praise, questions and restatements of the diff.
 - Defense-in-depth suggestions where the main defense is adequate.
 
-A finding must be about something the diff introduces, changes or leaves broken. A problem that the PR does not touch gets one line in the summary at most. The model reports no finding about punctuation style. Two cases stay findings: punctuation that changes how the code parses or runs, and punctuation that a check in the reviewed repository rejects.
+A finding must be about something the diff introduces, changes or leaves broken. A problem that the PR does not touch gets one line in the summary at most. One exception covers security. A security defect in moved, reformatted or adjacent unchanged code that the PR touches is reported as a MEDIUM finding. Its issue text starts with `Pre-existing:`. It does not block, and one such finding per PR is enough. Any other old defect that a move carries over stays out of scope. The model reports no finding about punctuation style. Two cases stay findings: punctuation that changes how the code parses or runs, and punctuation that a check in the reviewed repository rejects.
 
 ## How severity works
 
