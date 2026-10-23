@@ -2715,6 +2715,8 @@ $SLICE_CLEAN"
     done
     for p in ${VERIFY_PIDS[@]+"${VERIFY_PIDS[@]}"}; do wait "$p" || true; done
 
+    # Trade-off: only the first VERIFY_MAX blockers get a verifier, so only
+    # those can be lowered. A blocker past the cap keeps its severity.
     V_DROP="[]"; V_DEMOTE="[]"
     for i in ${VERIFY_FILES[@]+"${!VERIFY_FILES[@]}"}; do
       # Same status-line handling as the other three calls. A verifier whose
