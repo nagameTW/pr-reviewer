@@ -24,6 +24,10 @@ GH="${GH_BIN:-$(command -v gh)}"
 # The model for calls that are NOT the judgement. The split is about what the
 # call decides rather than about saving money:
 #
+#   finding grouping (lib/regroup.sh) — takes the list of findings and returns
+#     the ids of findings that share one root cause and one fix. It cannot
+#     rewrite, rate or drop a finding, and code does the merge.
+#
 #   structural repair — takes a reply that did not parse and fixes only its
 #     SHAPE, under a prompt that forbids changing content. Reformatting JSON
 #     does not need the reasoning the review needed, and the repair's output is
@@ -91,6 +95,10 @@ mkdir -p "$GATE_SCRATCH" || { echo "cannot create $GATE_SCRATCH — refusing to 
 # nothing and costs a round: the round is killed mid-review at the old
 # ceiling. Set it by its full name, PRREVIEW_GATE_ROUND_BUDGET: a bare
 # ROUND_BUDGET is silently ignored and leaves this at 900.
+#
+# The grouping call (lib/regroup.sh) runs once, after the refutation pass, and
+# only for a review of six findings or more. It takes REPAIR_TIMEOUT at most
+# and spends part of the 300s of slack in the formula above.
 #
 # This formula does NOT already account for the red-team stage
 # (PRREVIEW_GATE_REDTEAM=1, lib/redteam.sh, default off): turning it on adds up to
@@ -478,6 +486,9 @@ review_checks_render "$CHECKS_DIR" >/dev/null \
 . "$SCRIPT_DIR/lib/merge.sh" || { echo "lib/merge.sh missing — refusing to run"; exit 1; }
 . "$SCRIPT_DIR/lib/app.sh" || { echo "lib/app.sh missing — refusing to run"; exit 1; }
 . "$SCRIPT_DIR/lib/findings.sh" || { echo "lib/findings.sh missing — refusing to run"; exit 1; }
+# After lib/findings.sh, not before: the jq programs in lib/regroup.sh are built
+# from the severity and blocking rules defined there.
+. "$SCRIPT_DIR/lib/regroup.sh" || { echo "lib/regroup.sh missing — refusing to run"; exit 1; }
 # A jq that cannot compile the comment renderer posts a verdict with every
 # finding missing and says nothing: jq 1.6, still what Ubuntu 22.04 and Debian
 # 12 install, once rejected a parameter named after a word it reserves. One
@@ -2860,6 +2871,17 @@ $SLICE_CLEAN"
   # The counts are jq's, never a line count of the rendered text: a finding
   # whose issue text contains a newline renders as two lines and would be
   # counted twice.
+  # ── Merge findings that share one root cause and one fix ──────────────────
+  # One call to the cheap model groups them and code merges them
+  # (lib/regroup.sh). It runs once the findings are final, so the refutation
+  # pass has judged every blocker on its own text first, and ahead of the
+  # per-file cap, so the cap counts merged findings. It needs REGROUP_MIN_FINDINGS
+  # findings and fails open: any failure leaves the findings as they were.
+  # Trade-off: the capped and lowered counts above were taken before this step.
+  # A finding that a merge removes still counts in them, so the note in the
+  # comment can name one more finding than the list holds.
+  regroup_findings
+
   # The per-file cap is applied to CLEANED itself, not to the rendered
   # blocking half: the tally below, the state file and the next round's
   # prior list all have to see the same seven-plus-one. Capping only the

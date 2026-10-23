@@ -148,6 +148,11 @@ lacks 'no model call can read the raw diff' 'Read(/$DIFF)' "$SITES"
 lacks 'no model call is given the raw diff dir' '"$DIFF_DIR"' "$SITES"
 is  'repair: no tool, no read dir, and a rule that matches no file' \
     "$(printf '%s\n' "$SITES" | grep -cF 'claude_call "$REPAIR_TIMEOUT" "$CHEAP_MODEL" "" -- "Read(/nonexistent-repair-scope/**)"')" 1
+# The grouping call sits in lib/regroup.sh, in the same shape as the repair.
+CL_SITES="$(grep -E '^[^#]*claude_call ' lib/regroup.sh)"
+is  'grouping: lib/regroup.sh has one model call, through claude_call' "$(printf '%s\n' "$CL_SITES" | grep -c 'claude_call ')" 1
+is  'grouping: the cheap model, no tool, no read dir, and a rule that matches no file' \
+    "$(printf '%s\n' "$CL_SITES" | grep -cF 'claude_call "$REPAIR_TIMEOUT" "$CHEAP_MODEL" "" -- "Read(/nonexistent-repair-scope/**)"')" 1
 is  'the review rules are the clone, the slice display copy and the intent file' \
     "$(grep -cF 'ALLOWED=("Read(/$REPO_DIR/**)" "Grep(/$REPO_DIR/**)" "Glob(/$REPO_DIR/**)" "Read(/$SLICE_VIEW)")' pr-autoreview.sh)" 1
 # A read dir must hold only the files of one call. $GATE_SCRATCH holds every

@@ -31,12 +31,12 @@ Settings come from two layers. The first layer is a config file. The second laye
 | `PRREVIEW_SENSITIVE_PATTERNS_FILE` | `~/.config/pr-reviewer/sensitive-patterns` | The regex list. The reviewer checks every PR title, PR description and linked issue against it. It also checks every comment that carries PR text or model output |
 | `PRREVIEW_GATE_REPO_CONTEXT` | a sentence pointing at `CLAUDE.md`/`AGENTS.md`, `README`, `CONTRIBUTING` | Replaces the sentence that tells the model where the conventions of a repo live |
 | `PRREVIEW_REVIEW_MODEL` | `claude-opus-5-5` | Model for the review, the refutation pass and the red team |
-| `PRREVIEW_GATE_CHEAP_MODEL` | `claude-sonnet-5-5` | Model for the repair of unparseable output |
+| `PRREVIEW_GATE_CHEAP_MODEL` | `claude-sonnet-5-5` | Model for the repair of unparseable output and for the grouping of findings that share a cause |
 | `PRREVIEW_GATE_SAMPLES` | `1` | Review passes for each slice after the first round of a PR. The reviewer merges the findings of all passes |
 | `PRREVIEW_GATE_SAMPLES_ROUND1` | `1` | Review passes for each slice in the first round of a PR |
 | `PRREVIEW_GATE_ZERO_RECHECK_LINES` | `1000` | From this many changed lines, a first round gets at least two passes. `0` turns it off. The first round of a split-exempt PR gets two passes at any size |
 | `PRREVIEW_GATE_REVIEW_TIMEOUT` | `900` | Seconds for each review call |
-| `PRREVIEW_GATE_REPAIR_TIMEOUT` | `300` | Seconds for the call that repairs an unparseable answer |
+| `PRREVIEW_GATE_REPAIR_TIMEOUT` | `300` | Seconds for the call that repairs an unparseable answer. The call that groups findings uses the same ceiling |
 | `PRREVIEW_GATE_VERIFY_MAX` | `6` | Most blocking findings that get a refutation call |
 | `PRREVIEW_GATE_VERIFY_TIMEOUT` | `600` | Seconds for each refutation call |
 | `PRREVIEW_GATE_CHUNK_MIN_LINES` | `300` | The reviewer slices diffs that are larger than this |

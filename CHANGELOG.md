@@ -8,6 +8,12 @@ All notable changes to this project are recorded here. The format follows
 
 ### Added
 
+- A review with 6 findings or more makes one more call, to the cheaper model
+  (`PRREVIEW_GATE_CHEAP_MODEL`). The model returns only groups of finding ids
+  that share one root cause and one fix. Code merges each group into the
+  finding with the highest severity and names the other locations after
+  `Also at:`. A failed call or an invalid group keeps the findings as they
+  were. The call is counted in the usage of the round.
 - CI runs the test suite on macOS with `/bin/bash`, which is bash 3.2. The
   job installs jq, gh, flock, shellcheck and coreutils with Homebrew and does
   not put the coreutils `gnubin` directory on `PATH`.

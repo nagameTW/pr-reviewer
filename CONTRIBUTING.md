@@ -52,7 +52,8 @@ the suite in the `bash:3.2` Docker image.
 - `lib/` holds the pieces a round calls: `prompt.sh` builds prompts and reads
   earlier rounds, `findings.sh` filters and renders what the model returns,
   `review-spec.sh` reads the checklist in `checks/` and holds the rules every
-  prompt shares, `chunk.sh` slices diffs, `scan.sh` is the sensitive-data
+  prompt shares, `chunk.sh` slices diffs, `regroup.sh` merges findings that
+  share a cause, `scan.sh` is the sensitive-data
   scan, `holdoff.sh` remembers failures between rounds, `cooldown.sh` makes a
   PR wait after an edit of its title or description, `trust.sh` decides
   which PRs the reviewer reads by their authors, and so on. Every file

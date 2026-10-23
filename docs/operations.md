@@ -208,6 +208,9 @@ reads the settings named `PRREVIEW_LOOP_*`. It starts the rounds.
    `PRREVIEW_GATE_VERIFY_MAX` (6) in a round. The reviewer drops a refuted
    finding. The same call says whether a real HIGH is worth a block. If it is
    not, the finding becomes MEDIUM and stays. Any finding beyond the cap stands.
+   A review with 6 findings or more then gets one call to the cheaper model.
+   It groups findings that share a root cause and a fix, and code merges each
+   group into one finding.
 7. **Post.** Render one comment. Escape the model text (see
    [SECURITY.md](../SECURITY.md)). Scan the comment against your patterns. Post
    it. The end of the round prints the model usage and the cost of the round.
